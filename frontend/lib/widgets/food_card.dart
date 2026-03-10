@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/food_item.dart';
 import '../models/favorites_model.dart';
 import '../widgets/favorite_button.dart';
@@ -71,12 +72,21 @@ class _FoodCardState extends State<FoodCard> {
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(32),
                       ),
-                      child: Image.network(
-                        widget.food.imageUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: widget.food.imageUrl,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: double.infinity,
-                        errorBuilder: (context, error, stackTrace) {
+                        placeholder: (context, url) => Container(
+                          color: const Color(0xFFFDF0F0),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24, height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B1C28)),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) {
                           return Container(
                             color: const Color(0xFFFDF0F0),
                             child: const Center(

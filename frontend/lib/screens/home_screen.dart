@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../models/food_item.dart';
@@ -486,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(24),
                                     image: DecorationImage(
-                                      image: NetworkImage(restaurant.coverUrl ?? restaurant.imageUrl),
+                                      image: CachedNetworkImageProvider(restaurant.coverUrl ?? restaurant.imageUrl),
                                       fit: BoxFit.cover,
                                     ),
                                     boxShadow: [

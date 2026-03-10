@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/cart_model.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
@@ -370,10 +371,19 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Image.network(
-                      item.food.imageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: item.food.imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
+                      placeholder: (context, url) => Container(
+                        color: const Color(0xFFFDF0F0),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 24, height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: _maroon),
+                          ),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) {
                         return Container(
                           color: const Color(0xFFFDF0F0),
                           child: const Center(
@@ -655,10 +665,7 @@ class _CartScreenState extends State<CartScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // Delay the actual clearing to let the dialog closing animation finish without lag
-              Future.delayed(const Duration(milliseconds: 150), () {
-                cart.clear();
-              });
+              cart.clear();
             },
             child: const Text(
               'Clear',

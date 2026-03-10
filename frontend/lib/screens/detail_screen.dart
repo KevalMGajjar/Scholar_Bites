@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/food_item.dart';
 import '../models/favorites_model.dart';
 import '../models/cart_model.dart';
@@ -153,22 +154,17 @@ class _DetailScreenState extends State<DetailScreen> {
             child: Hero(
               tag: 'food-image-${widget.food.id}',
               key: imageKey, // Add key to Hero
-              child: Image.network(
-                widget.food.imageUrl,
+              child: CachedNetworkImage(
+                imageUrl: widget.food.imageUrl,
                 fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                          : null,
-                      color: const Color(0xFF8B1C28),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
+                width: double.infinity,
+                height: double.infinity,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF8B1C28),
+                  ),
+                ),
+                errorWidget: (context, url, error) {
                   return Container(
                     color: const Color(0xFFFDF0F0),
                     child: const Center(

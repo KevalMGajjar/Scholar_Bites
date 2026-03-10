@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/restaurant_model.dart';
 import '../models/food_item.dart';
 import '../models/cart_model.dart';
@@ -150,10 +151,18 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                     end: Alignment.topCenter,
                   ),
                 ),
-                child: Image.network(
-                  widget.restaurant.coverUrl ?? widget.restaurant.imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: widget.restaurant.coverUrl ?? widget.restaurant.imageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
+                  width: double.infinity,
+                  height: double.infinity,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF8B1C28)),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) {
                     return Container(
                       color: Colors.grey[300],
                       child: const Icon(Icons.restaurant, size: 50),
