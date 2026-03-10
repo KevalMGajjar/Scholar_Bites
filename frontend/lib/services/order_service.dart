@@ -33,6 +33,22 @@ class OrderService {
     }
   }
 
+  Future<void> verifyPayment(String razorpayOrderId, String razorpayPaymentId, String razorpaySignature) async {
+    try {
+      final response = await _dio.post('/orders/verify', data: {
+        'razorpay_order_id': razorpayOrderId,
+        'razorpay_payment_id': razorpayPaymentId,
+        'razorpay_signature': razorpaySignature,
+      });
+
+      if (response.statusCode != 200) {
+        throw Exception('Payment verification failed');
+      }
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['message'] ?? 'Payment verification failed');
+    }
+  }
+
   Future<List<dynamic>> getMyOrders() async {
     try {
       final response = await _dio.get('/orders/my-history');

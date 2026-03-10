@@ -33,16 +33,21 @@ class PaymentService {
   void openCheckout({
     required double amount,
     required String contact,
+    required String email,
     required String name,
     required String description,
+    required String orderId,
   }) {
     var options = {
       'key': 'rzp_test_zHkIerVdIItgIe', // Replace with an actual test key if available, using placeholder for now
       'amount': (amount * 100).toInt(), // Razorpay expects amount in paise
       'name': 'Scholar Bites',
       'description': description,
+      'order_id': orderId,
+      'retry': {'enabled': false},
       'prefill': {
         'contact': contact,
+        'email': email,
         'name': name,
       },
       'external': {

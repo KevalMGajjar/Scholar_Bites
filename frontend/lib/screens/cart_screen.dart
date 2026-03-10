@@ -41,22 +41,21 @@ class _CartScreenState extends State<CartScreen> {
   // --- Razorpay Handlers ---
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    // Payment succeeded, now create the order in the backend
+    _processSuccessfulOrder(response.orderId!, response.paymentId!, response.signature!);
+  }
+
+  void _processSuccessfulOrder(String orderId, String paymentId, String signature) async {
+    // Payment succeeded, verify with the backend
     try {
       final cart = Provider.of<CartProvider>(context, listen: false);
-      final universityId = await TokenStorage.getUniversityId();
       
-      if (universityId == null) {
-        throw Exception("Lost session. Please login again.");
-      }
-
-      final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+      await OrderService().verifyPayment(orderId, paymentId, signature);
       
       if (mounted) {
         setState(() => _isProcessingPayment = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payment Successful! Order placed! ID: ${orderResponse['id']}'),
+            content: Text('Payment Successful! Order placed! ID: $orderId'),
             backgroundColor: Colors.green,
           ),
         );
@@ -66,18 +65,22 @@ class _CartScreenState extends State<CartScreen> {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error creating order after payment: $e')),
+          SnackBar(content: Text('Payment verification failed: $e')),
         );
       }
     }
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    _processFailedOrder(response.message ?? 'User cancelled');
+  }
+
+  void _processFailedOrder(String message) {
     if (mounted) {
       setState(() => _isProcessingPayment = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Payment Failed: ${response.message ?? 'User cancelled'}'),
+          content: Text('Payment Failed: $message'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -109,17 +112,38 @@ class _CartScreenState extends State<CartScreen> {
 
     setState(() => _isProcessingPayment = true);
     
-    // Get user details for Razorpay prefill
-    String userName = await TokenStorage.getUserName() ?? 'Student';
-    // Email is removed, using phone if available in your token service or generic fallback
-    
-    // Open Razorpay Checkout overlay
-    _paymentService.openCheckout(
-      amount: cart.totalAmount,
-      contact: '9999999999', // Placeholder if no phone saved, update if needed
-      name: userName,
-      description: 'Scholar Bites Order',
-    );
+    try {
+      // Create order backend first to generate a valid Razorpay Order ID
+      final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+      final String orderId = orderResponse['payment_id']; // The Razorpay order ID
+
+      // Get user details for Razorpay prefill
+      String userName = await TokenStorage.getUserName() ?? 'Student';
+      String userEmail = await TokenStorage.getUserEmail() ?? 'student@example.com';
+
+      if (orderId.startsWith('mock_')) {
+        setState(() => _isProcessingPayment = false);
+        _showMockPaymentDialog(context, cart, orderId);
+        return;
+      }
+      
+      // Open Razorpay Checkout overlay
+      _paymentService.openCheckout(
+        amount: cart.totalAmount,
+        contact: '9999999999', // Placeholder if no phone saved, update if needed
+        email: userEmail,
+        name: userName,
+        description: 'Scholar Bites Order',
+        orderId: orderId,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to initiate checkout: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -642,6 +666,59 @@ class _CartScreenState extends State<CartScreen> {
                 color: _maroon,
                 fontWeight: FontWeight.w800,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMockPaymentDialog(BuildContext context, CartProvider cart, String orderId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Mock Payment Gateway (Test Mode)',
+          style: TextStyle(fontWeight: FontWeight.w800, color: _maroon),
+        ),
+        content: Text(
+          'You are in test mode.\n\nSimulating a payment of \u{20B9}${cart.totalAmount.toStringAsFixed(0)}.\nChoose the desired outcome to continue testing your flow:',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _processFailedOrder('Mock Payment Cancelled by User');
+            },
+            child: Text(
+              'Fail Payment',
+              style: TextStyle(
+                color: _maroon.withValues(alpha: 0.6),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _maroon,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _processSuccessfulOrder(
+                orderId,
+                'pay_mock_${DateTime.now().millisecondsSinceEpoch}',
+                'mock_signature'
+              );
+            },
+            child: const Text(
+              'Simulate Success',
+              style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
         ],
