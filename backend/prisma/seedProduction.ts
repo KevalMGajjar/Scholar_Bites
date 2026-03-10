@@ -22,19 +22,102 @@ async function main() {
     try {
         await client.query('BEGIN');
 
-        // 1. Create University
-        console.log('Creating Ahmedabad University...');
-        const uniResult = await client.query(`
-            INSERT INTO universities (name, logo_url, address, latitude, longitude) 
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (name) DO UPDATE SET 
-                name = EXCLUDED.name,
-                latitude = EXCLUDED.latitude,
-                longitude = EXCLUDED.longitude
-            RETURNING id;
-        `, ['Ahmedabad University', 'https://upload.wikimedia.org/wikipedia/en/thumb/9/91/Ahmedabad_University_Logo.svg/1200px-Ahmedabad_University_Logo.svg.png', 'Navrangpura, Ahmedabad, Gujarat 380009', 23.0374, 72.5411]);
+        // 1. Create Universities
+        console.log('Creating Universities in Gujarat...');
         
-        const uniId = uniResult.rows[0].id;
+        const universitiesData = [
+            {
+                name: 'Ahmedabad University',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/91/Ahmedabad_University_Logo.svg/1200px-Ahmedabad_University_Logo.svg.png',
+                address: 'Navrangpura, Ahmedabad, Gujarat 380009',
+                latitude: 23.0374,
+                longitude: 72.5411
+            },
+            {
+                name: 'Gujarat University',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/4/4c/Gujarat_University_Logo.svg/1200px-Gujarat_University_Logo.svg.png',
+                address: 'Navrangpura, Ahmedabad, Gujarat 380009',
+                latitude: 23.0360,
+                longitude: 72.5448
+            },
+            {
+                name: 'Nirma University',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/a/a4/Nirma_University_Logo.png',
+                address: 'Sarkhej - Gandhinagar Hwy, Ahmedabad, Gujarat 382481',
+                latitude: 23.1287,
+                longitude: 72.5401
+            },
+            {
+                name: 'Maharaja Sayajirao University of Baroda (MSU)',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/c/ca/Maharaja_Sayajirao_University_of_Baroda_logo.svg/1200px-Maharaja_Sayajirao_University_of_Baroda_logo.svg.png',
+                address: 'Pratapgunj, Vadodara, Gujarat 390002',
+                latitude: 22.3015,
+                longitude: 73.1815
+            },
+            {
+                name: 'IIT Gandhinagar',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/93/Indian_Institute_of_Technology_Gandhinagar_Logo.svg/1200px-Indian_Institute_of_Technology_Gandhinagar_Logo.svg.png',
+                address: 'Palaj, Gandhinagar, Gujarat 382355',
+                latitude: 23.2114,
+                longitude: 72.6842
+            },
+            {
+                name: 'DA-IICT',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/3/30/DA-IICT_logo.svg/1200px-DA-IICT_logo.svg.png',
+                address: 'Reliance Cross Rd, Gandhinagar, Gujarat 382007',
+                latitude: 23.1885,
+                longitude: 72.6283
+            },
+            {
+                name: 'SVNIT Surat',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d8/National_Institute_of_Technology%2C_Surat_Logo.png/1200px-National_Institute_of_Technology%2C_Surat_Logo.png',
+                address: 'Ichchhanath, Surat, Gujarat 395007',
+                latitude: 21.1664,
+                longitude: 72.7833
+            },
+            {
+                name: 'Pandit Deendayal Energy University (PDEU)',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/f/f6/Pandit_Deendayal_Energy_University_logo.png/1200px-Pandit_Deendayal_Energy_University_logo.png',
+                address: 'Knowledge Corridor, Raisan Village, Gandhinagar, Gujarat 382007',
+                latitude: 23.1565,
+                longitude: 72.6318
+            },
+            {
+                name: 'CEPT University',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/9d/CEPT_University_logo.svg/1200px-CEPT_University_logo.svg.png',
+                address: 'Kasturbhai Lalbhai Campus, University Road, Ahmedabad, Gujarat 380009',
+                latitude: 23.0375,
+                longitude: 72.5501
+            },
+            {
+                name: 'Navrachana University',
+                logo_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/5/52/Navrachana_University_logo.png/1200px-Navrachana_University_logo.png',
+                address: 'Bhaili, Vadodara, Gujarat 391410',
+                latitude: 22.2882,
+                longitude: 73.1368
+            }
+        ];
+
+        let uniId;
+
+        for (const uniData of universitiesData) {
+            const uniResult = await client.query(`
+                INSERT INTO universities (name, logo_url, address, latitude, longitude) 
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (name) DO UPDATE SET 
+                    name = EXCLUDED.name,
+                    logo_url = EXCLUDED.logo_url,
+                    address = EXCLUDED.address,
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude
+                RETURNING id;
+            `, [uniData.name, uniData.logo_url, uniData.address, uniData.latitude, uniData.longitude]);
+            
+            // We'll attach the restaurants and menu items to Ahmedabad University specifically for the demo
+            if (uniData.name === 'Ahmedabad University') {
+                uniId = uniResult.rows[0].id;
+            }
+        }
 
         // 2. Create Restaurants
         console.log('Creating Restaurants...');
