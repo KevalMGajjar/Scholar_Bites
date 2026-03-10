@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import '../utils/token_storage.dart';
 
 class PhysicsItem {
   final int id;
@@ -46,12 +47,26 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
   Offset? _lastDragPos;
   Offset? _dragStartPos;
   bool _wasDraggedFar = false;
+  
+  bool _hasSeenHint = true;
+  int _hintIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _initItems();
     _ticker = createTicker(_tick)..start();
+    _checkHintStatus();
+  }
+
+  Future<void> _checkHintStatus() async {
+    final hasSeen = await TokenStorage.getHasSeenFlickHint();
+    if (!hasSeen && mounted) {
+      setState(() {
+        _hasSeenHint = false;
+        _hintIndex = Random().nextInt(widget.items.length); // Randomly choose an item for the badge
+      });
+    }
   }
 
   void _initItems() {
@@ -59,43 +74,6 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
     _items = [];
     for (int i = 0; i < widget.items.length; i++) {
       Widget content = widget.items[i];
-      if (i == 0) {
-        content = Stack(
-          clipBehavior: Clip.none,
-          children: [
-            widget.items[i],
-            Positioned(
-              top: -8,
-              right: -20,
-              child: Transform.rotate(
-                angle: 0.2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B1C28),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
-                  ),
-                  child: const Text(
-                    'Flick me!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      }
 
       // Random initial positions and fast starting velocities
       _items.add(PhysicsItem(
@@ -230,6 +208,10 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
                 top: item.position.dy,
                 child: GestureDetector(
                   onPanStart: (details) {
+                    if (!_hasSeenHint) {
+                      setState(() => _hasSeenHint = true);
+                      TokenStorage.saveHasSeenFlickHint();
+                    }
                     item.isDragged = true;
                     item.velocity = Offset.zero;
                     _lastDragPos = details.localPosition;
@@ -276,7 +258,42 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
                       widget.onItemTap!(item.id);
                     }
                   },
-                  child: item.child,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      item.child,
+                      if (!_hasSeenHint && item.id == _hintIndex)
+                        Positioned(
+                          top: -8,
+                          right: -20,
+                          child: Transform.rotate(
+                            angle: 0.2,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8B1C28),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ],
+                              ),
+                              child: const Text(
+                                'Flick me!',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             }).toList(),

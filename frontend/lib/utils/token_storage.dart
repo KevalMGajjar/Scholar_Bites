@@ -42,4 +42,13 @@ class TokenStorage {
   static Future<String?> getUserEmail() async {
     return await _storage.read(key: 'user_email');
   }
+
+  static Future<void> saveHasSeenFlickHint() async {
+    await _storage.write(key: 'has_seen_flick_hint', value: 'true');
+  }
+
+  static Future<bool> getHasSeenFlickHint() async {
+    final val = await _storage.read(key: 'has_seen_flick_hint');
+    return val == 'true';
+  }
 }
