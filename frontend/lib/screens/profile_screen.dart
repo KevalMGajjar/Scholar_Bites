@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
 import '../utils/token_storage.dart';
 import 'welcome_screen.dart';
 import 'preferences_screen.dart';
+import 'feedback_screen.dart';
 
 // ─── Colors ──────────────────────────────────────────
 const _maroon = Color(0xFF8B1C28);
@@ -80,7 +80,11 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   Future<void> _fetchOrders() async {
     try {
       final orders = await OrderService().getMyOrders();
-      if (mounted) setState(() { _orders = orders; _isLoading = false; });
+      if (mounted)
+        setState(() {
+          _orders = orders;
+          _isLoading = false;
+        });
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -115,8 +119,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             color: _maroon.withValues(alpha: 0.08),
                             shape: BoxShape.circle),
                         child: const Center(
-                            child:
-                                Text('\u{1F4E6}', style: TextStyle(fontSize: 40))),
+                            child: Text('\u{1F4E6}',
+                                style: TextStyle(fontSize: 40))),
                       ),
                       const SizedBox(height: 16),
                       const Text('No orders yet',
@@ -178,12 +182,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             ),
                           ),
                           Icon(Icons.arrow_forward_ios_rounded,
-                              size: 14,
-                              color: _maroon.withValues(alpha: 0.4)),
+                              size: 14, color: _maroon.withValues(alpha: 0.4)),
                         ],
                       ),
-                    ).animate().fadeIn(
-                        delay: (50 * index).ms, duration: 300.ms);
+                    )
+                        .animate()
+                        .fadeIn(delay: (50 * index).ms, duration: 300.ms);
                   },
                 ),
     );
@@ -199,9 +203,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   File? _profileImage;
-  final ImagePicker _picker = ImagePicker();
-  String _userName = '';
-  String _userEmail = '';
   String _userPhone = '';
 
   @override
@@ -211,21 +212,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserProfile() async {
-    final name = await TokenStorage.getUserName();
-    final email = await TokenStorage.getUserEmail();
     final phone = await TokenStorage.getPhone();
     if (mounted) {
       setState(() {
-        _userName = name ?? 'Student';
-        _userEmail = email ?? '';
         _userPhone = phone ?? '';
       });
     }
-  }
-
-  Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) setState(() => _profileImage = File(image.path));
   }
 
   @override
@@ -289,7 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Feedback',
                       subtitle: 'Help us improve',
                       emoji: '\u{1F4AC}',
-                      onTap: _showFeedbackDialog,
+                      onTap: () => _navigate(const FeedbackScreen()),
                     ),
                   ]),
 
@@ -419,33 +411,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     fit: BoxFit.cover,
                   ),
                 ),
-              ).animate().scaleXY(begin: 0.8, end: 1.0, duration: 400.ms,
+              ).animate().scaleXY(
+                  begin: 0.8,
+                  end: 1.0,
+                  duration: 400.ms,
                   curve: Curves.easeOutBack),
               const SizedBox(height: 14),
 
-              // Student label + Phone Number
-              Column(
-                children: [
-                  Text(
-                    'Student',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
-                    ),
-                  ).animate().fadeIn(delay: 150.ms, duration: 300.ms),
-                  const SizedBox(height: 4),
-                  Text(
-                    _userPhone.isNotEmpty ? '+91 $_userPhone' : (_userName.isEmpty ? 'User' : _userName),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ).animate().fadeIn(delay: 200.ms, duration: 300.ms),
-                ],
-              ),
+              // Phone Number
+              Text(
+                _userPhone.isNotEmpty ? '+91 $_userPhone' : 'Student',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ).animate().fadeIn(delay: 150.ms, duration: 300.ms),
 
               const SizedBox(height: 22),
             ],
@@ -494,8 +475,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: item.onTap,
                   borderRadius: BorderRadius.vertical(
                     top: i == 0 ? const Radius.circular(22) : Radius.zero,
-                    bottom:
-                        isLast ? const Radius.circular(22) : Radius.zero,
+                    bottom: isLast ? const Radius.circular(22) : Radius.zero,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -518,8 +498,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 item.label,
@@ -535,8 +514,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   item.subtitle!,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color:
-                                        _darkText.withValues(alpha: 0.4),
+                                    color: _darkText.withValues(alpha: 0.4),
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -545,8 +523,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         Icon(Icons.arrow_forward_ios_rounded,
-                            size: 14,
-                            color: _maroon.withValues(alpha: 0.3)),
+                            size: 14, color: _maroon.withValues(alpha: 0.3)),
                       ],
                     ),
                   ),
@@ -556,80 +533,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Divider(
-                      height: 1,
-                      color: Colors.grey.withValues(alpha: 0.08)),
+                      height: 1, color: Colors.grey.withValues(alpha: 0.08)),
                 ),
             ],
           );
         }),
       ),
-    ).animate().fadeIn(delay: 450.ms, duration: 350.ms)
+    )
+        .animate()
+        .fadeIn(delay: 450.ms, duration: 350.ms)
         .slideY(begin: 0.05, end: 0);
   }
 
   // ── NAVIGATION HELPER ──────────────────────────────
   void _navigate(Widget screen) {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (context) => screen));
-  }
-
-  // ── FEEDBACK DIALOG ────────────────────────────────
-  void _showFeedbackDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Send Feedback',
-            style:
-                TextStyle(fontWeight: FontWeight.w800, color: _darkText)),
-        content: TextField(
-          decoration: InputDecoration(
-            hintText: 'Tell us what you think...',
-            hintStyle:
-                TextStyle(color: _darkText.withValues(alpha: 0.3)),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide:
-                  BorderSide(color: _maroon.withValues(alpha: 0.2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: _maroon),
-            ),
-          ),
-          maxLines: 4,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: TextStyle(
-                    color: _darkText.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Thank you for your feedback!'),
-                  backgroundColor: _maroon,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _maroon,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Send',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
   }
 
   // ── LOGOUT ─────────────────────────────────────────
@@ -637,11 +555,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Log Out',
-            style:
-                TextStyle(fontWeight: FontWeight.w800, color: _darkText)),
+            style: TextStyle(fontWeight: FontWeight.w800, color: _darkText)),
         content: const Text('Are you sure you want to log out?'),
         actions: [
           TextButton(
@@ -658,8 +574,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!context.mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(
-                    builder: (context) => const WelcomeScreen()),
+                MaterialPageRoute(builder: (context) => const WelcomeScreen()),
                 (route) => false,
               );
             },

@@ -124,6 +124,12 @@ async function main() {
         const res1Result = await client.query(`
             INSERT INTO restaurants (university_id, name, logo_url, cover_url, rating, tags, prep_time_minutes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (university_id, name) DO UPDATE SET
+                logo_url = EXCLUDED.logo_url,
+                cover_url = EXCLUDED.cover_url,
+                rating = EXCLUDED.rating,
+                tags = EXCLUDED.tags,
+                prep_time_minutes = EXCLUDED.prep_time_minutes
             RETURNING id;
         `, [
             uniId, 'Ahmedabad Canteen', 
@@ -136,6 +142,12 @@ async function main() {
         const res2Result = await client.query(`
             INSERT INTO restaurants (university_id, name, logo_url, cover_url, rating, tags, prep_time_minutes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (university_id, name) DO UPDATE SET
+                logo_url = EXCLUDED.logo_url,
+                cover_url = EXCLUDED.cover_url,
+                rating = EXCLUDED.rating,
+                tags = EXCLUDED.tags,
+                prep_time_minutes = EXCLUDED.prep_time_minutes
             RETURNING id;
         `, [
             uniId, 'Healthy Bytes',
@@ -152,11 +164,23 @@ async function main() {
         await client.query(`
             INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, stock_quantity)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (restaurant_id, name) DO UPDATE SET
+                description = EXCLUDED.description,
+                price = EXCLUDED.price,
+                category = EXCLUDED.category,
+                image_url = EXCLUDED.image_url,
+                stock_quantity = EXCLUDED.stock_quantity
         `, [res1Id, 'Classic Burger', 'Juicy beef patty with fresh lettuce, tomatoes.', 150.00, 'Burger', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80', 50]);
 
         await client.query(`
             INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, stock_quantity)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (restaurant_id, name) DO UPDATE SET
+                description = EXCLUDED.description,
+                price = EXCLUDED.price,
+                category = EXCLUDED.category,
+                image_url = EXCLUDED.image_url,
+                stock_quantity = EXCLUDED.stock_quantity
         `, [res1Id, 'Peri Peri Fries', 'Crispy french fries tossed in spicy peri peri mix.', 80.00, 'Snacks', 'https://images.unsplash.com/photo-1573080496597-1225bb156c70?auto=format&fit=crop&q=80', 100]);
 
         await client.query(`
