@@ -27,15 +27,24 @@ async function seedStaff() {
         const university = uniResult.rows[0];
         console.log(`📍 Using university: ${university.name} (${university.id})`);
 
-        // Check if staff table has 'phone' column
-        const colCheck = await client.query(`
-            SELECT column_name FROM information_schema.columns 
-            WHERE table_name = 'staff' AND column_name = 'phone'
+        // Ensure staff table has all required columns for admin panel auth
+        const requiredColumns = [
+            { name: 'email', type: 'VARCHAR(255) UNIQUE' },
+            { name: 'password_hash', type: 'VARCHAR(255)' },
+            { name: 'phone', type: 'VARCHAR(15)' },
+        ];
+
+        const existingCols = await client.query(`
+            SELECT column_name FROM information_schema.columns WHERE table_name = 'staff'
         `);
-        const hasPhone = colCheck.rows.length > 0;
-        if (!hasPhone) {
-            console.log('📝 Adding phone column to staff table...');
-            await client.query('ALTER TABLE staff ADD COLUMN IF NOT EXISTS phone VARCHAR(15)');
+        const existingNames = existingCols.rows.map((r: any) => r.column_name);
+        console.log('📋 Existing staff columns:', existingNames.join(', '));
+
+        for (const col of requiredColumns) {
+            if (!existingNames.includes(col.name)) {
+                console.log(`📝 Adding missing column: ${col.name} (${col.type})`);
+                await client.query(`ALTER TABLE staff ADD COLUMN ${col.name} ${col.type}`);
+            }
         }
 
         // Create admin user
