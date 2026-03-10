@@ -36,15 +36,19 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         }
 
         // 2. Create Razorpay Order
-        const razorpayOrder = await razorpay.orders.create({
-            amount: Math.round(totalAmount * 100), // amount in paisa
-            currency: 'INR',
-            receipt: `order_${Date.now()}`,
-        });
+        let orderId = `mock_order_${crypto.randomBytes(4).toString('hex')}`;
+
+        if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.includes('placeholder')) {
+            const razorpayOrder = await razorpay.orders.create({
+                amount: Math.round(totalAmount * 100), // amount in paisa
+                currency: 'INR',
+                receipt: `order_${Date.now()}`,
+            });
+            orderId = razorpayOrder.id;
+        }
 
         // 3. Create Database Order
         // Note: Using razorpay_order_id as payment_id initially
-        const orderId = razorpayOrder.id;
 
         const insertOrderQuery = `
             INSERT INTO orders (user_id, university_id, status, total_amount, payment_id)
@@ -85,13 +89,21 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
     try {
-        const body = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSignature = crypto
-            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
-            .update(body.toString())
-            .digest('hex');
+        let isValid = false;
 
-        if (expectedSignature === razorpay_signature) {
+        if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
+            const body = razorpay_order_id + "|" + razorpay_payment_id;
+            const expectedSignature = crypto
+                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+                .update(body.toString())
+                .digest('hex');
+            isValid = (expectedSignature === razorpay_signature);
+        } else {
+            // Mock environment check
+            isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
+        }
+
+        if (isValid) {
             // Payment successful
             const result = await pool.query(
                 "UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE payment_id = $1 RETURNING *",
