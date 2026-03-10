@@ -17,6 +17,7 @@ class TokenStorage {
     await _storage.delete(key: 'university_id');
     await _storage.delete(key: 'user_name');
     await _storage.delete(key: 'user_email');
+    await _storage.delete(key: 'user_phone');
   }
 
   static Future<void> saveUniversityId(String id) async {
@@ -50,5 +51,13 @@ class TokenStorage {
   static Future<bool> getHasSeenFlickHint() async {
     final val = await _storage.read(key: 'has_seen_flick_hint');
     return val == 'true';
+  }
+
+  static Future<void> savePhone(String phone) async {
+    await _storage.write(key: 'user_phone', value: phone);
+  }
+
+  static Future<String?> getPhone() async {
+    return await _storage.read(key: 'user_phone');
   }
 }

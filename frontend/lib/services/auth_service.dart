@@ -97,6 +97,7 @@ class AuthService {
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
+          await TokenStorage.savePhone(phone);
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
@@ -134,6 +135,7 @@ class AuthService {
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
+          await TokenStorage.savePhone(phone);
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
@@ -169,6 +171,7 @@ class AuthService {
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
+          await TokenStorage.savePhone(phone);
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);

@@ -11,12 +11,14 @@ class FoodCard extends StatefulWidget {
   final FoodItem food;
   final VoidCallback onTap;
   final Function(GlobalKey)? onAddTap;
+  final VoidCallback? onInteraction;
 
   const FoodCard({
     super.key,
     required this.food,
     required this.onTap,
     this.onAddTap,
+    this.onInteraction,
   });
 
   @override
@@ -124,7 +126,10 @@ class _FoodCardState extends State<FoodCard> {
                             ),
                             child: FavoriteButton(
                               isFavorite: isFavorite,
-                              onTap: () => favorites.toggleFavorite(widget.food.id, widget.food),
+                              onTap: () {
+                                favorites.toggleFavorite(widget.food.id, widget.food);
+                                widget.onInteraction?.call();
+                              },
                               size: 20,
                             ),
                           ),

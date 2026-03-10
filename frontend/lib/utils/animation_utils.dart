@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:math';
 
 class AnimationUtils {
@@ -160,7 +161,7 @@ class _PremiumFlyWidgetState extends State<_PremiumFlyWidget>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     image: DecorationImage(
-                      image: NetworkImage(widget.imageUrl),
+                      image: CachedNetworkImageProvider(widget.imageUrl),
                       fit: BoxFit.cover,
                     ),
                     boxShadow: [

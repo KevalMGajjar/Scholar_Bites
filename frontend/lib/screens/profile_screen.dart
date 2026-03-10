@@ -6,6 +6,7 @@ import '../services/order_service.dart';
 import '../services/auth_service.dart';
 import '../utils/token_storage.dart';
 import 'welcome_screen.dart';
+import 'preferences_screen.dart';
 
 // ─── Colors ──────────────────────────────────────────
 const _maroon = Color(0xFF8B1C28);
@@ -201,6 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   String _userName = '';
   String _userEmail = '';
+  String _userPhone = '';
 
   @override
   void initState() {
@@ -211,10 +213,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserProfile() async {
     final name = await TokenStorage.getUserName();
     final email = await TokenStorage.getUserEmail();
+    final phone = await TokenStorage.getPhone();
     if (mounted) {
       setState(() {
         _userName = name ?? 'Student';
         _userEmail = email ?? '';
+        _userPhone = phone ?? '';
       });
     }
   }
@@ -271,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Preferences',
                       subtitle: 'Dietary, allergies',
                       emoji: '\u{2699}\u{FE0F}',
-                      onTap: () {},
+                      onTap: () => _navigate(const PreferencesScreen()),
                     ),
                     _MenuItem(
                       icon: Icons.notifications_active_rounded,
@@ -394,67 +398,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 24),
 
               // Avatar
-              GestureDetector(
-                onTap: _pickImage,
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                        image: DecorationImage(
-                          image: _profileImage != null
-                              ? FileImage(_profileImage!) as ImageProvider
-                              : const NetworkImage(
-                                  'https://www.docbox.asia/images/dummy.png'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: _maroon.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.camera_alt_rounded,
-                            color: _maroon, size: 16),
-                      ),
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
                     ),
                   ],
+                  image: DecorationImage(
+                    image: _profileImage != null
+                        ? FileImage(_profileImage!) as ImageProvider
+                        : const NetworkImage(
+                            'https://www.docbox.asia/images/dummy.png'),
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ).animate().scaleXY(begin: 0.8, end: 1.0, duration: 400.ms,
                   curve: Curves.easeOutBack),
               const SizedBox(height: 14),
 
-              // Name / Phone Number
-              Text(
-                _userEmail.isNotEmpty ? _userEmail : (_userName == 'Student' || _userName.isEmpty ? 'User' : _userName),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                ),
-              ).animate().fadeIn(delay: 150.ms, duration: 300.ms),
+              // Student label + Phone Number
+              Column(
+                children: [
+                  Text(
+                    'Student',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.2,
+                    ),
+                  ).animate().fadeIn(delay: 150.ms, duration: 300.ms),
+                  const SizedBox(height: 4),
+                  Text(
+                    _userPhone.isNotEmpty ? '+91 $_userPhone' : (_userName.isEmpty ? 'User' : _userName),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ).animate().fadeIn(delay: 200.ms, duration: 300.ms),
+                ],
+              ),
 
               const SizedBox(height: 22),
             ],

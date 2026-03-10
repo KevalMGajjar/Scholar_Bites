@@ -64,22 +64,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startAutoScroll() {
-    _trendingTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _trendingTimer?.cancel();
+    _trendingTimer = Timer.periodic(const Duration(seconds: 7), (timer) {
       if (_trendingController.hasClients && _trendingItems.isNotEmpty) {
         int nextPage = _trendingController.page!.round() + 1;
         if (nextPage >= _trendingItems.length) {
           _trendingController.animateToPage(
             0,
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.fastOutSlowIn,
+            duration: const Duration(milliseconds: 1000),
+            curve: Curves.easeInOutCubic,
           );
         } else {
           _trendingController.nextPage(
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.fastOutSlowIn,
+            duration: const Duration(milliseconds: 1000),
+            curve: Curves.easeInOutCubic,
           );
         }
       }
+    });
+  }
+
+  void _pauseAutoScroll() {
+    _trendingTimer?.cancel();
+    // Resume auto-scroll after 12 seconds of inactivity
+    Future.delayed(const Duration(seconds: 12), () {
+      if (mounted) _startAutoScroll();
     });
   }
 
@@ -442,7 +451,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         onAddTap: (key) {
                                           Provider.of<CartProvider>(context, listen: false).addItem(_trendingItems[index]);
                                           _runAddToCartAnimation(key, _trendingItems[index].imageUrl);
+                                          _pauseAutoScroll();
                                         },
+                                        onInteraction: _pauseAutoScroll,
                                       ),
                                     );
                                   },
