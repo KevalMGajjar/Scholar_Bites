@@ -1,16 +1,126 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../models/cart_model.dart';
 import '../services/order_service.dart';
+import '../services/payment_service.dart';
 import '../utils/token_storage.dart';
 import 'detail_screen.dart';
 
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
+  @override
+  State<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends State<CartScreen> {
   static const _maroon = Color(0xFF8B1C28);
   static const _darkText = Color(0xFF4A0E13);
+  
+  late PaymentService _paymentService;
+  bool _isProcessingPayment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _paymentService = PaymentService(
+      onSuccess: _handlePaymentSuccess,
+      onFailure: _handlePaymentError,
+      onExternalWallet: _handleExternalWallet,
+    );
+  }
+
+  @override
+  void dispose() {
+    _paymentService.dispose();
+    super.dispose();
+  }
+
+  // --- Razorpay Handlers ---
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    // Payment succeeded, now create the order in the backend
+    try {
+      final cart = Provider.of<CartProvider>(context, listen: false);
+      final universityId = await TokenStorage.getUniversityId();
+      
+      if (universityId == null) {
+        throw Exception("Lost session. Please login again.");
+      }
+
+      final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+      
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment Successful! Order placed! ID: ${orderResponse['id']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        cart.clear();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating order after payment: $e')),
+        );
+      }
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (mounted) {
+      setState(() => _isProcessingPayment = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment Failed: ${response.message ?? 'User cancelled'}'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('External Wallet Selected: ${response.walletName}')),
+      );
+    }
+  }
+
+  // --- Checkout Flow ---
+
+  Future<void> _startCheckoutFlow(CartProvider cart) async {
+    if (cart.totalAmount <= 0) return;
+
+    final universityId = await TokenStorage.getUniversityId();
+    if (universityId == null || universityId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in again.')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isProcessingPayment = true);
+    
+    // Get user details for Razorpay prefill
+    String userName = await TokenStorage.getUserName() ?? 'Student';
+    // Email is removed, using phone if available in your token service or generic fallback
+    
+    // Open Razorpay Checkout overlay
+    _paymentService.openCheckout(
+      amount: cart.totalAmount,
+      contact: '9999999999', // Placeholder if no phone saved, update if needed
+      name: userName,
+      description: 'Scholar Bites Order',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +528,7 @@ class CartScreen extends StatelessWidget {
             width: double.infinity,
             height: 58,
             child: ElevatedButton(
-              onPressed: () => _handleCheckout(context, cart),
+              onPressed: _isProcessingPayment ? null : () => _startCheckoutFlow(cart),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _maroon,
                 foregroundColor: Colors.white,
@@ -428,13 +538,19 @@ class CartScreen extends StatelessWidget {
                 elevation: 8,
                 shadowColor: _maroon.withValues(alpha: 0.5),
               ),
-              child: const Row(
+              child: _isProcessingPayment 
+                ? const SizedBox(
+                    width: 24, 
+                    height: 24, 
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                  )
+                : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.shopping_bag_rounded, size: 22),
+                  Icon(Icons.payment_rounded, size: 22),
                   SizedBox(width: 10),
                   Text(
-                    'Place Order',
+                    'Pay via Razorpay',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -514,8 +630,11 @@ class CartScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              cart.clear();
               Navigator.pop(ctx);
+              // Delay the actual clearing to let the dialog closing animation finish without lag
+              Future.delayed(const Duration(milliseconds: 150), () {
+                cart.clear();
+              });
             },
             child: const Text(
               'Clear',
@@ -529,36 +648,5 @@ class CartScreen extends StatelessWidget {
       ),
     );
   }
-
-  Future<void> _handleCheckout(BuildContext context, CartProvider cart) async {
-    final universityId = await TokenStorage.getUniversityId();
-    if (universityId == null || universityId.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in again.')),
-        );
-      }
-      return;
-    }
-
-    try {
-      final response = await OrderService()
-          .createOrder(cart.items.values.toList(), universityId);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Order placed! ID: ${response['id']}'),
-            backgroundColor: _maroon,
-          ),
-        );
-        cart.clear();
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Checkout failed: $e')),
-        );
-      }
-    }
-  }
 }
+
