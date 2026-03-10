@@ -1,12 +1,5 @@
-import { Pool } from 'pg';
 import bcrypt from 'bcrypt';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:root@localhost:5432/canteen_db',
-});
+import pool from '../config/db';
 
 async function seedStaff() {
     const client = await pool.connect();
