@@ -1,0 +1,9 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const universityController_1 = require("../controllers/universityController");
+const authMiddleware_1 = require("../middlewares/authMiddleware");
+const router = (0, express_1.Router)();
+router.get('/', universityController_1.getUniversities);
+router.post('/', authMiddleware_1.authenticateJWT, (0, authMiddleware_1.authorizeRole)(['super_admin']), universityController_1.createUniversity);
+exports.default = router;

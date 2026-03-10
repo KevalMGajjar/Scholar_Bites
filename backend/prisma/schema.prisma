@@ -1,0 +1,198 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [uuidOssp(map: "uuid-ossp")]
+}
+
+// 1. universities Table
+model University {
+  id         String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name       String       @unique @db.VarChar(255)
+  logo_url   String?
+  address    String?
+  latitude   Float?
+  longitude  Float?
+  created_at DateTime     @default(now()) @db.Timestamptz
+
+  users       User[]
+  staff       Staff[]
+  restaurants Restaurant[]
+  orders      Order[]
+
+  @@map("universities")
+}
+
+// 1.5. restaurants Table (Vendors/Stalls within University)
+model Restaurant {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id String   @db.Uuid
+  name          String   @db.VarChar(100)
+  logo_url      String?
+  cover_url     String?
+  rating        Float    @default(0.0)
+  tags          String[] @default([]) // e.g. ["Healthy", "Fast Food"]
+  is_open       Boolean  @default(true)
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  university    University  @relation(fields: [university_id], references: [id])
+  menuItems     MenuItem[]
+  orders        Order[]
+
+  @@map("restaurants")
+}
+
+// 2. users Table (Students)
+model User {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id String   @db.Uuid
+  email         String   @unique @db.VarChar(255)
+  password_hash String   @db.VarChar(255)
+  name          String   @db.VarChar(100)
+  phone         String?  @db.VarChar(15)
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  university    University  @relation(fields: [university_id], references: [id])
+  groupOrders   GroupOrder[] 
+  groupMembers  GroupOrderMember[]
+  orders        Order[]
+
+  @@map("users")
+}
+
+// 3. staff Table
+enum Role {
+  staff
+  admin
+  super_admin
+}
+
+model Staff {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id String   @db.Uuid
+  email         String   @unique @db.VarChar(255)
+  password_hash String   @db.VarChar(255)
+  name          String   @db.VarChar(100)
+  role          Role
+  permissions   Json     @default("{}")
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  university    University @relation(fields: [university_id], references: [id])
+
+  @@map("staff")
+}
+
+// 4. menu_items Table
+model MenuItem {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  restaurant_id    String   @db.Uuid
+  name             String   @db.VarChar(100)
+  description      String?
+  price            Decimal  @db.Decimal(10, 2)
+  category         String   @db.VarChar(50)
+  image_url        String?
+  is_available     Boolean  @default(true)
+  stock_quantity   Int      @default(0)
+  nutritional_info Json?
+  created_at       DateTime @default(now()) @db.Timestamptz
+
+  restaurant     Restaurant  @relation(fields: [restaurant_id], references: [id])
+  orderItems     OrderItem[]
+
+  @@index([category])
+  @@map("menu_items") 
+}
+
+// 5. group_orders Table (Dutch Treat)
+enum GroupOrderStatus {
+  open
+  locked
+  paid
+  completed
+}
+
+model GroupOrder {
+  id               String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code             String           @unique @db.VarChar(6)
+  creator_id       String           @db.Uuid
+  status           GroupOrderStatus
+  total_amount     Decimal          @default(0.00) @db.Decimal(10, 2)
+  discount_applied Decimal          @default(0.00) @db.Decimal(10, 2)
+  created_at       DateTime         @default(now()) @db.Timestamptz
+  expires_at       DateTime?        @db.Timestamptz
+
+  creator      User               @relation(fields: [creator_id], references: [id])
+  members      GroupOrderMember[]
+  orders       Order[] // Link if Group Order
+
+  @@map("group_orders")
+}
+
+// 6. group_order_members Table
+enum PaymentStatus {
+  pending
+  paid
+  failed
+}
+
+model GroupOrderMember {
+  id             String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  group_order_id String        @db.Uuid
+  user_id        String        @db.Uuid
+  share_amount   Decimal       @db.Decimal(10, 2)
+  payment_status PaymentStatus
+  payment_id     String?       @unique @db.VarChar(255)
+  joined_at      DateTime      @default(now()) @db.Timestamptz
+
+  groupOrder     GroupOrder    @relation(fields: [group_order_id], references: [id])
+  user           User          @relation(fields: [user_id], references: [id])
+
+  @@map("group_order_members")
+}
+
+// 7. orders Table
+enum OrderStatus {
+  pending
+  preparing
+  ready
+  completed
+  cancelled
+}
+
+model Order {
+  id               String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id          String      @db.Uuid
+  university_id    String      @db.Uuid
+  restaurant_id    String      @db.Uuid
+  status           OrderStatus
+  total_amount     Decimal     @db.Decimal(10, 2)
+  payment_id       String      @unique @db.VarChar(255)
+  group_order_id   String?     @db.Uuid
+  created_at       DateTime    @default(now()) @db.Timestamptz
+  updated_at       DateTime    @default(now()) @updatedAt @db.Timestamptz
+
+  user        User        @relation(fields: [user_id], references: [id])
+  university  University  @relation(fields: [university_id], references: [id])
+  restaurant  Restaurant  @relation(fields: [restaurant_id], references: [id])
+  groupOrder  GroupOrder? @relation(fields: [group_order_id], references: [id])
+  items       OrderItem[]
+
+  @@map("orders")
+}
+
+// 8. order_items Table
+model OrderItem {
+  id            String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  order_id      String  @db.Uuid
+  menu_item_id  String  @db.Uuid
+  quantity      Int
+  price_at_time Decimal @db.Decimal(10, 2)
+
+  order    Order    @relation(fields: [order_id], references: [id])
+  menuItem MenuItem @relation(fields: [menu_item_id], references: [id])
+
+  @@map("order_items")
+}

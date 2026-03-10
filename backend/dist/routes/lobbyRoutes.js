@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const lobbyController_1 = require("../controllers/lobbyController");
+const authMiddleware_1 = require("../middlewares/authMiddleware");
+const router = (0, express_1.Router)();
+router.post('/create', authMiddleware_1.authenticateJWT, lobbyController_1.createLobby);
+router.post('/join', authMiddleware_1.authenticateJWT, lobbyController_1.joinLobby);
+router.post('/add-item', authMiddleware_1.authenticateJWT, lobbyController_1.addItemToLobby);
+router.post('/lock', authMiddleware_1.authenticateJWT, lobbyController_1.lockLobby);
+router.post('/pay-share', authMiddleware_1.authenticateJWT, lobbyController_1.payShare);
+router.post('/verify-share', authMiddleware_1.authenticateJWT, lobbyController_1.verifyShare);
+exports.default = router;

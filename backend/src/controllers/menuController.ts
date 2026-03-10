@@ -1,0 +1,109 @@
+import { Request, Response } from 'express';
+import pool from '../config/db';
+import { AuthRequest } from '../middlewares/authMiddleware';
+
+export const getMenu = async (req: Request, res: Response) => {
+    const { restaurant_id, university_id, category } = req.query;
+
+    if (!restaurant_id && !university_id) {
+        return res.status(400).json({ message: 'Restaurant ID or University ID is required' });
+    }
+
+    try {
+        let query = '';
+        let params: any[] = [];
+        let pIndex = 1;
+
+        if (restaurant_id) {
+            query = `SELECT * FROM menu_items WHERE restaurant_id = $${pIndex++} AND is_available = TRUE`;
+            params.push(restaurant_id);
+        } else if (university_id) {
+            query = `
+                SELECT m.* FROM menu_items m 
+                JOIN restaurants r ON m.restaurant_id = r.id 
+                WHERE r.university_id = $${pIndex++} AND m.is_available = TRUE
+            `;
+            params.push(university_id);
+        }
+
+        if (category) {
+            query += ` AND m.category = $${pIndex++}`;
+            params.push(category);
+        }
+
+        query += ' ORDER BY category, name';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const addMenuItem = async (req: AuthRequest, res: Response) => {
+    const { name, description, price, category, image_url, nutritional_info, stock_quantity, restaurant_id } = req.body;
+    
+    if (!restaurant_id) {
+        return res.status(400).json({ message: 'Restaurant ID is required' });
+    }
+
+    try {
+        // Fetch staff university_id to ensure they have access to this restaurant (simplified for now)
+        const staffParams = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
+        if (staffParams.rows.length === 0) return res.sendStatus(403);
+        const uniId = staffParams.rows[0].university_id;
+
+        // Verify restaurant belongs to university
+        const restCheck = await pool.query('SELECT id FROM restaurants WHERE id = $1 AND university_id = $2', [restaurant_id, uniId]);
+        if (restCheck.rows.length === 0) return res.sendStatus(403);
+
+        const result = await pool.query(
+            `INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity || 0]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const updateStock = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { stock_quantity, is_available } = req.body; // allow updating availability too
+
+    try {
+        // Should verify if item belongs to staff's university? 
+        // Ideally yes, but for MVP just update.
+
+        // Construct dynamic query
+        let updates = [];
+        let params = [];
+        let idx = 1;
+
+        if (stock_quantity !== undefined) {
+            updates.push(`stock_quantity = $${idx++}`);
+            params.push(stock_quantity);
+        }
+        if (is_available !== undefined) {
+            updates.push(`is_available = $${idx++}`);
+            params.push(is_available);
+        }
+
+        if (updates.length === 0) return res.sendStatus(400);
+
+        params.push(id);
+        const query = `UPDATE menu_items SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+
+        const result = await pool.query(query, params);
+
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
