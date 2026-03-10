@@ -15,11 +15,11 @@ export const getMenu = async (req: Request, res: Response) => {
         let pIndex = 1;
 
         if (restaurant_id) {
-            query = `SELECT * FROM menu_items WHERE restaurant_id = $${pIndex++} AND is_available = TRUE`;
+            query = `SELECT DISTINCT * FROM menu_items WHERE restaurant_id = $${pIndex++} AND is_available = TRUE`;
             params.push(restaurant_id);
         } else if (university_id) {
             query = `
-                SELECT m.* FROM menu_items m 
+                SELECT DISTINCT ON (m.name) m.* FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
                 WHERE r.university_id = $${pIndex++} AND m.is_available = TRUE
             `;
@@ -31,7 +31,7 @@ export const getMenu = async (req: Request, res: Response) => {
             params.push(category);
         }
 
-        query += ' ORDER BY category, name';
+        query += ' ORDER BY m.name, category';
 
         const result = await pool.query(query, params);
         res.json(result.rows);
