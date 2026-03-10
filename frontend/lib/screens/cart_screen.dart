@@ -220,7 +220,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ],
                 ),
-              ).animate().fadeIn(duration: 300.ms),
+              ),
 
               // Cart items list
               Expanded(
