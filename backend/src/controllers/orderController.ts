@@ -18,12 +18,13 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Calculate Total Amount
+        // 1. Calculate Total Amount and determine restaurant
         let totalAmount = 0;
+        let restaurantId: string | null = null;
         const orderItemsData = [];
 
         for (const item of items) {
-            const result = await client.query('SELECT price, is_available FROM menu_items WHERE id = $1', [item.menu_item_id]);
+            const result = await client.query('SELECT price, is_available, restaurant_id FROM menu_items WHERE id = $1', [item.menu_item_id]);
             const menuItem = result.rows[0];
 
             if (!menuItem || !menuItem.is_available) {
@@ -32,7 +33,12 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
             const price = parseFloat(menuItem.price);
             totalAmount += price * item.quantity;
+            if (!restaurantId) restaurantId = menuItem.restaurant_id;
             orderItemsData.push({ ...item, price });
+        }
+
+        if (!restaurantId) {
+            throw new Error('Could not determine restaurant for order');
         }
 
         // 2. Create Razorpay Order
@@ -51,11 +57,11 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         // Note: Using razorpay_order_id as payment_id initially
 
         const insertOrderQuery = `
-            INSERT INTO orders (user_id, university_id, status, total_amount, payment_id)
-            VALUES ($1, $2, 'pending', $3, $4)
+            INSERT INTO orders (user_id, university_id, restaurant_id, status, total_amount, payment_id)
+            VALUES ($1, $2, $3, 'pending', $4, $5)
             RETURNING id
         `;
-        const orderResult = await client.query(insertOrderQuery, [user_id, university_id, totalAmount, orderId]);
+        const orderResult = await client.query(insertOrderQuery, [user_id, university_id, restaurantId, totalAmount, orderId]);
         const dbOrderId = orderResult.rows[0].id;
 
         // 4. Create Order Items
