@@ -25,11 +25,14 @@ async function main() {
         // 1. Create University
         console.log('Creating Ahmedabad University...');
         const uniResult = await client.query(`
-            INSERT INTO universities (name, logo_url, address) 
-            VALUES ($1, $2, $3)
-            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+            INSERT INTO universities (name, logo_url, address, latitude, longitude) 
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (name) DO UPDATE SET 
+                name = EXCLUDED.name,
+                latitude = EXCLUDED.latitude,
+                longitude = EXCLUDED.longitude
             RETURNING id;
-        `, ['Ahmedabad University', 'https://upload.wikimedia.org/wikipedia/en/thumb/9/91/Ahmedabad_University_Logo.svg/1200px-Ahmedabad_University_Logo.svg.png', 'Navrangpura, Ahmedabad, Gujarat 380009']);
+        `, ['Ahmedabad University', 'https://upload.wikimedia.org/wikipedia/en/thumb/9/91/Ahmedabad_University_Logo.svg/1200px-Ahmedabad_University_Logo.svg.png', 'Navrangpura, Ahmedabad, Gujarat 380009', 23.0374, 72.5411]);
         
         const uniId = uniResult.rows[0].id;
 
