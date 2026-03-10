@@ -104,11 +104,12 @@ class AuthService {
         return userModel;
       }
     } on DioException catch (e) {
-      if (e.response?.statusCode != 404) {
-         throw Exception(e.response?.data['message'] ?? 'Login failed');
+      if (e.response?.statusCode == 404) {
+        return null; // Return null if 404 (needs registration)
       }
+      throw Exception(e.response?.data['message'] ?? 'Login failed');
     }
-    return null; // Return null if 404 (needs registration)
+    return null;
   }
 
   static Future<UserModel?> registerOtp({

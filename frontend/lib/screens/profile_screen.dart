@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 import 'dart:io';
-import '../models/favorites_model.dart';
-import '../models/cart_model.dart';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
 import '../utils/token_storage.dart';
@@ -229,9 +226,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final favCount = Provider.of<FavoritesProvider>(context).count;
-    final cartCount = Provider.of<CartProvider>(context).itemCount;
-
     return Scaffold(
       backgroundColor: _bg,
       body: SingleChildScrollView(
@@ -239,7 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           children: [
             // ── Premium Header ──────────────────────
-            _buildHeader(favCount, cartCount),
+            _buildHeader(),
 
             // ── Menu Sections ───────────────────────
             Padding(
@@ -352,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ── HEADER ──────────────────────────────────────────
-  Widget _buildHeader(int favCount, int cartCount) {
+  Widget _buildHeader() {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -394,16 +388,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.settings_rounded,
-                        color: Colors.white, size: 20),
-                  ),
+                  const SizedBox(width: 40),
                 ],
               ),
               const SizedBox(height: 24),
@@ -461,77 +446,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   curve: Curves.easeOutBack),
               const SizedBox(height: 14),
 
-              // Name + Email
+              // Name / Phone Number
               Text(
-                _userName.isEmpty ? 'Student' : _userName,
+                _userEmail.isNotEmpty ? _userEmail : (_userName == 'Student' || _userName.isEmpty ? 'User' : _userName),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                 ),
               ).animate().fadeIn(delay: 150.ms, duration: 300.ms),
-              const SizedBox(height: 4),
-              if (_userEmail.isNotEmpty)
-                Text(
-                  _userEmail,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ).animate().fadeIn(delay: 250.ms, duration: 300.ms),
 
               const SizedBox(height: 22),
-
-              // Stat cards
-              Row(
-                children: [
-                  _statCard('\u{2764}\u{FE0F}', '$favCount', 'Favorites'),
-                  const SizedBox(width: 12),
-                  _statCard('\u{1F6D2}', '$cartCount', 'In Cart'),
-                  const SizedBox(width: 12),
-                  _statCard('\u{2B50}', '4.8', 'Rating'),
-                ],
-              ).animate().fadeIn(delay: 350.ms, duration: 400.ms)
-                  .slideY(begin: 0.2, end: 0),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _statCard(String emoji, String value, String label) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Column(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
         ),
       ),
     );
