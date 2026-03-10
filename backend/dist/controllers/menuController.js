@@ -15,15 +15,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateStock = exports.addMenuItem = exports.getMenu = void 0;
 const db_1 = __importDefault(require("../config/db"));
 const getMenu = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { university_id, category } = req.query;
-    if (!university_id) {
-        return res.status(400).json({ message: 'University ID is required' });
+    const { restaurant_id, university_id, category } = req.query;
+    if (!restaurant_id && !university_id) {
+        return res.status(400).json({ message: 'Restaurant ID or University ID is required' });
     }
     try {
-        let query = 'SELECT * FROM menu_items WHERE university_id = $1 AND is_available = TRUE';
-        let params = [university_id];
+        let query = '';
+        let params = [];
+        let pIndex = 1;
+        if (restaurant_id) {
+            query = `SELECT * FROM menu_items WHERE restaurant_id = $${pIndex++} AND is_available = TRUE`;
+            params.push(restaurant_id);
+        }
+        else if (university_id) {
+            query = `
+                SELECT m.* FROM menu_items m 
+                JOIN restaurants r ON m.restaurant_id = r.id 
+                WHERE r.university_id = $${pIndex++} AND m.is_available = TRUE
+            `;
+            params.push(university_id);
+        }
         if (category) {
-            query += ' AND category = $2';
+            query += ` AND m.category = $${pIndex++}`;
             params.push(category);
         }
         query += ' ORDER BY category, name';
@@ -31,26 +44,28 @@ const getMenu = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         res.json(result.rows);
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 });
 exports.getMenu = getMenu;
 const addMenuItem = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { name, description, price, category, image_url, nutritional_info, stock_quantity } = req.body;
-    const university_id = req.user.university_id; // Staff belongs to a university (we need to ensure staff has uni_id in token or fetch it)
-    // Wait, token payload currently has { id, email, role }. It doesn't have university_id.
-    // I need to fetch staff details to get university_id or include it in token.
-    // Including in token is better for performance.
-    // I should update login controller to include university_id in token.
-    // For now, I'll fetch it from DB using req.user.id.
+    const { name, description, price, category, image_url, nutritional_info, stock_quantity, restaurant_id } = req.body;
+    if (!restaurant_id) {
+        return res.status(400).json({ message: 'Restaurant ID is required' });
+    }
     try {
-        // Fetch staff university_id
+        // Fetch staff university_id to ensure they have access to this restaurant (simplified for now)
         const staffParams = yield db_1.default.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
         if (staffParams.rows.length === 0)
             return res.sendStatus(403);
         const uniId = staffParams.rows[0].university_id;
-        const result = yield db_1.default.query(`INSERT INTO menu_items (university_id, name, description, price, category, image_url, nutritional_info, stock_quantity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`, [uniId, name, description, price, category, image_url, nutritional_info, stock_quantity || 0]);
+        // Verify restaurant belongs to university
+        const restCheck = yield db_1.default.query('SELECT id FROM restaurants WHERE id = $1 AND university_id = $2', [restaurant_id, uniId]);
+        if (restCheck.rows.length === 0)
+            return res.sendStatus(403);
+        const result = yield db_1.default.query(`INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`, [restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity || 0]);
         res.status(201).json(result.rows[0]);
     }
     catch (error) {

@@ -10,6 +10,7 @@ const universityRoutes_1 = __importDefault(require("./routes/universityRoutes"))
 const menuRoutes_1 = __importDefault(require("./routes/menuRoutes"));
 const orderRoutes_1 = __importDefault(require("./routes/orderRoutes"));
 const lobbyRoutes_1 = __importDefault(require("./routes/lobbyRoutes"));
+const restaurantRoutes_1 = __importDefault(require("./routes/restaurantRoutes"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
@@ -19,6 +20,7 @@ app.use('/api/university', universityRoutes_1.default);
 app.use('/api/menu', menuRoutes_1.default);
 app.use('/api/orders', orderRoutes_1.default);
 app.use('/api/lobby', lobbyRoutes_1.default);
+app.use('/api/restaurants', restaurantRoutes_1.default);
 app.get('/', (req, res) => {
     res.send('University Canteen API is running');
 });
