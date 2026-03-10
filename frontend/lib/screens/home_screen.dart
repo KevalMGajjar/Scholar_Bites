@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _cartKey = GlobalKey();
   final GlobalKey _favKey = GlobalKey();
   
-  final ScrollController _trendingController = ScrollController();
+  final PageController _trendingController = PageController(viewportFraction: 0.85);
   Timer? _trendingTimer;
 
   List<FoodItem> _trendingItems = [];
@@ -63,18 +63,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startAutoScroll() {
-    _trendingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (_trendingController.hasClients) {
-        double maxScroll = _trendingController.position.maxScrollExtent;
-        double currentScroll = _trendingController.position.pixels;
-        double targetScroll = currentScroll + 236; // Card width + margin
-        if (targetScroll > maxScroll) targetScroll = 0;
-        
-        _trendingController.animateTo(
-          targetScroll,
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.fastOutSlowIn,
-        );
+    _trendingTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (_trendingController.hasClients && _trendingItems.isNotEmpty) {
+        int nextPage = _trendingController.page!.round() + 1;
+        if (nextPage >= _trendingItems.length) {
+          _trendingController.animateToPage(
+            0,
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.fastOutSlowIn,
+          );
+        } else {
+          _trendingController.nextPage(
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.fastOutSlowIn,
+          );
+        }
       }
     });
   }
@@ -158,8 +161,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return "Morning cravings";
-    if (hour < 17) return "Lunchtime";
-    if (hour < 21) return "Evening snack";
+    if (hour < 15) return "Lunchtime";
+    if (hour < 18) return "Afternoon snack";
+    if (hour < 22) return "Dinnertime";
     return "Late night cravings";
   }
 
@@ -393,12 +397,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                         color: Color(0xFF1E1E1E),
                                       ),
                                     ),
-                                    Text(
-                                      'See all',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF8B1C28).withValues(alpha: 0.8),
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => const SearchScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: Text(
+                                        'See all',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF8B1C28).withValues(alpha: 0.8),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -406,32 +420,28 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               SizedBox(
                                 height: 320,
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  scrollDirection: Axis.horizontal,
+                                child: PageView.builder(
+                                  padEnds: true,
                                   physics: const BouncingScrollPhysics(),
                                   controller: _trendingController,
                                   itemCount: _trendingItems.length,
                                   itemBuilder: (context, index) {
-                                    return SizedBox(
-                                      width: 220,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                                        child: FoodCard(
-                                          food: _trendingItems[index],
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => DetailScreen(food: _trendingItems[index]),
-                                              ),
-                                            );
-                                          },
-                                          onAddTap: (key) {
-                                            Provider.of<CartProvider>(context, listen: false).addItem(_trendingItems[index]);
-                                            _runAddToCartAnimation(key, _trendingItems[index].imageUrl);
-                                          },
-                                        ),
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: FoodCard(
+                                        food: _trendingItems[index],
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => DetailScreen(food: _trendingItems[index]),
+                                            ),
+                                          );
+                                        },
+                                        onAddTap: (key) {
+                                          Provider.of<CartProvider>(context, listen: false).addItem(_trendingItems[index]);
+                                          _runAddToCartAnimation(key, _trendingItems[index].imageUrl);
+                                        },
                                       ),
                                     );
                                   },

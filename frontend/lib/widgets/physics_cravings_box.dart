@@ -58,17 +58,56 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
     final random = Random();
     _items = [];
     for (int i = 0; i < widget.items.length; i++) {
-      // Random initial positions and slow velocities
+      Widget content = widget.items[i];
+      if (i == 0) {
+        content = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            widget.items[i],
+            Positioned(
+              top: -8,
+              right: -20,
+              child: Transform.rotate(
+                angle: 0.2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8B1C28),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                  child: const Text(
+                    'Flick me!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
+      // Random initial positions and fast starting velocities
       _items.add(PhysicsItem(
         id: i,
-        child: widget.items[i],
+        child: content,
         position: Offset(
           random.nextDouble() * 300, // Will be clamped in tick
           random.nextDouble() * widget.boxHeight,
         ),
         velocity: Offset(
-          (random.nextDouble() - 0.5) * 150,
-          (random.nextDouble() - 0.5) * 150,
+          (random.nextDouble() - 0.5) * 600, // Increased starting energy
+          (random.nextDouble() - 0.5) * 600,
         ),
         radius: widget.itemRadius,
       ));
@@ -230,6 +269,12 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
                       item.velocity = details.velocity.pixelsPerSecond;
                     }
                     _dragStartPos = null;
+                  },
+                  onTap: () {
+                    // Instantly detect direct taps without confusing them as drags
+                    if (widget.onItemTap != null) {
+                      widget.onItemTap!(item.id);
+                    }
                   },
                   child: item.child,
                 ),
