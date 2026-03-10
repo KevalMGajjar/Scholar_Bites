@@ -1,5 +1,19 @@
+import { Pool } from 'pg';
 import bcrypt from 'bcrypt';
-import pool from '../config/db';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Ensure .env is loaded from the backend root, not from CWD
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:root@localhost:5432/canteen_db';
+
+console.log('🔗 Connecting to:', connectionString.replace(/:[^:@]+@/, ':***@')); // Log masked URL
+
+const pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+});
 
 async function seedStaff() {
     const client = await pool.connect();
@@ -12,6 +26,17 @@ async function seedStaff() {
         }
         const university = uniResult.rows[0];
         console.log(`📍 Using university: ${university.name} (${university.id})`);
+
+        // Check if staff table has 'phone' column
+        const colCheck = await client.query(`
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name = 'staff' AND column_name = 'phone'
+        `);
+        const hasPhone = colCheck.rows.length > 0;
+        if (!hasPhone) {
+            console.log('📝 Adding phone column to staff table...');
+            await client.query('ALTER TABLE staff ADD COLUMN IF NOT EXISTS phone VARCHAR(15)');
+        }
 
         // Create admin user
         const adminPasswordHash = await bcrypt.hash('admin123', 10);
