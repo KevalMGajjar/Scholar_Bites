@@ -6,6 +6,8 @@ import '../widgets/filter_bottom_sheet.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
 import '../utils/animation_utils.dart';
+import '../services/menu_service.dart';
+import '../utils/token_storage.dart';
 import 'cart_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -34,7 +36,7 @@ class _SearchScreenState extends State<SearchScreen> {
   // Categories aligned with Home Screen Cravings
   final List<String> _categories = [
     'All',
-    'Burgers',
+    'Burger',
     'Healthy',
     'Coffee',
     'Snacks',
@@ -44,41 +46,9 @@ class _SearchScreenState extends State<SearchScreen> {
     'Chicken',
   ];
 
-  // Large dummy dataset so filtering feels real
-  final List<FoodItem> _allMeals = [
-    // Burgers
-    FoodItem(id: '1', name: 'Classic Cheeseburger', price: 149.0, imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Burgers', calories: 450, weight: 200, description: 'Juicy beef patty with melted cheese'),
-    FoodItem(id: '2', name: 'Spicy Chicken Burger', price: 169.0, imageUrl: 'https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400', category: 'Burgers', calories: 480, weight: 220, description: 'Crispy chicken with hot sauce'),
-    FoodItem(id: '3', name: 'Veggie Burger', price: 129.0, imageUrl: 'https://images.unsplash.com/photo-1525059696034-4967a8e1dca2?w=400', category: 'Burgers', calories: 350, weight: 180, description: 'Plant-based patty with fresh veggies'),
-    // Pizza
-    FoodItem(id: '4', name: 'Margherita Pizza', price: 299.0, imageUrl: 'https://images.unsplash.com/photo-1604068549290-dea0e4a30536?w=400', category: 'Pizza', calories: 800, weight: 400, description: 'Classic mozzarella and tomato base'),
-    FoodItem(id: '5', name: 'BBQ Chicken Pizza', price: 349.0, imageUrl: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400', category: 'Pizza', calories: 950, weight: 450, description: 'Topped with BBQ chicken pieces'),
-    FoodItem(id: '6', name: 'Pepperoni Pizza', price: 329.0, imageUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400', category: 'Pizza', calories: 900, weight: 420, description: 'Loaded with pepperoni slices'),
-    // Healthy
-    FoodItem(id: '7', name: 'Quinoa Salad', price: 199.0, imageUrl: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Healthy', calories: 250, weight: 300, description: 'Fresh quinoa mixed with vegetables'),
-    FoodItem(id: '8', name: 'Acai Bowl', price: 249.0, imageUrl: 'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=400', category: 'Healthy', calories: 320, weight: 350, description: 'Blended acai with fresh toppings'),
-    FoodItem(id: '9', name: 'Green Smoothie Bowl', price: 219.0, imageUrl: 'https://images.unsplash.com/photo-1511690743698-d9d18f7e20f1?w=400', category: 'Healthy', calories: 200, weight: 280, description: 'Spinach and banana smoothie base'),
-    // Coffee
-    FoodItem(id: '10', name: 'Iced Latte', price: 120.0, imageUrl: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=400', category: 'Coffee', calories: 120, weight: 250, description: 'Chilled espresso with fresh milk'),
-    FoodItem(id: '11', name: 'Cappuccino', price: 140.0, imageUrl: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400', category: 'Coffee', calories: 100, weight: 200, description: 'Rich espresso with steamed foam'),
-    FoodItem(id: '12', name: 'Cold Brew', price: 150.0, imageUrl: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=400', category: 'Coffee', calories: 80, weight: 300, description: 'Slow-steeped for smooth flavor'),
-    // Drinks
-    FoodItem(id: '13', name: 'Mango Smoothie', price: 110.0, imageUrl: 'https://images.unsplash.com/photo-1623065422900-0320e832f915?w=400', category: 'Drinks', calories: 150, weight: 300, description: 'Refreshing sweet mango blend'),
-    FoodItem(id: '14', name: 'Fresh Lemonade', price: 80.0, imageUrl: 'https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=400', category: 'Drinks', calories: 90, weight: 350, description: 'Tangy fresh-squeezed lemonade'),
-    FoodItem(id: '15', name: 'Berry Blast Shake', price: 160.0, imageUrl: 'https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=400', category: 'Drinks', calories: 220, weight: 400, description: 'Mixed berries blended to perfection'),
-    // Desserts
-    FoodItem(id: '16', name: 'Chocolate Lava Cake', price: 180.0, imageUrl: 'https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?w=400', category: 'Desserts', calories: 550, weight: 150, description: 'Warm chocolate cake with molten center'),
-    FoodItem(id: '17', name: 'Tiramisu', price: 220.0, imageUrl: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400', category: 'Desserts', calories: 450, weight: 180, description: 'Classic Italian coffee-flavored treat'),
-    FoodItem(id: '18', name: 'Cheesecake Slice', price: 199.0, imageUrl: 'https://images.unsplash.com/photo-1524351199678-941a58a3df50?w=400', category: 'Desserts', calories: 400, weight: 160, description: 'Creamy New York cheesecake'),
-    // Chicken
-    FoodItem(id: '19', name: 'Fried Chicken Wings', price: 249.0, imageUrl: 'https://images.unsplash.com/photo-1569695584173-ee78ce8f5ea0?w=400', category: 'Chicken', calories: 600, weight: 350, description: 'Crispy deep-fried chicken wings'),
-    FoodItem(id: '20', name: 'Grilled Chicken Wrap', price: 189.0, imageUrl: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=400', category: 'Chicken', calories: 420, weight: 280, description: 'Grilled chicken with fresh veggies'),
-    FoodItem(id: '21', name: 'Chicken Tikka', price: 269.0, imageUrl: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=400', category: 'Chicken', calories: 500, weight: 300, description: 'Tender marinated chicken pieces'),
-    // Snacks
-    FoodItem(id: '22', name: 'French Fries', price: 99.0, imageUrl: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=400', category: 'Snacks', calories: 380, weight: 200, description: 'Crispy golden potato fries'),
-    FoodItem(id: '23', name: 'Nachos Supreme', price: 179.0, imageUrl: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=400', category: 'Snacks', calories: 450, weight: 250, description: 'Loaded nachos with cheese and salsa'),
-    FoodItem(id: '24', name: 'Spring Rolls', price: 139.0, imageUrl: 'https://images.unsplash.com/photo-1548507200-e4e56289e4df?w=400', category: 'Snacks', calories: 280, weight: 180, description: 'Crispy vegetable spring rolls'),
-  ];
+  // Loaded from API
+  List<FoodItem> _allMeals = [];
+  bool _isLoadingMeals = true;
 
   // Pagination
   static const int _pageSize = 8;
@@ -94,9 +64,30 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchController.text = widget.initialQuery ?? '';
     _selectedCategory = widget.initialCategory ?? _filters.category;
 
-    _filterResults();
+    _fetchMenuItems();
     _searchController.addListener(_filterResults);
     _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _fetchMenuItems() async {
+    try {
+      final uniId = await TokenStorage.getUniversityId();
+      if (uniId != null) {
+        final menuService = MenuService();
+        final items = await menuService.getMenuItems(uniId);
+        if (mounted) {
+          setState(() {
+            _allMeals = items;
+            _isLoadingMeals = false;
+          });
+          _filterResults();
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingMeals = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingMeals = false);
+    }
   }
 
   @override
@@ -541,7 +532,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
             // Results Grid
             Expanded(
-              child: _filteredMeals.isEmpty
+              child: _isLoadingMeals
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF8B1C28),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : _filteredMeals.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,

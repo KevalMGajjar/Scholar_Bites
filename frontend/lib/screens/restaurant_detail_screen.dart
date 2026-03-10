@@ -211,21 +211,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                           color: Color(0xFF1E1E1E),
                         ),
                       ),
-                      const SizedBox(width: 20),
-                      const Icon(
-                        Icons.delivery_dining_rounded,
-                        color: Color(0xFF8B1C28),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '\u{20B9}${widget.restaurant.deliveryFee.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E1E1E),
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 16),

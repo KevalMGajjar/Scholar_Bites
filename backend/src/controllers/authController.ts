@@ -94,3 +94,73 @@ export const updateUniversity = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ─── Staff Login (Email + Password) for Admin Panel ───
+export const staffLogin = async (req: Request, res: Response) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT s.*, uni.name as university_name 
+             FROM staff s 
+             LEFT JOIN universities uni ON s.university_id = uni.id 
+             WHERE s.email = $1`,
+            [email]
+        );
+
+        const staff = result.rows[0];
+        if (!staff) {
+            return res.status(404).json({ message: 'Staff member not found' });
+        }
+
+        const isValidPassword = await bcrypt.compare(password, staff.password_hash);
+        if (!isValidPassword) {
+            return res.status(401).json({ message: 'Invalid password' });
+        }
+
+        const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
+        res.json({
+            token,
+            user: {
+                id: staff.id,
+                name: staff.name,
+                email: staff.email,
+                role: staff.role,
+                university_id: staff.university_id,
+                university_name: staff.university_name,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Register Staff (Admin-only) ───
+export const registerStaff = async (req: Request, res: Response) => {
+    const { email, password, name, role, university_id } = req.body;
+
+    if (!email || !password || !name || !role || !university_id) {
+        return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            `INSERT INTO staff (email, password_hash, name, role, university_id)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, university_id`,
+            [email, hashedPassword, name, role, university_id]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (error: any) {
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Email already registered' });
+        }
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};

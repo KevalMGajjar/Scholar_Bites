@@ -107,3 +107,52 @@ export const updateStock = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ─── Admin: Update Menu Item (full edit) ───
+export const updateMenuItem = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { name, description, price, category, image_url, nutritional_info, stock_quantity, is_available } = req.body;
+
+    try {
+        const updates: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name); }
+        if (description !== undefined) { updates.push(`description = $${idx++}`); params.push(description); }
+        if (price !== undefined) { updates.push(`price = $${idx++}`); params.push(price); }
+        if (category !== undefined) { updates.push(`category = $${idx++}`); params.push(category); }
+        if (image_url !== undefined) { updates.push(`image_url = $${idx++}`); params.push(image_url); }
+        if (nutritional_info !== undefined) { updates.push(`nutritional_info = $${idx++}`); params.push(nutritional_info); }
+        if (stock_quantity !== undefined) { updates.push(`stock_quantity = $${idx++}`); params.push(stock_quantity); }
+        if (is_available !== undefined) { updates.push(`is_available = $${idx++}`); params.push(is_available); }
+
+        if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
+
+        params.push(id);
+        const result = await pool.query(
+            `UPDATE menu_items SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`, params
+        );
+
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Admin: Delete (soft) Menu Item ───
+export const deleteMenuItem = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(
+            'UPDATE menu_items SET is_available = false WHERE id = $1 RETURNING *', [id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
+        res.json({ message: 'Item deactivated', item: result.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};

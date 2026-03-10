@@ -7,6 +7,7 @@ import '../utils/token_storage.dart';
 import 'welcome_screen.dart';
 import 'preferences_screen.dart';
 import 'feedback_screen.dart';
+import 'notifications_screen.dart';
 
 // ─── Colors ──────────────────────────────────────────
 const _maroon = Color(0xFF8B1C28);
@@ -274,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Notifications',
                       subtitle: 'Push, email alerts',
                       emoji: '\u{1F514}',
-                      onTap: () {},
+                      onTap: () => _navigate(const NotificationsScreen()),
                     ),
                     _MenuItem(
                       icon: Icons.chat_bubble_outline_rounded,

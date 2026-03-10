@@ -44,6 +44,7 @@ const createTablesQuery = `
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
+    phone VARCHAR(15),
     role role_enum NOT NULL,
     permissions JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT NOW()

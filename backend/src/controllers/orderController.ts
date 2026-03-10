@@ -186,3 +186,129 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ─── Admin: Get All Orders (with items + user info) ───
+export const getAllOrders = async (req: AuthRequest, res: Response) => {
+    const { status, restaurant_id, page = '1', limit = '50' } = req.query;
+
+    try {
+        const staffRes = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
+        if (staffRes.rows.length === 0) return res.sendStatus(403);
+        const uniId = staffRes.rows[0].university_id;
+
+        let query = `
+            SELECT o.*, 
+                   u.name as user_name, u.phone as user_phone,
+                   r.name as restaurant_name,
+                   json_agg(json_build_object(
+                       'id', oi.id,
+                       'menu_item_id', oi.menu_item_id,
+                       'quantity', oi.quantity,
+                       'price_at_time', oi.price_at_time,
+                       'item_name', mi.name,
+                       'item_image', mi.image_url
+                   )) as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.university_id = $1
+        `;
+        const params: any[] = [uniId];
+        let pIdx = 2;
+
+        if (status) {
+            query += ` AND o.status = $${pIdx++}`;
+            params.push(status);
+        }
+        if (restaurant_id) {
+            query += ` AND o.restaurant_id = $${pIdx++}`;
+            params.push(restaurant_id);
+        }
+
+        query += ` GROUP BY o.id, u.name, u.phone, r.name ORDER BY o.created_at DESC`;
+        query += ` LIMIT $${pIdx++} OFFSET $${pIdx++}`;
+        params.push(parseInt(limit as string), (parseInt(page as string) - 1) * parseInt(limit as string));
+
+        const result = await pool.query(query, params);
+
+        // Get total count
+        let countQuery = `SELECT COUNT(DISTINCT o.id) FROM orders o WHERE o.university_id = $1`;
+        const countParams: any[] = [uniId];
+        let cIdx = 2;
+        if (status) { countQuery += ` AND o.status = $${cIdx++}`; countParams.push(status); }
+        if (restaurant_id) { countQuery += ` AND o.restaurant_id = $${cIdx++}`; countParams.push(restaurant_id); }
+
+        const countResult = await pool.query(countQuery, countParams);
+
+        res.json({
+            orders: result.rows,
+            total: parseInt(countResult.rows[0].count),
+            page: parseInt(page as string),
+            limit: parseInt(limit as string),
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Admin: Get Single Order Details ───
+export const getOrderDetails = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query(`
+            SELECT o.*, 
+                   u.name as user_name, u.phone as user_phone, u.email as user_email,
+                   r.name as restaurant_name,
+                   json_agg(json_build_object(
+                       'id', oi.id,
+                       'menu_item_id', oi.menu_item_id,
+                       'quantity', oi.quantity,
+                       'price_at_time', oi.price_at_time,
+                       'item_name', mi.name,
+                       'item_image', mi.image_url,
+                       'item_category', mi.category
+                   )) as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.id = $1
+            GROUP BY o.id, u.name, u.phone, u.email, r.name
+        `, [id]);
+
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Order not found' });
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Admin: Refund Order ───
+export const refundOrder = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    try {
+        const result = await pool.query(
+            `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *`,
+            [id]
+        );
+
+        const order = result.rows[0];
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        // Notify user about refund
+        emitStatusUpdate(order.user_id, { ...order, refund_reason: reason || 'Refund processed by admin' });
+
+        res.json({ message: 'Order refunded successfully', order });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
