@@ -31,20 +31,30 @@ app.get('/api', (req, res) => {
 // ─── Serve Admin Panel (built static files) ───
 const adminDist = path.resolve(__dirname, '../../admin-panel/dist');
 const adminIndex = path.join(adminDist, 'index.html');
-const adminExists = fs.existsSync(adminIndex);
 
-if (adminExists) {
-    console.log('✅ Admin panel found at:', adminDist);
-    app.use('/admin', express.static(adminDist));
-    // SPA catch-all using middleware (compatible with all Express versions)
-    app.use('/admin', (req, res) => {
-        res.sendFile(adminIndex);
-    });
-} else {
-    console.log('⚠️ Admin panel not built yet. Run: cd admin-panel && npm run build');
-    app.use('/admin', (req, res) => {
+// Use raw middleware — no Express route patterns, fully compatible with Express 5
+app.use((req, res, next) => {
+    // Only handle /admin routes
+    if (!req.path.startsWith('/admin')) {
+        return next();
+    }
+
+    // Check if admin panel is built
+    if (!fs.existsSync(adminIndex)) {
         res.status(503).send('Admin panel not built. Run: cd admin-panel && npm run build');
-    });
-}
+        return;
+    }
+
+    // Try to serve static file (JS, CSS, images, etc.)
+    const filePath = req.path.replace('/admin', '');
+    const fullPath = path.join(adminDist, filePath);
+
+    if (filePath && filePath !== '/' && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        res.sendFile(fullPath);
+    } else {
+        // SPA fallback — serve index.html for all other /admin routes
+        res.sendFile(adminIndex);
+    }
+});
 
 export default app;
