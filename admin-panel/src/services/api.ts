@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+// In production (served from Express), API is on the same origin.
+// In dev (Vite proxy), API is proxied to localhost:3000.
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
@@ -23,7 +25,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401 || err.response?.status === 403) {
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
-      window.location.href = '/login';
+      window.location.href = '/admin/login';
     }
     return Promise.reject(err);
   }
