@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import authRoutes from './routes/authRoutes';
 import universityRoutes from './routes/universityRoutes';
 import menuRoutes from './routes/menuRoutes';
@@ -29,14 +30,21 @@ app.get('/api', (req, res) => {
 
 // ─── Serve Admin Panel (built static files) ───
 const adminDist = path.resolve(__dirname, '../../admin-panel/dist');
-app.use('/admin', express.static(adminDist));
+const adminIndex = path.join(adminDist, 'index.html');
+const adminExists = fs.existsSync(adminIndex);
 
-// Serve index.html for /admin and all /admin/* routes (SPA catch-all)
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(adminDist, 'index.html'));
-});
-app.get('/admin/*', (req, res) => {
-    res.sendFile(path.join(adminDist, 'index.html'));
-});
+if (adminExists) {
+    console.log('✅ Admin panel found at:', adminDist);
+    app.use('/admin', express.static(adminDist));
+    // SPA catch-all using middleware (compatible with all Express versions)
+    app.use('/admin', (req, res) => {
+        res.sendFile(adminIndex);
+    });
+} else {
+    console.log('⚠️ Admin panel not built yet. Run: cd admin-panel && npm run build');
+    app.use('/admin', (req, res) => {
+        res.status(503).send('Admin panel not built. Run: cd admin-panel && npm run build');
+    });
+}
 
 export default app;
