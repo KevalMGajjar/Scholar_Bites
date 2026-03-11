@@ -39,7 +39,7 @@ class PaymentService {
     required String orderId,
   }) {
     var options = {
-      'key': 'rzp_test_zHkIerVdIItgIe', // Replace with an actual test key if available, using placeholder for now
+      'key': 'rzp_test_SPkxayowhOjcMQ',
       'amount': (amount * 100).toInt(), // Razorpay expects amount in paise
       'name': 'Scholar Bites',
       'description': description,
