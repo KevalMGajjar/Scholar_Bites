@@ -41,16 +41,19 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             throw new Error('Could not determine restaurant for order');
         }
 
+        const amountInPaise = Math.round(totalAmount * 100);
+
         // 2. Create Razorpay Order
         let orderId = `mock_order_${crypto.randomBytes(4).toString('hex')}`;
 
         if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.includes('placeholder')) {
             const razorpayOrder = await razorpay.orders.create({
-                amount: Math.round(totalAmount * 100), // amount in paisa
+                amount: amountInPaise,
                 currency: 'INR',
                 receipt: `order_${Date.now()}`,
             });
             orderId = razorpayOrder.id;
+            console.log(`✅ Razorpay order created: ${orderId}, amount: ${amountInPaise} paise`);
         }
 
         // 3. Create Database Order
@@ -78,6 +81,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             id: dbOrderId,
             payment_id: orderId, // Razorpay Order ID
             amount: totalAmount,
+            amount_in_paise: amountInPaise, // Exact paise value sent to Razorpay
             currency: 'INR',
             items: orderItemsData
         });

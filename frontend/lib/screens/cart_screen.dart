@@ -123,11 +123,11 @@ class _CartScreenState extends State<CartScreen> {
       debugPrint('🛒 Creating order with ${cart.items.length} items, universityId=$universityId');
       final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
       final String orderId = orderResponse['payment_id']; // The Razorpay order ID
-      final double amount = (orderResponse['amount'] as num).toDouble();
-      debugPrint('✅ Order created: razorpayOrderId=$orderId, amount=$amount');
+      // Use the exact paise value from the backend — same value sent to Razorpay
+      final int amountInPaise = orderResponse['amount_in_paise'] as int;
+      debugPrint('✅ Order created: razorpayOrderId=$orderId, paise=$amountInPaise');
 
       // Get user details for Razorpay prefill
-      String userName = await TokenStorage.getUserName() ?? 'Student';
       String userEmail = await TokenStorage.getUserEmail() ?? 'student@example.com';
       String userPhone = await TokenStorage.getPhone() ?? '9999999999';
 
@@ -137,13 +137,13 @@ class _CartScreenState extends State<CartScreen> {
         return;
       }
       
-      debugPrint('💳 Opening Razorpay checkout: orderId=$orderId, amount=$amount (₹), contact=$userPhone');
+      debugPrint('💳 Opening Razorpay checkout: orderId=$orderId, paise=$amountInPaise, contact=$userPhone');
       // Open Razorpay Checkout overlay
       _paymentService.openCheckout(
-        amount: amount,
+        amountInPaise: amountInPaise,
         contact: userPhone,
         email: userEmail,
-        name: userName,
+        name: 'Scholar Bites',
         description: 'Scholar Bites Order',
         orderId: orderId,
       );

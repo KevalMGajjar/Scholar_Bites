@@ -30,31 +30,28 @@ class PaymentService {
     onExternalWallet(response);
   }
 
+  /// Opens the Razorpay checkout.
+  /// [amountInPaise] must be the exact amount from the server in paise.
   void openCheckout({
-    required double amount,
+    required int amountInPaise,
     required String contact,
     required String email,
     required String name,
     required String description,
     required String orderId,
   }) {
-    // Amount must be in paise and must match the server-side order amount exactly
-    final int amountInPaise = (amount * 100).round();
-
-    debugPrint('💳 PaymentService.openCheckout: orderId=$orderId, amount=$amount (₹), amountInPaise=$amountInPaise, contact=$contact, email=$email');
+    debugPrint('💳 PaymentService: orderId=$orderId, amountInPaise=$amountInPaise, contact=$contact, email=$email');
 
     var options = {
       'key': 'rzp_test_SPkxayowhOjcMQ',
       'amount': amountInPaise,
+      'currency': 'INR',
       'name': 'Scholar Bites',
       'description': description,
       'order_id': orderId,
-      'retry': {'enabled': true, 'max_count': 1},
-      'send_sms_hash': true,
       'prefill': {
         'contact': contact,
         'email': email,
-        'name': name,
       },
       'theme': {
         'color': '#8B1C28'
