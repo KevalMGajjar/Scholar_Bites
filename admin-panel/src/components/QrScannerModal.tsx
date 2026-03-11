@@ -25,7 +25,7 @@ export default function QrScannerModal({ onScan, onClose }: QrScannerModalProps)
             fps: 10,
             qrbox: { width: 250, height: 250 },
           },
-          (decodedText) => {
+          (decodedText: string) => {
             // QR decoded — pass token up
             onScan(decodedText.trim().toUpperCase());
             // Stop scanner
