@@ -38,30 +38,35 @@ class PaymentService {
     required String description,
     required String orderId,
   }) {
+    // Amount must be in paise and must match the server-side order amount exactly
+    final int amountInPaise = (amount * 100).round();
+
+    debugPrint('💳 PaymentService.openCheckout: orderId=$orderId, amount=$amount (₹), amountInPaise=$amountInPaise, contact=$contact, email=$email');
+
     var options = {
       'key': 'rzp_test_SPkxayowhOjcMQ',
-      'amount': (amount * 100).toInt(), // Razorpay expects amount in paise
+      'amount': amountInPaise,
       'name': 'Scholar Bites',
       'description': description,
       'order_id': orderId,
-      'retry': {'enabled': false},
+      'retry': {'enabled': true, 'max_count': 1},
+      'send_sms_hash': true,
       'prefill': {
         'contact': contact,
         'email': email,
         'name': name,
       },
-      'external': {
-        'wallets': ['paytm']
-      },
       'theme': {
-        'color': '#8B1C28' // App Maroon
+        'color': '#8B1C28'
       }
     };
+
+    debugPrint('💳 Razorpay options: $options');
 
     try {
       _razorpay.open(options);
     } catch (e) {
-      debugPrint('Error opening Razorpay: $e');
+      debugPrint('❌ Error opening Razorpay: $e');
     }
   }
 

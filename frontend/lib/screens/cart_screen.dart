@@ -42,15 +42,18 @@ class _CartScreenState extends State<CartScreen> {
   // --- Razorpay Handlers ---
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    debugPrint('✅ RAZORPAY SUCCESS: orderId=${response.orderId}, paymentId=${response.paymentId}, signature=${response.signature}');
     _processSuccessfulOrder(response.orderId!, response.paymentId!, response.signature!);
   }
 
   void _processSuccessfulOrder(String orderId, String paymentId, String signature) async {
     // Payment succeeded, verify with the backend
+    debugPrint('🔄 Verifying payment: orderId=$orderId, paymentId=$paymentId');
     try {
       final cart = Provider.of<CartProvider>(context, listen: false);
       
       await OrderService().verifyPayment(orderId, paymentId, signature);
+      debugPrint('✅ Payment verification succeeded!');
       
       if (mounted) {
         setState(() => _isProcessingPayment = false);
@@ -63,6 +66,7 @@ class _CartScreenState extends State<CartScreen> {
         cart.clear();
       }
     } catch (e) {
+      debugPrint('❌ Payment verification FAILED: $e');
       if (mounted) {
         setState(() => _isProcessingPayment = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -73,6 +77,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    debugPrint('❌ RAZORPAY ERROR: code=${response.code}, message=${response.message}');
     _processFailedOrder(response.message ?? 'User cancelled');
   }
 
@@ -115,12 +120,16 @@ class _CartScreenState extends State<CartScreen> {
     
     try {
       // Create order backend first to generate a valid Razorpay Order ID
+      debugPrint('🛒 Creating order with ${cart.items.length} items, universityId=$universityId');
       final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
       final String orderId = orderResponse['payment_id']; // The Razorpay order ID
+      final double amount = (orderResponse['amount'] as num).toDouble();
+      debugPrint('✅ Order created: razorpayOrderId=$orderId, amount=$amount');
 
       // Get user details for Razorpay prefill
       String userName = await TokenStorage.getUserName() ?? 'Student';
       String userEmail = await TokenStorage.getUserEmail() ?? 'student@example.com';
+      String userPhone = await TokenStorage.getPhone() ?? '9999999999';
 
       if (orderId.startsWith('mock_')) {
         setState(() => _isProcessingPayment = false);
@@ -128,10 +137,11 @@ class _CartScreenState extends State<CartScreen> {
         return;
       }
       
+      debugPrint('💳 Opening Razorpay checkout: orderId=$orderId, amount=$amount (₹), contact=$userPhone');
       // Open Razorpay Checkout overlay
       _paymentService.openCheckout(
-        amount: cart.totalAmount,
-        contact: '9999999999', // Placeholder if no phone saved, update if needed
+        amount: amount,
+        contact: userPhone,
         email: userEmail,
         name: userName,
         description: 'Scholar Bites Order',
