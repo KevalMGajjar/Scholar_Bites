@@ -139,12 +139,31 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
 
 export const getMyOrders = async (req: AuthRequest, res: Response) => {
     try {
-        const result = await pool.query(
-            'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC',
-            [req.user.id]
-        );
+        const result = await pool.query(`
+            SELECT o.id, o.status, o.total_amount, o.payment_id, o.created_at, o.updated_at,
+                   r.name as restaurant_name,
+                   COALESCE(json_agg(
+                       json_build_object(
+                           'id', oi.id,
+                           'menu_item_id', oi.menu_item_id,
+                           'quantity', oi.quantity,
+                           'price_at_time', oi.price_at_time,
+                           'item_name', mi.name,
+                           'item_image', mi.image_url
+                       )
+                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.user_id = $1
+            GROUP BY o.id, r.name
+            ORDER BY o.created_at DESC
+        `, [req.user.id]);
+
         res.json(result.rows);
     } catch (error) {
+        console.error('getMyOrders error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

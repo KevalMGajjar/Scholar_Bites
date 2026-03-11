@@ -112,6 +112,7 @@ const createTablesQuery = `
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     university_id UUID REFERENCES universities(id) ON DELETE SET NULL,
+    restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL,
     status order_status_enum NOT NULL DEFAULT 'pending',
     total_amount DECIMAL(10, 2) NOT NULL,
     payment_id VARCHAR(255) UNIQUE NOT NULL,
@@ -119,6 +120,9 @@ const createTablesQuery = `
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   );
+
+  -- Add restaurant_id column if it doesn't exist (migration for existing DBs)
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL;
 
   -- 8. Order Items Table
   CREATE TABLE IF NOT EXISTS order_items (

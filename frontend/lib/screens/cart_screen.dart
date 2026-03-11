@@ -8,6 +8,7 @@ import '../services/order_service.dart';
 import '../services/payment_service.dart';
 import '../utils/token_storage.dart';
 import 'detail_screen.dart';
+import 'order_success_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -39,6 +40,22 @@ class _CartScreenState extends State<CartScreen> {
     super.dispose();
   }
 
+  // --- Custom Toast ---
+
+  void _showCustomToast(String message, {bool isError = false, IconData icon = Icons.check_circle_rounded}) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _CustomToastWidget(
+        message: message,
+        isError: isError,
+        icon: icon,
+        onDismiss: () => entry.remove(),
+      ),
+    );
+    overlay.insert(entry);
+  }
+
   // --- Razorpay Handlers ---
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
@@ -47,57 +64,52 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _processSuccessfulOrder(String orderId, String paymentId, String signature) async {
-    // Payment succeeded, verify with the backend
     debugPrint('🔄 Verifying payment: orderId=$orderId, paymentId=$paymentId');
     try {
       final cart = Provider.of<CartProvider>(context, listen: false);
-      
+      final totalAmount = cart.totalAmount;
+
       await OrderService().verifyPayment(orderId, paymentId, signature);
       debugPrint('✅ Payment verification succeeded!');
-      
+
       if (mounted) {
         setState(() => _isProcessingPayment = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Payment Successful! Order placed! ID: $orderId'),
-            backgroundColor: Colors.green,
+        await cart.clear();
+
+        // Navigate to success screen
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => OrderSuccessScreen(
+              orderId: orderId,
+              amount: totalAmount,
+            ),
           ),
         );
-        cart.clear();
       }
     } catch (e) {
       debugPrint('❌ Payment verification FAILED: $e');
       if (mounted) {
         setState(() => _isProcessingPayment = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Payment verification failed: $e')),
-        );
+        _showCustomToast('Payment verification failed. Please contact support.', isError: true, icon: Icons.error_outline_rounded);
       }
     }
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
     debugPrint('❌ RAZORPAY ERROR: code=${response.code}, message=${response.message}');
-    _processFailedOrder(response.message ?? 'User cancelled');
+    _processFailedOrder(response.message ?? 'Payment was cancelled');
   }
 
   void _processFailedOrder(String message) {
     if (mounted) {
       setState(() => _isProcessingPayment = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment Failed: $message'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _showCustomToast('Payment Failed: $message', isError: true, icon: Icons.payment_rounded);
     }
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('External Wallet Selected: ${response.walletName}')),
-      );
+      _showCustomToast('External Wallet: ${response.walletName}', icon: Icons.account_balance_wallet_rounded);
     }
   }
 
@@ -746,3 +758,121 @@ class _CartScreenState extends State<CartScreen> {
   }
 }
 
+// ─── Custom Toast Widget ─────────────────────────────────────
+
+class _CustomToastWidget extends StatefulWidget {
+  final String message;
+  final bool isError;
+  final IconData icon;
+  final VoidCallback onDismiss;
+
+  const _CustomToastWidget({
+    required this.message,
+    required this.isError,
+    required this.icon,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_CustomToastWidget> createState() => _CustomToastWidgetState();
+}
+
+class _CustomToastWidgetState extends State<_CustomToastWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+    _controller.forward();
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        _controller.reverse().then((_) => widget.onDismiss());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = widget.isError
+        ? const Color(0xFF8B1C28)
+        : const Color(0xFF27AE60);
+
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 12,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slideAnim,
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: bgColor.withValues(alpha: 0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(widget.icon, color: Colors.white, size: 24),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      widget.message,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      _controller.reverse().then((_) => widget.onDismiss());
+                    },
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: Colors.white.withValues(alpha: 0.7),
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

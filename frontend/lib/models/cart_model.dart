@@ -147,8 +147,8 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void clear() {
-    _box.clear();
+  Future<void> clear() async {
+    await _box.clear();
     notifyListeners();
   }
 }

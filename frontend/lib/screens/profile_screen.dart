@@ -71,6 +71,23 @@ class OrderHistoryScreen extends StatefulWidget {
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   List<dynamic> _orders = [];
   bool _isLoading = true;
+  final Set<int> _expandedOrders = {};
+
+  static const _statusColors = {
+    'pending': Color(0xFFF59E0B),
+    'preparing': Color(0xFF3B82F6),
+    'ready': Color(0xFF10B981),
+    'completed': Color(0xFF6B7280),
+    'cancelled': Color(0xFFEF4444),
+  };
+
+  static const _statusIcons = {
+    'pending': Icons.schedule_rounded,
+    'preparing': Icons.restaurant_rounded,
+    'ready': Icons.check_circle_rounded,
+    'completed': Icons.verified_rounded,
+    'cancelled': Icons.cancel_rounded,
+  };
 
   @override
   void initState() {
@@ -81,117 +98,322 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   Future<void> _fetchOrders() async {
     try {
       final orders = await OrderService().getMyOrders();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _orders = orders;
           _isLoading = false;
         });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(date);
+
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${date.day} ${months[date.month - 1]}, ${date.year}';
+    } catch (_) {
+      return '';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text('Order History'),
+        title: const Text('My Orders',
+            style: TextStyle(fontWeight: FontWeight.w800, color: _darkText)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: _darkText,
       ),
-      backgroundColor: _bg,
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: _maroon, strokeWidth: 2))
           : _orders.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                            color: _maroon.withValues(alpha: 0.08),
-                            shape: BoxShape.circle),
-                        child: const Center(
-                            child: Text('\u{1F4E6}',
-                                style: TextStyle(fontSize: 40))),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text('No orders yet',
-                          style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: _darkText)),
-                    ],
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  color: _maroon,
+                  onRefresh: _fetchOrders,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                    itemCount: _orders.length,
+                    itemBuilder: (context, index) =>
+                        _buildOrderCard(_orders[index], index),
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _orders.length,
-                  itemBuilder: (context, index) {
-                    final order = _orders[index];
-                    final orderId = order['id'].toString().substring(0, 8);
-                    final subtotal = order['total_amount'];
-                    final status = order['status'];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4))
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                                color: _maroon.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(14)),
-                            child: const Icon(Icons.receipt_long_rounded,
-                                color: _maroon, size: 22),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Order #$orderId',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: _darkText)),
-                                const SizedBox(height: 2),
-                                Text('$status \u{2022} \u{20B9}$subtotal',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color:
-                                            _darkText.withValues(alpha: 0.5))),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.arrow_forward_ios_rounded,
-                              size: 14, color: _maroon.withValues(alpha: 0.4)),
-                        ],
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(delay: (50 * index).ms, duration: 300.ms);
-                  },
                 ),
     );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 110,
+            height: 110,
+            decoration: BoxDecoration(
+              color: _maroon.withValues(alpha: 0.06),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+                child: Text('\u{1F4E6}', style: TextStyle(fontSize: 48))),
+          ),
+          const SizedBox(height: 20),
+          const Text('No orders yet',
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w800, color: _darkText)),
+          const SizedBox(height: 8),
+          Text('Your order history will appear here',
+              style: TextStyle(
+                  fontSize: 14,
+                  color: _darkText.withValues(alpha: 0.4),
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(dynamic order, int index) {
+    final String orderId = order['id']?.toString() ?? '';
+    final String shortId = orderId.length > 8 ? orderId.substring(orderId.length - 8).toUpperCase() : orderId.toUpperCase();
+    final String status = order['status'] ?? 'pending';
+    final double total = double.tryParse(order['total_amount']?.toString() ?? '0') ?? 0;
+    final String restaurant = order['restaurant_name'] ?? 'Restaurant';
+    final String dateStr = _formatDate(order['created_at']?.toString());
+    final List items = order['items'] is List ? order['items'] : [];
+    final bool isExpanded = _expandedOrders.contains(index);
+    final Color statusColor = _statusColors[status] ?? _maroon;
+    final IconData statusIcon = _statusIcons[status] ?? Icons.info_rounded;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isExpanded) {
+            _expandedOrders.remove(index);
+          } else {
+            _expandedOrders.add(index);
+          }
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isExpanded
+                ? statusColor.withValues(alpha: 0.2)
+                : Colors.transparent,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                // Status icon
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 22),
+                ),
+                const SizedBox(width: 14),
+                // Order info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Order #$shortId',
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: _darkText)),
+                      const SizedBox(height: 3),
+                      Text(restaurant,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: _darkText.withValues(alpha: 0.45))),
+                    ],
+                  ),
+                ),
+                // Amount & date
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('\u{20B9}${total.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: _maroon)),
+                    const SizedBox(height: 3),
+                    Text(dateStr,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: _darkText.withValues(alpha: 0.35))),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Status badge + item count
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    status[0].toUpperCase() + status.substring(1),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${items.length} item${items.length != 1 ? 's' : ''}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _darkText.withValues(alpha: 0.4)),
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 200),
+                  turns: isExpanded ? 0.5 : 0,
+                  child: Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 22, color: _darkText.withValues(alpha: 0.3)),
+                ),
+              ],
+            ),
+
+            // Expanded items
+            if (isExpanded && items.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _bg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    ...items.where((i) => i['item_name'] != null).map<Widget>((item) {
+                      final String itemName = item['item_name'] ?? 'Item';
+                      final int qty = item['quantity'] ?? 1;
+                      final double price =
+                          double.tryParse(item['price_at_time']?.toString() ?? '0') ?? 0;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: _maroon.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Text('${qty}x',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: _maroon)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(itemName,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _darkText)),
+                            ),
+                            Text(
+                                '\u{20B9}${(price * qty).toStringAsFixed(0)}',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: _darkText.withValues(alpha: 0.7))),
+                          ],
+                        ),
+                      );
+                    }),
+                    // Divider + Total
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.only(top: 10),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                              color: _darkText.withValues(alpha: 0.08)),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Total',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: _darkText.withValues(alpha: 0.5))),
+                          Text('\u{20B9}${total.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: _maroon)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ).animate().fadeIn(delay: (50 * index).ms, duration: 300.ms);
   }
 }
 
