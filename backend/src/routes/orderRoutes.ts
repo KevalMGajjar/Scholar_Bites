@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createOrder, verifyPayment, getMyOrders, getPendingOrders, updateOrderStatus } from '../controllers/orderController';
+import { createOrder, verifyPayment, getMyOrders, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 
 const router = Router();

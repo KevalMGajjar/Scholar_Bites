@@ -2,15 +2,19 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'order_qr_screen.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
   final String orderId;
   final double amount;
+  final String orderToken;
 
   const OrderSuccessScreen({
     super.key,
     required this.orderId,
     required this.amount,
+    this.orderToken = '',
   });
 
   @override
@@ -196,7 +200,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
 
                             const SizedBox(height: 20),
 
-                            // Order details
+                            // Order details row
                             Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
@@ -256,6 +260,93 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                           ],
                         ),
                       ).animate().fadeIn(delay: 800.ms, duration: 500.ms).slideY(begin: 0.2),
+
+                      // QR Code section
+                      if (widget.orderToken.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _maroon.withValues(alpha: 0.06),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                'Your Pickup Token',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _darkText.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                '#${widget.orderToken}',
+                                style: const TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w900,
+                                  color: _maroon,
+                                  letterSpacing: 6,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              QrImageView(
+                                data: widget.orderToken,
+                                version: QrVersions.auto,
+                                size: 140,
+                                eyeStyle: const QrEyeStyle(
+                                  eyeShape: QrEyeShape.square,
+                                  color: _darkText,
+                                ),
+                                dataModuleStyle: const QrDataModuleStyle(
+                                  dataModuleShape: QrDataModuleShape.square,
+                                  color: _darkText,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => OrderQrScreen(
+                                          orderToken: widget.orderToken,
+                                          orderId: widget.orderId,
+                                          status: 'preparing',
+                                          amount: widget.amount,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.qr_code_2_rounded, size: 20),
+                                  label: const Text(
+                                    'Show QR at Counter',
+                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: _maroon,
+                                    side: BorderSide(color: _maroon.withValues(alpha: 0.3)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ).animate().fadeIn(delay: 1000.ms, duration: 400.ms).slideY(begin: 0.2),
+                      ],
 
                       const SizedBox(height: 40),
 

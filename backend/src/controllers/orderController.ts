@@ -5,6 +5,27 @@ import crypto from 'crypto';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { emitNewOrder, emitStatusUpdate } from '../services/socketService';
 
+// ─── Generate a unique 4-char alphanumeric order token ───
+const generateOrderToken = async (client: any): Promise<string> => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No 0/O/1/I to avoid confusion
+    let attempts = 0;
+    while (attempts < 20) {
+        let token = '';
+        for (let i = 0; i < 4; i++) {
+            token += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        // Check uniqueness among active orders (not completed/cancelled)
+        const existing = await client.query(
+            "SELECT id FROM orders WHERE order_token = $1 AND status NOT IN ('completed', 'cancelled')",
+            [token]
+        );
+        if (existing.rows.length === 0) return token;
+        attempts++;
+    }
+    // Fallback: 6-char token if 4-char space is exhausted
+    return crypto.randomBytes(3).toString('hex').toUpperCase();
+};
+
 export const createOrder = async (req: AuthRequest, res: Response) => {
     const { items, university_id } = req.body; // items: [{ menu_item_id, quantity }]
     const user_id = req.user.id;
@@ -59,13 +80,17 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         // 3. Create Database Order
         // Note: Using razorpay_order_id as payment_id initially
 
+        // Generate unique pickup token
+        const orderToken = await generateOrderToken(client);
+
         const insertOrderQuery = `
-            INSERT INTO orders (user_id, university_id, restaurant_id, status, total_amount, payment_id)
-            VALUES ($1, $2, $3, 'pending', $4, $5)
-            RETURNING id
+            INSERT INTO orders (user_id, university_id, restaurant_id, status, total_amount, payment_id, order_token)
+            VALUES ($1, $2, $3, 'pending', $4, $5, $6)
+            RETURNING id, order_token
         `;
-        const orderResult = await client.query(insertOrderQuery, [user_id, university_id, restaurantId, totalAmount, orderId]);
+        const orderResult = await client.query(insertOrderQuery, [user_id, university_id, restaurantId, totalAmount, orderId, orderToken]);
         const dbOrderId = orderResult.rows[0].id;
+        const dbOrderToken = orderResult.rows[0].order_token;
 
         // 4. Create Order Items
         for (const item of orderItemsData) {
@@ -81,8 +106,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             id: dbOrderId,
             payment_id: orderId, // Razorpay Order ID
             amount: totalAmount,
-            amount_in_paise: amountInPaise, // Exact paise value sent to Razorpay
+            amount_in_paise: amountInPaise,
             currency: 'INR',
+            order_token: dbOrderToken,
             items: orderItemsData
         });
 
@@ -140,7 +166,8 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
 export const getMyOrders = async (req: AuthRequest, res: Response) => {
     try {
         const result = await pool.query(`
-            SELECT o.id, o.status, o.total_amount, o.payment_id, o.created_at, o.updated_at,
+            SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                   o.created_at, o.updated_at,
                    r.name as restaurant_name,
                    COALESCE(json_agg(
                        json_build_object(
@@ -168,22 +195,82 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const getPendingOrders = async (req: AuthRequest, res: Response) => {
-    // Staff only. Ideally fetch by university_id (from staff's university)
-    // We assume staff is from a specific university. 
-    // Need to fetch staff's university_id first.
+// ─── Scan Order by Token (Staff) ───
+export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
+    const { token } = req.params;
 
+    try {
+        const result = await pool.query(`
+            SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                   o.created_at, o.updated_at,
+                   u.name as user_name, u.phone as user_phone,
+                   r.name as restaurant_name,
+                   COALESCE(json_agg(
+                       json_build_object(
+                           'id', oi.id,
+                           'menu_item_id', oi.menu_item_id,
+                           'quantity', oi.quantity,
+                           'price_at_time', oi.price_at_time,
+                           'item_name', mi.name,
+                           'item_image', mi.image_url
+                       )
+                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE UPPER(o.order_token) = UPPER($1)
+              AND o.status NOT IN ('completed', 'cancelled')
+            GROUP BY o.id, u.name, u.phone, r.name
+        `, [token]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Order not found or already completed' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('scanOrderByToken error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getPendingOrders = async (req: AuthRequest, res: Response) => {
     try {
         const staffRes = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
         if (staffRes.rows.length === 0) return res.sendStatus(403);
         const uniId = staffRes.rows[0].university_id;
 
-        const result = await pool.query(
-            "SELECT * FROM orders WHERE university_id = $1 AND status != 'completed' AND status != 'cancelled' ORDER BY created_at ASC",
-            [uniId]
-        );
+        const result = await pool.query(`
+            SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                   o.created_at, o.updated_at,
+                   u.name as user_name, u.phone as user_phone,
+                   r.name as restaurant_name,
+                   COALESCE(json_agg(
+                       json_build_object(
+                           'id', oi.id,
+                           'menu_item_id', oi.menu_item_id,
+                           'quantity', oi.quantity,
+                           'price_at_time', oi.price_at_time,
+                           'item_name', mi.name,
+                           'item_image', mi.image_url
+                       )
+                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.university_id = $1
+              AND o.status NOT IN ('completed', 'cancelled')
+            GROUP BY o.id, u.name, u.phone, r.name
+            ORDER BY o.created_at ASC
+        `, [uniId]);
+
         res.json(result.rows);
     } catch (error) {
+        console.error('getPendingOrders error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

@@ -8,6 +8,7 @@ import 'welcome_screen.dart';
 import 'preferences_screen.dart';
 import 'feedback_screen.dart';
 import 'notifications_screen.dart';
+import 'order_qr_screen.dart';
 
 // ─── Colors ──────────────────────────────────────────
 const _maroon = Color(0xFF8B1C28);
@@ -197,6 +198,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final double total = double.tryParse(order['total_amount']?.toString() ?? '0') ?? 0;
     final String restaurant = order['restaurant_name'] ?? 'Restaurant';
     final String dateStr = _formatDate(order['created_at']?.toString());
+    final String orderToken = order['order_token']?.toString() ?? '';
     final List items = order['items'] is List ? order['items'] : [];
     final bool isExpanded = _expandedOrders.contains(index);
     final Color statusColor = _statusColors[status] ?? _maroon;
@@ -409,6 +411,45 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ],
                 ),
               ),
+              // Show QR button for active orders
+              if (isExpanded &&
+                  orderToken.isNotEmpty &&
+                  ['pending', 'preparing', 'ready'].contains(status)) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrderQrScreen(
+                            orderToken: orderToken,
+                            orderId: orderId,
+                            status: status,
+                            amount: total,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.qr_code_2_rounded, size: 20),
+                    label: const Text(
+                      'Show QR at Counter',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _maroon,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         ),

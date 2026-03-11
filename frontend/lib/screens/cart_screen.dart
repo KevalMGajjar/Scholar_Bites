@@ -23,6 +23,8 @@ class _CartScreenState extends State<CartScreen> {
   
   late PaymentService _paymentService;
   bool _isProcessingPayment = false;
+  String? _currentOrderToken;
+  String? _currentDbOrderId;
 
   @override
   void initState() {
@@ -80,8 +82,9 @@ class _CartScreenState extends State<CartScreen> {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => OrderSuccessScreen(
-              orderId: orderId,
+              orderId: _currentDbOrderId ?? orderId,
               amount: totalAmount,
+              orderToken: _currentOrderToken ?? '',
             ),
           ),
         );
@@ -135,11 +138,13 @@ class _CartScreenState extends State<CartScreen> {
       debugPrint('🛒 Creating order with ${cart.items.length} items, universityId=$universityId');
       final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
       final String orderId = orderResponse['payment_id']; // The Razorpay order ID
+      _currentOrderToken = orderResponse['order_token'];
+      _currentDbOrderId = orderResponse['id'];
       // Use exact paise from backend if available, otherwise calculate from amount
       final int amountInPaise = orderResponse['amount_in_paise'] != null
           ? (orderResponse['amount_in_paise'] as num).toInt()
           : ((orderResponse['amount'] as num).toDouble() * 100).round();
-      debugPrint('✅ Order created: razorpayOrderId=$orderId, paise=$amountInPaise');
+      debugPrint('✅ Order created: razorpayOrderId=$orderId, token=$_currentOrderToken, paise=$amountInPaise');
 
       // Get user details for Razorpay prefill
       String userEmail = await TokenStorage.getUserEmail() ?? 'student@example.com';

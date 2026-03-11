@@ -116,13 +116,15 @@ const createTablesQuery = `
     status order_status_enum NOT NULL DEFAULT 'pending',
     total_amount DECIMAL(10, 2) NOT NULL,
     payment_id VARCHAR(255) UNIQUE NOT NULL,
+    order_token VARCHAR(6),
     group_order_id UUID REFERENCES group_orders(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   );
 
-  -- Add restaurant_id column if it doesn't exist (migration for existing DBs)
+  -- Migrations for existing DBs
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_token VARCHAR(6);
 
   -- 8. Order Items Table
   CREATE TABLE IF NOT EXISTS order_items (

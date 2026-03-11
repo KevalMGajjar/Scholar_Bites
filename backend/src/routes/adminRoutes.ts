@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 import { staffLogin, registerStaff } from '../controllers/authController';
-import { getAllOrders, getOrderDetails, refundOrder, getPendingOrders, updateOrderStatus } from '../controllers/orderController';
+import { getAllOrders, getOrderDetails, refundOrder, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
 import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant } from '../controllers/restaurantController';
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
 
@@ -15,6 +15,7 @@ router.use(authenticateJWT);
 
 // ─── Orders (Staff + Admin) ───
 router.get('/orders/pending', authorizeRole(['staff', 'admin', 'super_admin']), getPendingOrders);
+router.get('/orders/scan/:token', authorizeRole(['staff', 'admin', 'super_admin']), scanOrderByToken);
 router.patch('/orders/:id/status', authorizeRole(['staff', 'admin', 'super_admin']), updateOrderStatus);
 
 // ─── Orders (Admin only) ───
