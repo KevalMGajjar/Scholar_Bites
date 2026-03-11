@@ -10,7 +10,7 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
   const { isConnected } = useSocket();
 
   return (
