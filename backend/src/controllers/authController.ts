@@ -1,7 +1,19 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import pool from '../config/db';
 import { generateToken } from '../utils/jwt';
+
+/** Hash a JWT token to a short 64-char hex string for storage */
+function hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/** Save the active token hash on the user row (single-device enforcement) */
+async function saveActiveToken(userId: string, token: string, table: 'users' | 'staff' = 'users') {
+    const hash = hashToken(token);
+    await pool.query(`UPDATE ${table} SET active_token = $1 WHERE id = $2`, [hash, userId]);
+}
 
 export const loginOtp = async (req: Request, res: Response) => {
     const { phone } = req.body;
@@ -35,6 +47,11 @@ export const loginOtp = async (req: Request, res: Response) => {
         }
 
         const token = generateToken({ id: user.id, phone: user.phone, role });
+
+        // Save token hash for single-device enforcement
+        const table = role === 'student' ? 'users' : 'staff';
+        await saveActiveToken(user.id, token, table);
+
         res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, university_id: user.university_id, university_name: user.university_name, role } });
     } catch (error) {
         console.error(error);
@@ -60,6 +77,10 @@ export const registerOtp = async (req: Request, res: Response) => {
         const universityName = uniResult.rows[0]?.name || '';
 
         const token = generateToken({ id: user.id, phone: user.phone, role: 'student' });
+
+        // Save token hash for single-device enforcement
+        await saveActiveToken(user.id, token);
+
         res.status(201).json({ token, user: { ...user, university_name: universityName, role: 'student' } });
     } catch (error: any) {
         console.error(error);
@@ -88,6 +109,10 @@ export const updateUniversity = async (req: Request, res: Response) => {
         const universityName = uniResult.rows[0]?.name || '';
 
         const token = generateToken({ id: user.id, phone: user.phone, role: 'student' });
+
+        // Save token hash for single-device enforcement
+        await saveActiveToken(user.id, token);
+
         res.json({ token, user: { ...user, university_name: universityName, role: 'student' } });
     } catch (error) {
         console.error(error);
@@ -123,6 +148,10 @@ export const staffLogin = async (req: Request, res: Response) => {
         }
 
         const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
+
+        // Save token hash for single-device enforcement
+        await saveActiveToken(staff.id, token, 'staff');
+
         res.json({
             token,
             user: {

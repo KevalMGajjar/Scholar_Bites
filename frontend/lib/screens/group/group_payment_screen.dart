@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/group_service.dart';
+import '../../services/group_socket_service.dart';
 import '../../utils/custom_toast.dart';
 import '../../utils/token_storage.dart';
 import '../../widgets/spoon_loader.dart';
 import 'group_lobby_screen.dart';
 import 'group_waiting_screen.dart';
+import '../home_screen.dart';
 
 class GroupPaymentScreen extends StatefulWidget {
   final String groupCode;
@@ -34,6 +36,7 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
   static const _bg = Color(0xFFFCF9F5);
 
   final _groupService = GroupService();
+  final _socketService = GroupSocketService();
   bool _isLoading = true;
   bool _isPaying = false;
   bool _isUnlocking = false;
@@ -47,6 +50,48 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
   void initState() {
     super.initState();
     _loadPaymentDetails();
+    _connectSocket();
+  }
+
+  @override
+  void dispose() {
+    _socketService.disconnect();
+    super.dispose();
+  }
+
+  void _connectSocket() {
+    _socketService.connect(
+      widget.groupCode,
+      onLobbyUnlocked: (data) {
+        // Leader unlocked — everyone goes back to lobby
+        _socketService.disconnect();
+        if (mounted) {
+          CustomToast.showSuccessToast(context, 'Group has been unlocked');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GroupLobbyScreen(
+                groupCode: widget.groupCode,
+                isLeader: widget.isLeader,
+                myNickname: widget.myNickname,
+              ),
+            ),
+          );
+        }
+      },
+      onGroupDeleted: (data) {
+        _socketService.disconnect();
+        if (mounted) {
+          CustomToast.showErrorToast(context, 'Group has been disbanded');
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        }
+      },
+      onMemberPaid: (data) => _loadPaymentDetails(),
+    );
   }
 
   Future<void> _loadPaymentDetails() async {

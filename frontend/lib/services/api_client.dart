@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import '../main.dart';
+import '../screens/splash_screen.dart';
 import '../utils/app_config.dart';
 import '../utils/token_storage.dart';
 
@@ -50,15 +53,47 @@ class ApiClient {
             print('Response: ${e.response?.data}');
           }
 
-          // Handle 401 Unauthorized globally if needed
+          // ─── Device Conflict: logged in on another device ───
           if (e.response?.statusCode == 401) {
+            final data = e.response?.data;
+            final code = data is Map ? data['code'] : null;
+
             await TokenStorage.deleteToken();
-            // Ideally trigger navigation to login
+
+            if (code == 'DEVICE_CONFLICT') {
+              _forceLogout('You have been logged in on another device.');
+            }
           }
 
           return handler.next(e);
         },
       ),
     );
+  }
+
+  /// Navigate to splash screen and show a device-conflict message
+  static void _forceLogout(String message) {
+    final ctx = FoodTechApp.navigatorKey.currentContext;
+    if (ctx == null) return;
+
+    // Navigate to splash and clear the stack
+    FoodTechApp.navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const SplashScreen()),
+      (route) => false,
+    );
+
+    // Show a snackbar on the splash screen after the frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final scaffoldMessenger = ScaffoldMessenger.maybeOf(
+        FoodTechApp.navigatorKey.currentContext!,
+      );
+      scaffoldMessenger?.showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF8B1C28),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    });
   }
 }

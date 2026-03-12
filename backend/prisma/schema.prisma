@@ -50,11 +50,12 @@ model Restaurant {
 
 // 2. users Table (Students)
 model User {
-  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  university_id String   @db.Uuid
-  name          String   @db.VarChar(100)
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id  String   @db.Uuid
+  name           String   @db.VarChar(100)
   phone          String   @unique @db.VarChar(15)
   wallet_balance Decimal  @default(0.00) @db.Decimal(10, 2)
+  active_token   String?  @db.VarChar(64)
   created_at     DateTime @default(now()) @db.Timestamptz
 
   university    University  @relation(fields: [university_id], references: [id])

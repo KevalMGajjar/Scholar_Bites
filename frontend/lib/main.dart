@@ -37,6 +37,9 @@ void main() async {
 class FoodTechApp extends StatelessWidget {
   const FoodTechApp({super.key});
 
+  /// Global navigator key used by API interceptor for device-conflict redirects
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -45,6 +48,7 @@ class FoodTechApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: FoodTechApp.navigatorKey,
         title: 'Food Tech',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

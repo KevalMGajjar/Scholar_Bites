@@ -504,8 +504,10 @@ export const verifyShare = async (req: AuthRequest, res: Response) => {
     try {
         let isValid = false;
 
-        // Mock orders are always accepted (development / Razorpay not configured)
-        if (razorpay_order_id.startsWith('mock_')) {
+        // Accept mock payments (frontend doesn't have Razorpay SDK checkout yet)
+        const isMockPayment = razorpay_payment_id.startsWith('mock_') || razorpay_order_id.startsWith('mock_');
+
+        if (isMockPayment) {
             isValid = true;
         } else if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
             const body = razorpay_order_id + "|" + razorpay_payment_id;
@@ -515,7 +517,7 @@ export const verifyShare = async (req: AuthRequest, res: Response) => {
                 .digest('hex');
             isValid = (expectedSignature === razorpay_signature);
         } else {
-            // No valid secret — accept any signature
+            // No valid secret configured — accept any
             isValid = true;
         }
 
