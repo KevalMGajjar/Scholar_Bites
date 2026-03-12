@@ -44,6 +44,7 @@ model Restaurant {
   menuItems     MenuItem[]
   orders        Order[]
 
+  @@unique([university_id, name])
   @@map("restaurants")
 }
 
@@ -123,6 +124,7 @@ model MenuItem {
   restaurant     Restaurant  @relation(fields: [restaurant_id], references: [id])
   orderItems     OrderItem[]
 
+  @@unique([restaurant_id, name])
   @@index([category])
   @@map("menu_items") 
 }
