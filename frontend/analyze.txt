@@ -1,0 +1,5 @@
+Analyzing 2 items...                                            
+
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:66:34 - use_build_context_synchronously
+
+1 issue found. (ran in 1.9s)

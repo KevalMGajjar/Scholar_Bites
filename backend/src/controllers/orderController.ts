@@ -171,26 +171,41 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
 export const getMyOrders = async (req: AuthRequest, res: Response) => {
     try {
         const result = await pool.query(`
-            SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
-                   o.created_at, o.updated_at,
-                   r.name as restaurant_name,
-                   COALESCE(json_agg(
-                       json_build_object(
-                           'id', oi.id,
-                           'menu_item_id', oi.menu_item_id,
-                           'quantity', oi.quantity,
-                           'price_at_time', oi.price_at_time,
-                           'item_name', mi.name,
-                           'item_image', mi.image_url
-                       )
-                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
-            FROM orders o
+            WITH user_contexts AS (
+                SELECT id as base_order_id, group_order_id 
+                FROM orders 
+                WHERE user_id = $1
+            )
+            SELECT 
+                COALESCE(go.code, uc.base_order_id::text) as id,
+                MAX(COALESCE(go.status, o.status)) as status,
+                MAX(COALESCE(go.total_amount, o.total_amount)) as total_amount,
+                MAX(COALESCE(o.payment_id, '')) as payment_id,
+                MAX(COALESCE(o.order_token, '')) as order_token,
+                MAX(COALESCE(go.created_at, o.created_at)) as created_at,
+                MAX(COALESCE(go.created_at, o.updated_at)) as updated_at,
+                MAX(r.name) as restaurant_name,
+                COALESCE(json_agg(
+                    json_build_object(
+                        'id', oi.id,
+                        'menu_item_id', oi.menu_item_id,
+                        'quantity', oi.quantity,
+                        'price_at_time', oi.price_at_time,
+                        'item_name', mi.name,
+                        'item_image', mi.image_url,
+                        'added_by', u.name
+                    )
+                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM user_contexts uc
+            JOIN orders o ON (uc.group_order_id IS NULL AND o.id = uc.base_order_id)
+                          OR (uc.group_order_id IS NOT NULL AND o.group_order_id = uc.group_order_id)
+            LEFT JOIN group_orders go ON uc.group_order_id = go.id
             LEFT JOIN restaurants r ON o.restaurant_id = r.id
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
-            WHERE o.user_id = $1
-            GROUP BY o.id, r.name
-            ORDER BY o.created_at DESC
+            LEFT JOIN users u ON o.user_id = u.id
+            GROUP BY COALESCE(go.code, uc.base_order_id::text)
+            ORDER BY MAX(COALESCE(go.created_at, o.created_at)) DESC
         `, [req.user.id]);
 
         res.json(result.rows);

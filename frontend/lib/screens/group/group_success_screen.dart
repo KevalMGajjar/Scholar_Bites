@@ -47,13 +47,16 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
   }
 
   void _spinWheel() {
-    if (_isSpinning || widget.members.isEmpty) return;
+    if (_isSpinning) return;
 
     setState(() => _isSpinning = true);
 
+    final memberCount = widget.members.isNotEmpty ? widget.members.length : 1;
+    final displayCount = memberCount == 1 ? 2 : memberCount; // Wheel needs min 2 items
+
     final random = Random();
-    final selected = random.nextInt(widget.members.length);
-    _selectedController.add(selected);
+    final selectedIdx = random.nextInt(displayCount);
+    _selectedController.add(selectedIdx);
 
     // After animation
     Future.delayed(const Duration(seconds: 4), () {
@@ -61,7 +64,12 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
         setState(() {
           _hasSpun = true;
           _isSpinning = false;
-          _selectedMember = widget.members[selected]['nickname'] ?? 'Member';
+          if (widget.members.isNotEmpty) {
+            final realIdx = selectedIdx % widget.members.length;
+            _selectedMember = widget.members[realIdx]['nickname'] ?? 'Member';
+          } else {
+            _selectedMember = 'Member';
+          }
         });
       }
     });
@@ -69,7 +77,13 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final memberNames = widget.members.map((m) => m['nickname']?.toString() ?? 'Member').toList();
+    var memberNames = widget.members.map((m) => m['nickname']?.toString() ?? 'Member').toList();
+    if (memberNames.isEmpty) memberNames = ['Member'];
+    
+    // FortuneWheel needs at least 2 items to render 
+    final displayNames = memberNames.length == 1 
+        ? [memberNames[0], memberNames[0]] 
+        : memberNames;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -137,7 +151,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
               const SizedBox(height: 20),
 
               // Fortune Wheel
-              if (memberNames.length >= 2)
+              if (displayNames.isNotEmpty)
                 SizedBox(
                   height: 300,
                   child: FortuneWheel(
@@ -154,12 +168,12 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
                       ),
                     ],
                     items: [
-                      for (int i = 0; i < memberNames.length; i++)
+                      for (int i = 0; i < displayNames.length; i++)
                         FortuneItem(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             child: Text(
-                              memberNames[i],
+                              displayNames[i],
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
@@ -177,21 +191,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
                         ),
                     ],
                   ),
-                ).animate().fadeIn(delay: 800.ms).scaleXY(begin: 0.8)
-              else
-                Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: _maroon.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${memberNames.firstOrNull ?? "Someone"} picks up the order! 🏃',
-                      style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _darkText),
-                    ),
-                  ),
-                ),
+                ).animate().fadeIn(delay: 800.ms).scaleXY(begin: 0.8),
 
               const SizedBox(height: 20),
 
@@ -224,7 +224,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
                     ],
                   ),
                 ).animate().fadeIn().scaleXY(begin: 0.9, curve: Curves.elasticOut, duration: 800.ms)
-              else if (memberNames.length >= 2)
+              else
                 GestureDetector(
                   onTap: _isSpinning ? null : _spinWheel,
                   child: Container(

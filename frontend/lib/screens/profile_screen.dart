@@ -62,7 +62,8 @@ class _WalletScreenState extends State<WalletScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
       CustomToast.showErrorToast(context, 'Failed to load wallet data');
     }
   }
@@ -86,9 +87,11 @@ class _WalletScreenState extends State<WalletScreen> {
         _lastRequestedAmount,
       );
 
+      if (!mounted) return;
       CustomToast.showSuccessToast(context, 'Wallet topped up successfully!');
       _fetchWalletData();
     } catch (e) {
+      if (!mounted) return;
       CustomToast.showErrorToast(context, 'Payment verification failed');
     } finally {
       if (mounted) setState(() => _isProcessingPayment = false);
@@ -122,6 +125,7 @@ class _WalletScreenState extends State<WalletScreen> {
       final email = await TokenStorage.getUserEmail() ?? 'student@example.com';
       final phone = await TokenStorage.getPhone() ?? '9999999999';
 
+      if (!mounted) return;
       _paymentService.openCheckout(
         amountInPaise: orderData['amount_in_paise'],
         orderId: orderData['payment_id'],
@@ -132,6 +136,7 @@ class _WalletScreenState extends State<WalletScreen> {
       );
     } catch (e) {
       if (mounted) setState(() => _isProcessingPayment = false);
+      if (!mounted) return;
       CustomToast.showErrorToast(context, 'Failed to initiate payment');
     }
   }
@@ -657,11 +662,22 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(itemName,
-                                  style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: _darkText)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(itemName,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: _darkText)),
+                                  if (item['added_by'] != null)
+                                    Text('Added by ${item['added_by']}',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                            color: _darkText.withValues(alpha: 0.4))),
+                                ],
+                              ),
                             ),
                             Text(
                                 '\u{20B9}${(price * qty).toStringAsFixed(0)}',

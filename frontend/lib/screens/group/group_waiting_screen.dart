@@ -61,6 +61,9 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
       final status = data['status']?.toString() ?? '';
       _creatorId = data['creator_id']?.toString() ?? widget.creatorId;
 
+      // Ensure members are parsed even if we return early, so success screen gets them
+      final fetchedMembers = List<Map<String, dynamic>>.from(data['members'] ?? []);
+
       // If group was unlocked, go back to lobby
       if (status == 'open') {
         _socketService.disconnect();
@@ -83,6 +86,7 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
         final pickupRestaurant = data['pickup_restaurant']?.toString() ?? 'Restaurant';
         final orderToken = data['order_token']?.toString() ?? '';
         _socketService.disconnect();
+        _members = fetchedMembers; // Update state inline before routing
         if (mounted) {
           _handleOrderCompleted(pickupRestaurant, orderToken);
         }
@@ -90,7 +94,7 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
       }
 
       setState(() {
-        _members = List<Map<String, dynamic>>.from(data['members'] ?? []);
+        _members = fetchedMembers;
         _isLoading = false;
       });
 
