@@ -9,12 +9,14 @@ class OrderSuccessScreen extends StatefulWidget {
   final String orderId;
   final double amount;
   final String orderToken;
+  final String restaurantName;
 
   const OrderSuccessScreen({
     super.key,
     required this.orderId,
     required this.amount,
     this.orderToken = '',
+    this.restaurantName = 'the counter',
   });
 
   @override
@@ -325,6 +327,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                           orderId: widget.orderId,
                                           status: 'preparing',
                                           amount: widget.amount,
+                                          restaurantName: widget.restaurantName,
                                         ),
                                       ),
                                     );

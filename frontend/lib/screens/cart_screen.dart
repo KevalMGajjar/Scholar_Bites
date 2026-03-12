@@ -26,6 +26,7 @@ class _CartScreenState extends State<CartScreen> {
   bool _isProcessingPayment = false;
   String? _currentOrderToken;
   String? _currentDbOrderId;
+  String _currentRestaurantName = 'the counter';
   double _walletBalance = 0.0;
   bool _isLoadingBalance = true;
 
@@ -103,6 +104,7 @@ class _CartScreenState extends State<CartScreen> {
               orderId: _currentDbOrderId ?? orderId,
               amount: totalAmount,
               orderToken: _currentOrderToken ?? '',
+              restaurantName: _currentRestaurantName,
             ),
           ),
         );
@@ -158,6 +160,7 @@ class _CartScreenState extends State<CartScreen> {
       final String orderId = orderResponse['payment_id']; // The Razorpay order ID
       _currentOrderToken = orderResponse['order_token'];
       _currentDbOrderId = orderResponse['id'];
+      _currentRestaurantName = orderResponse['restaurant_name'] ?? 'the counter';
       // Use exact paise from backend if available, otherwise calculate from amount
       final int amountInPaise = orderResponse['amount_in_paise'] != null
           ? (orderResponse['amount_in_paise'] as num).toInt()
@@ -222,6 +225,7 @@ class _CartScreenState extends State<CartScreen> {
         debugPrint('✅ Wallet payment succeeded! New balance: ${walletResult['balance']}');
         
         if (mounted) {
+          final double paidAmount = cart.totalAmount; // capture before clear
           setState(() {
             _isProcessingPayment = false;
             _walletBalance = double.tryParse(walletResult['balance'].toString()) ?? 0.0;
@@ -232,8 +236,9 @@ class _CartScreenState extends State<CartScreen> {
             MaterialPageRoute(
               builder: (_) => OrderSuccessScreen(
                 orderId: dbOrderId,
-                amount: cart.totalAmount,
+                amount: paidAmount,
                 orderToken: walletResult['order_token'] ?? orderToken,
+                restaurantName: orderResponse['restaurant_name'] ?? 'the counter',
               ),
             ),
           );

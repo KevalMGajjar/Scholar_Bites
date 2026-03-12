@@ -13,6 +13,7 @@ class OrderQrScreen extends StatefulWidget {
   final String orderId;
   final String status;
   final double amount;
+  final String restaurantName;
 
   const OrderQrScreen({
     super.key,
@@ -20,6 +21,7 @@ class OrderQrScreen extends StatefulWidget {
     required this.orderId,
     required this.status,
     required this.amount,
+    this.restaurantName = 'the counter',
   });
 
   @override
@@ -110,7 +112,7 @@ class _OrderQrScreenState extends State<OrderQrScreen> {
 
                 // Instruction
                 Text(
-                  'Show this code at the counter',
+                  'Show this code at ${widget.restaurantName}',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,

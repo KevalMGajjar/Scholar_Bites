@@ -100,6 +100,10 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             );
         }
 
+        // 5. Fetch restaurant name
+        const restaurantResult = await client.query('SELECT name FROM restaurants WHERE id = $1', [restaurantId]);
+        const restaurantName = restaurantResult.rows[0]?.name ?? 'Restaurant';
+
         await client.query('COMMIT');
 
         res.status(201).json({
@@ -109,6 +113,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             amount_in_paise: amountInPaise,
             currency: 'INR',
             order_token: dbOrderToken,
+            restaurant_name: restaurantName,
             items: orderItemsData
         });
 

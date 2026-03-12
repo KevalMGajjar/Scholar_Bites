@@ -719,6 +719,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             orderId: orderId,
                             status: status,
                             amount: total,
+                            restaurantName: restaurant,
                           ),
                         ),
                       );
@@ -758,6 +759,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   File? _profileImage;
   String _userPhone = '';
+  double _walletBalance = 0.0;
 
   @override
   void initState() {
@@ -772,6 +774,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _userPhone = phone ?? '';
       });
     }
+    // Fetch wallet balance for the menu card
+    try {
+      final data = await WalletService().getWalletData();
+      if (mounted) {
+        setState(() {
+          _walletBalance = double.tryParse(data['balance'].toString()) ?? 0.0;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -799,7 +810,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _MenuItem(
                       icon: Icons.account_balance_wallet_rounded,
                       label: 'Wallet',
-                      subtitle: 'Balance: \u{20B9}250',
+                      subtitle: 'Balance: \u{20B9}${_walletBalance.toStringAsFixed(2)}',
                       emoji: '\u{1F4B0}',
                       onTap: () => _navigate(const WalletScreen()),
                     ),
