@@ -1,68 +1,48 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../utils/token_storage.dart';
-import '../utils/app_config.dart';
+import 'package:dio/dio.dart';
+import 'api_client.dart';
 
+/// Service for all Wallet-related API calls.
+/// Uses the shared [ApiClient] (Dio) singleton for consistent
+/// authentication, logging, and base URL handling.
 class WalletService {
   static final WalletService _instance = WalletService._internal();
+  final Dio _dio = ApiClient().dio;
 
-  factory WalletService() {
-    return _instance;
-  }
-
+  factory WalletService() => _instance;
   WalletService._internal();
 
-  String get baseUrl => AppConfig.baseUrl;
-
-  Future<Map<String, String>> _getHeaders() async {
-    final token = await TokenStorage.getToken();
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-  }
-
-  /// Fetch the current wallet balance and latest transactions
-  /// Returns a map with 'balance' and 'transactions' list
+  /// Fetch the current wallet balance and latest transactions.
+  /// Returns a map with 'balance' (num) and 'transactions' (List).
   Future<Map<String, dynamic>> getWalletData() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/wallet/balance'),
-        headers: await _getHeaders(),
+      final response = await _dio.get('/wallet/balance');
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      throw Exception(
+        'Failed to load wallet data: ${e.response?.statusCode ?? e.message}',
       );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to load wallet data: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Wallet API error: $e');
     }
   }
 
-  /// Create a Razorpay top-up order from the backend
-  /// Returns a map containing the 'payment_id' (Razorpay Order ID) and 'amount_in_paise'
+  /// Create a Razorpay top-up order from the backend.
+  /// Returns a map containing the 'payment_id' (Razorpay Order ID)
+  /// and 'amount_in_paise'.
   Future<Map<String, dynamic>> createTopUpOrder(double amount) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/wallet/topup/create-order'),
-        headers: await _getHeaders(),
-        body: jsonEncode({'amount': amount}),
+      final response = await _dio.post(
+        '/wallet/topup/create-order',
+        data: {'amount': amount},
       );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to create top-up order: ${response.body}');
-      }
-    } catch (e) {
-      throw Exception('Create top-up error: $e');
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      throw Exception(
+        'Failed to create top-up order: ${e.response?.data ?? e.message}',
+      );
     }
   }
 
-  /// Verify the top-up payment with Razorpay signature
-  /// Returns a success status if the wallet was credited
+  /// Verify the top-up payment with Razorpay signature.
+  /// Returns a success status if the wallet was credited.
   Future<Map<String, dynamic>> verifyTopUp(
     String razorpayOrderId,
     String razorpayPaymentId,
@@ -70,24 +50,20 @@ class WalletService {
     double amount,
   ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/wallet/topup/verify'),
-        headers: await _getHeaders(),
-        body: jsonEncode({
+      final response = await _dio.post(
+        '/wallet/topup/verify',
+        data: {
           'razorpay_order_id': razorpayOrderId,
           'razorpay_payment_id': razorpayPaymentId,
           'razorpay_signature': razorpaySignature,
           'amount': amount,
-        }),
+        },
       );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to verify top-up: ${response.body}');
-      }
-    } catch (e) {
-      throw Exception('Verify top-up error: $e');
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      throw Exception(
+        'Failed to verify top-up: ${e.response?.data ?? e.message}',
+      );
     }
   }
 }
