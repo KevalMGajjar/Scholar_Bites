@@ -45,7 +45,7 @@ export default function MenuItems() {
     if (!selectedRestaurant) return;
     setLoading(true);
     try {
-      const res = await api.get('/menu', { params: { restaurant_id: selectedRestaurant } });
+      const res = await api.get('/menu', { params: { restaurant_id: selectedRestaurant, include_unavailable: 'true' } });
       setItems(res.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }

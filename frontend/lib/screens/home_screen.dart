@@ -6,6 +6,7 @@ import '../models/food_item.dart';
 import '../models/restaurant_model.dart';
 import '../models/cart_model.dart';
 import '../widgets/food_card.dart';
+import '../widgets/spoon_loader.dart';
 import '../widgets/custom_bottom_bar.dart';
 import 'detail_screen.dart';
 import 'restaurant_detail_screen.dart';
@@ -206,8 +207,8 @@ class _HomeScreenState extends State<HomeScreen> {
           SafeArea(
             bottom: false,
             child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF8B1C28)))
+                ? Center(
+                    child: SpoonLoader(size: 60))
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(
                         parent: AlwaysScrollableScrollPhysics()),

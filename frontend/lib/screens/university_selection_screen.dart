@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:geolocator/geolocator.dart';
+import '../widgets/spoon_loader.dart';
 import 'dart:async';
 import '../widgets/primary_button.dart';
 import '../widgets/custom_text_field.dart';
@@ -237,7 +238,7 @@ class _UniversitySelectionScreenState extends State<UniversitySelectionScreen> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.only(bottom: 20),
-                        child: CircularProgressIndicator(color: Color(0xFF8B1C28)),
+                        child: SpoonLoader(size: 50),
                       ),
                     )
                   : Padding(
@@ -259,7 +260,7 @@ class _UniversitySelectionScreenState extends State<UniversitySelectionScreen> {
     if (_searchQuery.isNotEmpty) {
       if (_isSearching) {
         return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF8B1C28)),
+          child: SpoonLoader(size: 50),
         );
       }
       if (_searchResults.isEmpty) {
@@ -284,7 +285,7 @@ class _UniversitySelectionScreenState extends State<UniversitySelectionScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 30),
-                  const CircularProgressIndicator(color: Color(0xFF8B1C28)),
+                   SpoonLoader(size: 40),
                   const SizedBox(height: 16),
                   Text("Finding nearest campus...", style: GoogleFonts.poppins(color: const Color(0xFF4A0E13).withValues(alpha: 0.7), fontSize: 14)),
                 ],

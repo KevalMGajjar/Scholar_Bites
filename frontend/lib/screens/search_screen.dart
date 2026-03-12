@@ -8,6 +8,7 @@ import '../models/cart_model.dart';
 import '../utils/animation_utils.dart';
 import '../services/menu_service.dart';
 import '../services/speech_service.dart';
+import '../widgets/spoon_loader.dart';
 import '../utils/token_storage.dart';
 import 'cart_screen.dart';
 import 'detail_screen.dart';
@@ -573,11 +574,8 @@ class _SearchScreenState extends State<SearchScreen> {
             // Results Grid
             Expanded(
               child: _isLoadingMeals
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF8B1C28),
-                        strokeWidth: 2,
-                      ),
+                  ? Center(
+                      child: SpoonLoader(size: 50),
                     )
                   : _filteredMeals.isEmpty
                   ? Center(
@@ -627,13 +625,10 @@ class _SearchScreenState extends State<SearchScreen> {
                           _displayedMeals.length + (_hasMore ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index >= _displayedMeals.length) {
-                          return const Center(
+                          return Center(
                             child: Padding(
                               padding: EdgeInsets.all(16),
-                              child: CircularProgressIndicator(
-                                color: Color(0xFF8B1C28),
-                                strokeWidth: 2,
-                              ),
+                              child: SpoonLoader(size: 40),
                             ),
                           );
                         }

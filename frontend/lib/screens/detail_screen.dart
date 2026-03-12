@@ -7,6 +7,7 @@ import '../models/cart_model.dart';
 import '../widgets/favorite_button.dart';
 import '../utils/animation_utils.dart';
 import '../services/menu_service.dart';
+import '../widgets/spoon_loader.dart';
 import 'cart_screen.dart';
 
 class DetailScreen extends StatefulWidget {
@@ -221,9 +222,7 @@ class _DetailScreenState extends State<DetailScreen> {
                 width: double.infinity,
                 height: double.infinity,
                 placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xFF8B1C28),
-                  ),
+                  child: SpoonLoader(size: 40),
                 ),
                 errorWidget: (context, url, error) {
                   return Container(

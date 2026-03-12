@@ -33,7 +33,7 @@ export const getTrendingItems = async (req: Request, res: Response) => {
 };
 
 export const getMenu = async (req: Request, res: Response) => {
-    const { restaurant_id, university_id, category } = req.query;
+    const { restaurant_id, university_id, category, include_unavailable } = req.query;
 
     if (!restaurant_id && !university_id) {
         return res.status(400).json({ message: 'Restaurant ID or University ID is required' });
@@ -43,15 +43,16 @@ export const getMenu = async (req: Request, res: Response) => {
         let query = '';
         let params: any[] = [];
         let pIndex = 1;
+        const availFilter = include_unavailable === 'true' ? '' : ' AND m.is_available = TRUE';
 
         if (restaurant_id) {
-            query = `SELECT m.* FROM menu_items m WHERE m.restaurant_id = $${pIndex++} AND m.is_available = TRUE`;
+            query = `SELECT m.* FROM menu_items m WHERE m.restaurant_id = $${pIndex++}${availFilter}`;
             params.push(restaurant_id);
         } else if (university_id) {
             query = `
                 SELECT DISTINCT ON (m.name) m.* FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
-                WHERE r.university_id = $${pIndex++} AND m.is_available = TRUE
+                WHERE r.university_id = $${pIndex++}${availFilter}
             `;
             params.push(university_id);
         }

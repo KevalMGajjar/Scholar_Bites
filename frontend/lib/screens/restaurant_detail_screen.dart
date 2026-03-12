@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../widgets/spoon_loader.dart';
 import '../models/restaurant_model.dart';
 import '../models/food_item.dart';
 import '../models/cart_model.dart';
@@ -159,7 +160,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                   placeholder: (context, url) => Container(
                     color: Colors.grey[200],
                     child: const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF8B1C28)),
+                      child: SpoonLoader(size: 40),
                     ),
                   ),
                   errorWidget: (context, url, error) {
@@ -306,7 +307,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
             ? const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.all(40),
-                  child: Center(child: CircularProgressIndicator(color: Color(0xFF8B1C28))),
+                  child: Center(child: SpoonLoader(size: 50)),
                 )
               )
             : _menuItems.isEmpty

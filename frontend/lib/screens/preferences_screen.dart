@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../widgets/spoon_loader.dart';
 
 // ─── Colors ──────────────────────────────────────────
 const _maroon = Color(0xFF8B1C28);
@@ -121,8 +122,8 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         ],
       ),
       body: !_isLoaded
-          ? const Center(
-              child: CircularProgressIndicator(color: _maroon),
+          ? Center(
+              child: SpoonLoader(size: 50),
             )
           : SingleChildScrollView(
               physics: const BouncingScrollPhysics(),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../widgets/spoon_loader.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../utils/custom_toast.dart';
@@ -128,8 +129,8 @@ class _PhoneScreenState extends State<PhoneScreen> {
               const SizedBox(height: 40),
               
               _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF8B1C28)),
+                  ? Center(
+                      child: SpoonLoader(size: 50),
                     )
                   : PrimaryButton(
                       text: 'Continue',

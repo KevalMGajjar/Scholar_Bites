@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../widgets/spoon_loader.dart';
 import 'dart:io';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
@@ -213,7 +214,7 @@ class _WalletScreenState extends State<WalletScreen> {
       ),
       backgroundColor: _bg,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _maroon))
+          ? Center(child: SpoonLoader(size: 60))
           : Stack(
               children: [
                 RefreshIndicator(
@@ -344,7 +345,7 @@ class _WalletScreenState extends State<WalletScreen> {
                   Container(
                     color: Colors.black.withValues(alpha: 0.3),
                     child: const Center(
-                      child: CircularProgressIndicator(color: _maroon),
+                      child: SpoonLoader(size: 40),
                     ),
                   ),
               ],
@@ -434,7 +435,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: _maroon, strokeWidth: 2))
+              child: SpoonLoader(size: 30))
           : _orders.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(

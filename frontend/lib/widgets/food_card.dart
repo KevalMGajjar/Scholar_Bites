@@ -6,6 +6,8 @@ import '../models/favorites_model.dart';
 import '../widgets/favorite_button.dart';
 import '../widgets/heart_overlay.dart';
 
+import '../widgets/spoon_loader.dart';
+
 class FoodCard extends StatefulWidget {
   final FoodItem food;
   final VoidCallback onTap;
@@ -88,7 +90,7 @@ class _FoodCardState extends State<FoodCard> {
                               child: const Center(
                                 child: SizedBox(
                                   width: 24, height: 24,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B1C28)),
+                                  child: SpoonLoader(size: 24),
                                 ),
                               ),
                             ),

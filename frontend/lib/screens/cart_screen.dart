@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../widgets/spoon_loader.dart';
 import '../models/cart_model.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
@@ -487,7 +488,7 @@ class _CartScreenState extends State<CartScreen> {
                         child: const Center(
                           child: SizedBox(
                             width: 24, height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: _maroon),
+                            child: SpoonLoader(size: 30),
                           ),
                         ),
                       ),
@@ -686,7 +687,7 @@ class _CartScreenState extends State<CartScreen> {
                 ? const SizedBox(
                     width: 24, 
                     height: 24, 
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                    child: SpoonLoader(size: 24)
                   )
                 : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
