@@ -20,6 +20,7 @@ class AuthService {
         final userModel = UserModel.fromJson(data['user']);
         if (token != null) {
           await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
@@ -60,6 +61,7 @@ class AuthService {
         final userModel = UserModel.fromJson(data['user']);
         if (token != null) {
           await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
@@ -94,6 +96,7 @@ class AuthService {
         final userModel = UserModel.fromJson(data['user']);
         if (token != null) {
           await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
@@ -132,6 +135,7 @@ class AuthService {
         final userModel = UserModel.fromJson(data['user']);
         if (token != null) {
           await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);
@@ -168,6 +172,7 @@ class AuthService {
         final userModel = UserModel.fromJson(data['user']);
         if (token != null) {
           await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
           await TokenStorage.saveUniversityId(userModel.universityId);
           await TokenStorage.saveUserName(userModel.name);
           await TokenStorage.saveUserEmail(userModel.email);

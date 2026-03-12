@@ -15,9 +15,18 @@ class TokenStorage {
   static Future<void> deleteToken() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: 'university_id');
+    await _storage.delete(key: 'user_id');
     await _storage.delete(key: 'user_name');
     await _storage.delete(key: 'user_email');
     await _storage.delete(key: 'user_phone');
+  }
+
+  static Future<void> saveUserId(String id) async {
+    await _storage.write(key: 'user_id', value: id);
+  }
+
+  static Future<String?> getUserId() async {
+    return await _storage.read(key: 'user_id');
   }
 
   static Future<void> saveUniversityId(String id) async {

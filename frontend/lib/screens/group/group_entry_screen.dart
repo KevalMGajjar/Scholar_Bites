@@ -146,6 +146,7 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -235,7 +236,7 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
   }
 
   Widget _buildCreateTab() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
@@ -268,7 +269,7 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
             ),
           ).animate().fadeIn(delay: 300.ms, duration: 500.ms).scaleXY(begin: 0.95),
 
-          const Spacer(),
+          const SizedBox(height: 40),
 
           // Create Button
           GestureDetector(
@@ -301,7 +302,7 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
   }
 
   Widget _buildJoinTab() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
@@ -405,7 +406,7 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
             ),
           ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
 
-          const Spacer(),
+          const SizedBox(height: 40),
         ],
       ),
     );

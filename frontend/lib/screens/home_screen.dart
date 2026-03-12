@@ -12,6 +12,9 @@ import '../widgets/custom_bottom_bar.dart';
 import 'detail_screen.dart';
 import 'restaurant_detail_screen.dart';
 import 'group/group_entry_screen.dart';
+import 'group/group_lobby_screen.dart';
+import 'group/group_payment_screen.dart';
+import '../services/group_service.dart';
 import '../services/menu_service.dart';
 import '../services/restaurant_service.dart';
 import '../services/speech_service.dart';
@@ -65,6 +68,51 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchHomeData();
     _startAutoScroll();
+    _checkActiveGroup();
+  }
+
+  /// Check if user is stuck in an active locked group and redirect
+  Future<void> _checkActiveGroup() async {
+    try {
+      final result = await GroupService().getActiveGroup();
+      if (!mounted) return;
+      if (result['active'] == true) {
+        final code = result['code']?.toString() ?? '';
+        final status = result['status']?.toString() ?? '';
+        final isLeader = result['is_leader'] == true;
+        final nickname = result['nickname']?.toString() ?? 'Member';
+
+        if (status == 'locked') {
+          // Redirect to payment screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GroupPaymentScreen(
+                groupCode: code,
+                isLeader: isLeader,
+                myNickname: nickname,
+                members: const [],
+                creatorId: '',
+              ),
+            ),
+          );
+        } else if (status == 'open') {
+          // Redirect to lobby screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GroupLobbyScreen(
+                groupCode: code,
+                isLeader: isLeader,
+                myNickname: nickname,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      // Silently fail — don't block home screen
+    }
   }
 
   void _startAutoScroll() {
@@ -661,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Floating Group Order Button
           Positioned(
             right: 20,
-            bottom: 90,
+            bottom: 120,
             child: GestureDetector(
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupEntryScreen())),
               child: Container(

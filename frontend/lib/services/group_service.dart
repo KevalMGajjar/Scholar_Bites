@@ -18,9 +18,21 @@ class GroupService {
     return response.data;
   }
 
+  /// Leave a group (leader leaves = group deleted, member leaves = removed)
+  Future<Map<String, dynamic>> leaveGroup(String code) async {
+    final response = await _dio.post('/lobby/leave', data: {'code': code});
+    return response.data;
+  }
+
   /// Get full group state (members, items, status)
   Future<Map<String, dynamic>> getGroupState(String code) async {
     final response = await _dio.get('/lobby/$code/state');
+    return response.data;
+  }
+
+  /// Check if user is in any active (open/locked) group
+  Future<Map<String, dynamic>> getActiveGroup() async {
+    final response = await _dio.get('/lobby/active');
     return response.data;
   }
 
@@ -34,14 +46,23 @@ class GroupService {
     return response.data;
   }
 
-  /// Lock the group (leader only) — no more items can be added
-  Future<Map<String, dynamic>> lockGroup(String code) async {
-    final response = await _dio.post('/lobby/lock', data: {'code': code});
+  /// Lock the group (leader only) with split mode
+  Future<Map<String, dynamic>> lockGroup(String code, {String splitMode = 'individual'}) async {
+    final response = await _dio.post('/lobby/lock', data: {
+      'code': code,
+      'split_mode': splitMode,
+    });
+    return response.data;
+  }
+
+  /// Unlock the group (leader only) — revert to open
+  Future<Map<String, dynamic>> unlockGroup(String code) async {
+    final response = await _dio.post('/lobby/unlock', data: {'code': code});
     return response.data;
   }
 
   /// Initiate payment for the user's share
-  Future<Map<String, dynamic>> payShare(String code, {String method = 'razorpay'}) async {
+  Future<Map<String, dynamic>> payShare(String code, {String method = 'wallet'}) async {
     final response = await _dio.post('/lobby/pay-share', data: {
       'code': code,
       'payment_method': method,

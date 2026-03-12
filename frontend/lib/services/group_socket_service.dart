@@ -11,8 +11,11 @@ class GroupSocketService {
   void connect(String groupCode, {
     VoidCallback? onConnect,
     Function(dynamic)? onMemberJoined,
+    Function(dynamic)? onMemberLeft,
+    Function(dynamic)? onGroupDeleted,
     Function(dynamic)? onItemAdded,
     Function(dynamic)? onLobbyLocked,
+    Function(dynamic)? onLobbyUnlocked,
     Function(dynamic)? onMemberPaid,
     Function(dynamic)? onOrderCompleted,
     VoidCallback? onDisconnect,
@@ -36,11 +39,20 @@ class GroupSocketService {
     if (onMemberJoined != null) {
       _socket!.on('member_joined', onMemberJoined);
     }
+    if (onMemberLeft != null) {
+      _socket!.on('member_left', onMemberLeft);
+    }
+    if (onGroupDeleted != null) {
+      _socket!.on('group_deleted', onGroupDeleted);
+    }
     if (onItemAdded != null) {
       _socket!.on('item_added', onItemAdded);
     }
     if (onLobbyLocked != null) {
       _socket!.on('lobby_locked', onLobbyLocked);
+    }
+    if (onLobbyUnlocked != null) {
+      _socket!.on('lobby_unlocked', onLobbyUnlocked);
     }
     if (onMemberPaid != null) {
       _socket!.on('member_paid', onMemberPaid);

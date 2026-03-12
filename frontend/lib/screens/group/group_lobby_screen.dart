@@ -6,12 +6,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../services/group_service.dart';
 import '../../services/group_socket_service.dart';
-import '../../services/menu_service.dart';
-import '../../models/food_item.dart';
 import '../../utils/custom_toast.dart';
-import '../../utils/token_storage.dart';
 import '../../widgets/spoon_loader.dart';
 import 'group_payment_screen.dart';
+import 'group_menu_picker_screen.dart';
 
 class GroupLobbyScreen extends StatefulWidget {
   final String groupCode;
@@ -24,7 +22,7 @@ class GroupLobbyScreen extends StatefulWidget {
     required this.groupCode,
     required this.isLeader,
     required this.myNickname,
-    required this.myUserId,
+    this.myUserId = '',
   });
 
   @override
@@ -37,7 +35,6 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
   static const _bg = Color(0xFFFCF9F5);
 
   final _groupService = GroupService();
-  final _menuService = MenuService();
   final _socketService = GroupSocketService();
 
   bool _isLoading = true;
@@ -86,14 +83,30 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     }
   }
 
+  // ─── Leave / system messages ───
+  final List<String> _systemMessages = [];
+
   void _connectSocket() {
     _socketService.connect(
       widget.groupCode,
       onMemberJoined: (data) {
-        _loadState(); // Refresh to get new member
+        final nickname = data['nickname']?.toString() ?? 'Someone';
+        _addSystemMessage('$nickname joined the group');
+        _loadState();
+      },
+      onMemberLeft: (data) {
+        final nickname = data['nickname']?.toString() ?? 'Someone';
+        _addSystemMessage('$nickname left the group');
+        _loadState();
+      },
+      onGroupDeleted: (data) {
+        if (mounted) {
+          _socketService.disconnect();
+          CustomToast.showErrorToast(context, 'Group has been disbanded by the leader');
+          Navigator.pop(context);
+        }
       },
       onItemAdded: (data) {
-        // Trigger flying animation
         final userId = data['userId'] ?? '';
         final itemName = data['item_name'] ?? 'Item';
         _triggerFlyingAnimation(userId, itemName);
@@ -101,12 +114,24 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
       },
       onLobbyLocked: (data) {
         setState(() => _status = 'locked');
-        // Navigate to payment
         _navigateToPayment();
+      },
+      onLobbyUnlocked: (data) {
+        setState(() => _status = 'open');
+        _addSystemMessage('Leader has reopened the group');
+        _loadState();
       },
       onMemberPaid: (data) => _loadState(),
       onOrderCompleted: (data) => _loadState(),
     );
+  }
+
+  void _addSystemMessage(String msg) {
+    if (!mounted) return;
+    setState(() {
+      _systemMessages.add(msg);
+      if (_systemMessages.length > 10) _systemMessages.removeAt(0);
+    });
   }
 
   void _triggerFlyingAnimation(String userId, String itemName) {
@@ -135,44 +160,152 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     });
   }
 
-  Future<void> _showMenuPicker() async {
-    final universityId = await TokenStorage.getUniversityId();
-    if (universityId == null || !mounted) return;
-
-    List<FoodItem> menuItems = [];
-    try {
-      menuItems = await _menuService.getMenuItems(universityId);
-    } catch (e) {
-      if (mounted) CustomToast.showErrorToast(context, 'Failed to load menu');
-      return;
-    }
-
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => _MenuPickerSheet(
-        items: menuItems,
-        onAddItem: (FoodItem item) async {
-          try {
-            await _groupService.addItem(widget.groupCode, item.id, 1);
-          } catch (e) {
-            if (mounted) CustomToast.showErrorToast(context, 'Failed to add item');
-          }
-        },
+  void _showMenuPicker() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GroupMenuPickerScreen(groupCode: widget.groupCode),
       ),
     );
   }
 
-  void _lockGroup() async {
+  void _showSplitModeDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Split Mode', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: _darkText)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'How should the bill be split?',
+              style: GoogleFonts.poppins(color: _darkText.withValues(alpha: 0.6), fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            _buildSplitOption(
+              ctx,
+              icon: Icons.person_rounded,
+              title: 'Pay Own Share',
+              subtitle: 'Each pays for their items',
+              mode: 'individual',
+            ),
+            const SizedBox(height: 12),
+            _buildSplitOption(
+              ctx,
+              icon: Icons.group_rounded,
+              title: 'Split Equally',
+              subtitle: 'Total divided equally',
+              mode: 'equal',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSplitOption(BuildContext ctx, {required IconData icon, required String title, required String subtitle, required String mode}) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(ctx);
+        _lockWithMode(mode);
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _maroon.withValues(alpha: 0.15)),
+          boxShadow: [BoxShadow(color: _maroon.withValues(alpha: 0.05), blurRadius: 8)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _maroon.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: _maroon, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: _darkText)),
+                  Text(subtitle, style: GoogleFonts.poppins(fontSize: 11, color: _darkText.withValues(alpha: 0.5))),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, color: _maroon, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _lockWithMode(String mode) async {
     try {
-      await _groupService.lockGroup(widget.groupCode);
+      await _groupService.lockGroup(widget.groupCode, splitMode: mode);
     } catch (e) {
       if (mounted) CustomToast.showErrorToast(context, 'Failed to lock group');
     }
+  }
+
+  Future<bool> _showExitConfirmation() async {
+    // Can't leave if locked
+    if (_status != 'open') {
+      CustomToast.showErrorToast(context, 'Group is locked — pay your share first');
+      return false;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          widget.isLeader ? 'Delete Group?' : 'Leave Group?',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: _darkText),
+        ),
+        content: Text(
+          widget.isLeader
+              ? 'Leaving as leader will permanently delete this group for everyone. This cannot be undone.'
+              : 'Are you sure you want to leave? Your added items will be removed.',
+          style: GoogleFonts.poppins(color: _darkText.withValues(alpha: 0.6), fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Stay', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: _darkText)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              widget.isLeader ? 'Delete Group' : 'Leave',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _handleExit() async {
+    final confirmed = await _showExitConfirmation();
+    if (!confirmed || !mounted) return;
+
+    try {
+      await _groupService.leaveGroup(widget.groupCode);
+    } catch (_) {
+      // Silently handle — still navigate out
+    }
+    _socketService.disconnect();
+    if (mounted) Navigator.pop(context);
   }
 
   void _navigateToPayment() {
@@ -196,7 +329,12 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
       return Scaffold(backgroundColor: _bg, body: Center(child: SpoonLoader(size: 60)));
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleExit();
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       body: Stack(
         children: [
@@ -239,6 +377,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
           if (_showQR) _buildQROverlay(),
         ],
       ),
+      ),
     );
   }
 
@@ -249,7 +388,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back_ios_rounded, color: _darkText),
-            onPressed: () => Navigator.pop(context),
+            onPressed: _handleExit,
           ),
           Expanded(
             child: Column(
@@ -307,6 +446,33 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
                   ),
                 ).animate(onPlay: (c) => c.repeat())
                   .shimmer(duration: 2.seconds, color: _maroon.withValues(alpha: 0.2)),
+              ),
+
+            // ─── System Messages (WhatsApp-style) ───
+            if (_systemMessages.isNotEmpty)
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _systemMessages.map((msg) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _darkText.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          msg,
+                          style: GoogleFonts.poppins(fontSize: 11, color: _darkText.withValues(alpha: 0.5), fontWeight: FontWeight.w500),
+                        ),
+                      ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.3),
+                    ),
+                  )).toList(),
+                ),
               ),
           ],
         );
@@ -376,6 +542,13 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     );
   }
 
+  // ─── Circular Dish Colors ───
+  static const _dishColors = [
+    Color(0xFF4285F4), Color(0xFFC8E02A), Color(0xFFFFB800),
+    Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF00BCD4),
+    Color(0xFFFF5722), Color(0xFF4CAF50),
+  ];
+
   Widget _buildFoodPile() {
     if (_items.isEmpty) {
       return Container(
@@ -384,7 +557,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
         decoration: BoxDecoration(
           color: _maroon.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _maroon.withValues(alpha: 0.1), style: BorderStyle.solid),
+          border: Border.all(color: _maroon.withValues(alpha: 0.1)),
         ),
         child: Center(
           child: Text(
@@ -396,17 +569,17 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     }
 
     return Container(
-      height: 100,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [_maroon.withValues(alpha: 0.08), _maroon.withValues(alpha: 0.03)],
+          colors: [_maroon.withValues(alpha: 0.06), _maroon.withValues(alpha: 0.02)],
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _maroon.withValues(alpha: 0.12)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _maroon.withValues(alpha: 0.1)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -428,43 +601,127 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _items.length,
-              itemBuilder: (_, i) {
-                final item = _items[i];
-                return Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _maroon.withValues(alpha: 0.1)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('🍽️', style: const TextStyle(fontSize: 14)),
-                      const SizedBox(width: 4),
-                      Text(
-                        item['item_name'] ?? 'Item',
-                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: _darkText),
-                      ),
-                      Text(
-                        ' ×${item['quantity'] ?? 1}',
-                        style: GoogleFonts.poppins(fontSize: 10, color: _maroon, fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                  ),
-                ).animate().fadeIn(delay: Duration(milliseconds: 100 * i)).slideX(begin: 0.2);
-              },
-            ),
-          ),
+          const SizedBox(height: 10),
+
+          // ─── Triangle Pile ───
+          _buildTrianglePile(),
         ],
       ),
     );
+  }
+
+  /// Arrange items in a triangle: row 0 has 1 item, row 1 has 2, row 2 has 3...
+  /// Items shrink as more are added.
+  Widget _buildTrianglePile() {
+    // Figure out how many rows we need
+    int totalRows = 1;
+    int capacity = 1;
+    while (capacity < _items.length) {
+      totalRows++;
+      capacity += totalRows;
+    }
+
+    // Calculate circle size based on row count
+    // Fewer rows = bigger circles, more rows = smaller
+    final double circleSize;
+    if (totalRows <= 1) {
+      circleSize = 56;
+    } else if (totalRows <= 2) {
+      circleSize = 50;
+    } else if (totalRows <= 3) {
+      circleSize = 44;
+    } else if (totalRows <= 4) {
+      circleSize = 38;
+    } else if (totalRows <= 5) {
+      circleSize = 32;
+    } else {
+      circleSize = 26;
+    }
+
+    final double borderWidth = circleSize > 40 ? 3.0 : 2.5;
+    final double fontSize = circleSize > 40 ? 20.0 : (circleSize > 30 ? 16.0 : 12.0);
+    final double overlap = circleSize * 0.15; // slight overlap between circles
+
+    // Distribute items into rows: row i has (i+1) items
+    List<List<Map<String, dynamic>>> rows = [];
+    int itemIndex = 0;
+    for (int r = 0; r < totalRows && itemIndex < _items.length; r++) {
+      int rowCount = r + 1;
+      List<Map<String, dynamic>> row = [];
+      for (int c = 0; c < rowCount && itemIndex < _items.length; c++) {
+        row.add(_items[itemIndex]);
+        itemIndex++;
+      }
+      rows.add(row);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int r = 0; r < rows.length; r++)
+          Padding(
+            padding: EdgeInsets.only(bottom: r < rows.length - 1 ? (circleSize * 0.05) : 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int c = 0; c < rows[r].length; c++)
+                  Padding(
+                    padding: EdgeInsets.only(right: c < rows[r].length - 1 ? overlap : 0),
+                    child: _buildDishCircle(
+                      rows[r][c],
+                      _getGlobalIndex(r, c),
+                      circleSize,
+                      borderWidth,
+                      fontSize,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  int _getGlobalIndex(int row, int col) {
+    // Sum of 1+2+...+row = row*(row+1)/2, then add col
+    return (row * (row + 1)) ~/ 2 + col;
+  }
+
+  Widget _buildDishCircle(Map<String, dynamic> item, int index, double size, double borderWidth, double fontSize) {
+    final color = _dishColors[index % _dishColors.length];
+    final imageUrl = item['item_image']?.toString() ?? '';
+    final firstLetter = item['item_name']?.toString().isNotEmpty == true
+        ? item['item_name'].toString().substring(0, 1).toUpperCase()
+        : '🍽';
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: borderWidth),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3, offset: const Offset(0, 1)),
+        ],
+      ),
+      child: ClipOval(
+        child: imageUrl.isNotEmpty
+            ? Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(firstLetter, style: GoogleFonts.poppins(fontSize: fontSize, fontWeight: FontWeight.w800, color: color)),
+                ),
+              )
+            : Center(
+                child: Text(firstLetter, style: GoogleFonts.poppins(fontSize: fontSize, fontWeight: FontWeight.w800, color: color)),
+              ),
+      ),
+    ).animate()
+        .fadeIn(delay: Duration(milliseconds: 60 * index), duration: 350.ms)
+        .scaleXY(begin: 0, end: 1, curve: Curves.elasticOut, duration: 500.ms);
   }
 
   Widget _buildBottomControls() {
@@ -504,7 +761,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
           if (_status == 'open' && widget.isLeader)
             Expanded(
               child: GestureDetector(
-                onTap: _lockGroup,
+                onTap: _showSplitModeDialog,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
@@ -625,96 +882,4 @@ class _FlyingItem {
   final double startY;
 
   _FlyingItem({required this.id, required this.itemName, required this.startLeft, required this.startY});
-}
-
-// ─── Menu Picker Bottom Sheet ───
-class _MenuPickerSheet extends StatelessWidget {
-  final List<FoodItem> items;
-  final Function(FoodItem) onAddItem;
-
-  const _MenuPickerSheet({required this.items, required this.onAddItem});
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.9,
-      minChildSize: 0.4,
-      expand: false,
-      builder: (_, controller) => Column(
-        children: [
-          const SizedBox(height: 12),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text('Add to Group Pile', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF4A0E13))),
-          ),
-          Expanded(
-            child: ListView.builder(
-              controller: controller,
-              itemCount: items.length,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemBuilder: (_, i) {
-                final item = items[i];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF8B1C28).withValues(alpha: 0.08)),
-                  ),
-                  child: Row(
-                    children: [
-                      // Item image
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: item.imageUrl.isNotEmpty
-                            ? Image.network(item.imageUrl, width: 50, height: 50, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.fastfood_rounded)))
-                            : Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.fastfood_rounded)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: const Color(0xFF4A0E13))),
-                            Text('₹${item.price.toStringAsFixed(0)}', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF8B1C28))),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          onAddItem(item);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('${item.name} added to pile!'),
-                              backgroundColor: const Color(0xFF8B1C28),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B1C28),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
