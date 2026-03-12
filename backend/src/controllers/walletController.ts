@@ -24,8 +24,11 @@ export const getWalletData = async (req: AuthRequest, res: Response) => {
         );
 
         res.json({
-            balance: userResult.rows[0].wallet_balance,
-            transactions: txResult.rows
+            balance: Number(userResult.rows[0].wallet_balance),
+            transactions: txResult.rows.map(tx => ({
+                ...tx,
+                amount: Number(tx.amount)
+            }))
         });
     } catch (error) {
         console.error('getWalletData Error:', error);
@@ -140,8 +143,11 @@ export const verifyTopUp = async (req: AuthRequest, res: Response) => {
 
                 res.json({
                     status: 'success',
-                    balance: updatedBalance,
-                    transaction: txResult.rows[0]
+                    balance: Number(updatedBalance),
+                    transaction: {
+                        ...txResult.rows[0],
+                        amount: Number(txResult.rows[0].amount)
+                    }
                 });
             } catch (err: any) {
                 await client.query('ROLLBACK');
