@@ -2,33 +2,30 @@ import { Response } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import crypto from 'crypto';
 import razorpay from '../config/razorpay';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import pool from '../config/db';
 
 // 1. Get Wallet Balance and History
 export const getWalletData = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { wallet_balance: true }
-        });
+        const userResult = await pool.query(
+            'SELECT wallet_balance FROM users WHERE id = $1',
+            [userId]
+        );
 
-        if (!user) {
+        if (userResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        const transactions = await prisma.walletTransaction.findMany({
-            where: { user_id: userId },
-            orderBy: { created_at: 'desc' },
-            take: 50
-        });
+        const txResult = await pool.query(
+            'SELECT * FROM wallet_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
+            [userId]
+        );
 
         res.json({
-            balance: user.wallet_balance,
-            transactions: transactions
+            balance: userResult.rows[0].wallet_balance,
+            transactions: txResult.rows
         });
     } catch (error) {
         console.error('getWalletData Error:', error);
@@ -47,8 +44,10 @@ export const createTopUpOrder = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Invalid amount' });
         }
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        const userResult = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
 
         const amountInPaise = Math.round(parsedAmount * 100);
 
@@ -104,46 +103,52 @@ export const verifyTopUp = async (req: AuthRequest, res: Response) => {
         }
 
         if (isValid) {
-            // Use transaction to ensure balance and history add atomically
-            const result = await prisma.$transaction(async (tx) => {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+
                 // Check if reference already exists to prevent double-crediting
-                const existing = await tx.walletTransaction.findFirst({
-                    where: { reference_id: razorpay_order_id }
-                });
+                const existingResult = await client.query(
+                    'SELECT id FROM wallet_transactions WHERE reference_id = $1',
+                    [razorpay_order_id]
+                );
                 
-                if (existing) {
+                if (existingResult.rows.length > 0) {
                     throw new Error('Transaction already processed');
                 }
 
                 // Credit User
-                const updatedUser = await tx.user.update({
-                    where: { id: userId },
-                    data: {
-                        wallet_balance: {
-                            increment: parsedAmount
-                        }
-                    }
-                });
+                const updatedUserResult = await client.query(
+                    'UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2 RETURNING wallet_balance',
+                    [parsedAmount, userId]
+                );
+                
+                if (updatedUserResult.rows.length === 0) {
+                    throw new Error('User not found');
+                }
+
+                const updatedBalance = updatedUserResult.rows[0].wallet_balance;
 
                 // Record Transaction
-                const transaction = await tx.walletTransaction.create({
-                    data: {
-                        user_id: userId!,
-                        amount: parsedAmount,
-                        type: 'credit',
-                        description: 'Wallet Top-up',
-                        reference_id: razorpay_order_id
-                    }
+                const txResult = await client.query(
+                    `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id) 
+                     VALUES ($1, $2, 'credit', 'Wallet Top-up', $3) RETURNING *`,
+                    [userId, parsedAmount, razorpay_order_id]
+                );
+
+                await client.query('COMMIT');
+
+                res.json({
+                    status: 'success',
+                    balance: updatedBalance,
+                    transaction: txResult.rows[0]
                 });
-
-                return { updatedUser, transaction };
-            });
-
-            res.json({
-                status: 'success',
-                balance: result.updatedUser.wallet_balance,
-                transaction: result.transaction
-            });
+            } catch (err: any) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
         } else {
             res.status(400).json({ status: 'failure', message: 'Invalid signature' });
         }
