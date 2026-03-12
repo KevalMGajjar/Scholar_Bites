@@ -152,44 +152,94 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
 
               // Fortune Wheel
               if (displayNames.isNotEmpty)
-                SizedBox(
-                  height: 300,
-                  child: FortuneWheel(
-                    selected: _selectedController.stream,
-                    animateFirst: false,
-                    physics: CircularPanPhysics(
-                      duration: const Duration(seconds: 3),
-                      curve: Curves.decelerate,
-                    ),
-                    indicators: const [
-                      FortuneIndicator(
-                        alignment: Alignment.topCenter,
-                        child: TriangleIndicator(color: _maroon),
+                Center(
+                  child: Container(
+                    width: 300,
+                    height: 300,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF3A0B10), Color(0xFF8B1C28), Color(0xFF2A060A)],
                       ),
-                    ],
-                    items: [
-                      for (int i = 0; i < displayNames.length; i++)
-                        FortuneItem(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              displayNames[i],
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          style: FortuneItemStyle(
-                            color: _wheelColors[i % _wheelColors.length],
-                            borderColor: Colors.white,
-                            borderWidth: 2,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                        BoxShadow(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          blurRadius: 2,
+                          spreadRadius: 1,
+                          offset: const Offset(0, -1),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0), // The thickness of the wheel rim
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _maroon, // Base background behind the wheel
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: 0.8), // Inner shadow rim
+                            width: 3,
                           ),
                         ),
-                    ],
+                        child: ClipOval(
+                          child: FortuneWheel(
+                          selected: _selectedController.stream,
+                          animateFirst: false,
+                          physics: CircularPanPhysics(
+                            duration: const Duration(seconds: 4),
+                            curve: Curves.decelerate,
+                          ),
+                          indicators: const [
+                            FortuneIndicator(
+                              alignment: Alignment.topCenter,
+                              child: TriangleIndicator(
+                                color: Color(0xFFFFD700), // Gold indicator
+                                width: 24,
+                                height: 32,
+                              ),
+                            ),
+                          ],
+                          items: [
+                            for (int i = 0; i < displayNames.length; i++)
+                              FortuneItem(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    displayNames[i],
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                      color: Colors.white,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black.withValues(alpha: 0.5),
+                                          blurRadius: 2,
+                                          offset: const Offset(1, 1),
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                style: FortuneItemStyle(
+                                  color: _wheelColors[i % _wheelColors.length],
+                                  borderColor: const Color(0xFFF7F2E8),
+                                  borderWidth: 3,
+                                ),
+                              ),
+                          ],
+                        ),
+                        ), // CLipOval closing
+                      ),
+                    ),
                   ),
                 ).animate().fadeIn(delay: 800.ms).scaleXY(begin: 0.8),
 

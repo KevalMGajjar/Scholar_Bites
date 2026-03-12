@@ -178,7 +178,7 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
             )
             SELECT 
                 COALESCE(go.code, uc.base_order_id::text) as id,
-                MAX(COALESCE(go.status, o.status)) as status,
+                MAX(COALESCE(go.status::text, o.status::text)) as status,
                 MAX(COALESCE(go.total_amount, o.total_amount)) as total_amount,
                 MAX(COALESCE(o.payment_id, '')) as payment_id,
                 MAX(COALESCE(o.order_token, '')) as order_token,
