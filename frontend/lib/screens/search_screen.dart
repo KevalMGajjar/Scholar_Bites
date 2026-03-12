@@ -640,6 +640,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         return FoodCard(
                           food: _displayedMeals[index],
                           onTap: () {
+                            FocusScope.of(context).unfocus();
                             Navigator.push(
                               context,
                               MaterialPageRoute(

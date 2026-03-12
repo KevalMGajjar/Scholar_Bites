@@ -11,6 +11,8 @@ interface Restaurant {
   tags: string[];
   is_open: boolean;
   prep_time_minutes: number;
+  opening_time: string | null;
+  closing_time: string | null;
 }
 
 export default function Restaurants() {
@@ -19,7 +21,7 @@ export default function Restaurants() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Restaurant | null>(null);
-  const [form, setForm] = useState({ name: '', logo_url: '', cover_url: '', rating: 4.5, tags: '', prep_time_minutes: 15 });
+  const [form, setForm] = useState({ name: '', logo_url: '', cover_url: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
 
   const fetchRestaurants = useCallback(async () => {
     try {
@@ -33,7 +35,7 @@ export default function Restaurants() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', logo_url: '', cover_url: '', rating: 4.5, tags: '', prep_time_minutes: 15 });
+    setForm({ name: '', logo_url: '', cover_url: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
     setShowForm(true);
   };
 
@@ -46,6 +48,8 @@ export default function Restaurants() {
       rating: r.rating,
       tags: (r.tags || []).join(', '),
       prep_time_minutes: r.prep_time_minutes || 15,
+      opening_time: r.opening_time ? r.opening_time.substring(0, 5) : '09:00',
+      closing_time: r.closing_time ? r.closing_time.substring(0, 5) : '22:00',
     });
     setShowForm(true);
   };
@@ -156,6 +160,18 @@ export default function Restaurants() {
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">Tags (comma sep)</label>
                   <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Opening Time</label>
+                  <input type="time" value={form.opening_time} onChange={(e) => setForm({ ...form, opening_time: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Closing Time</label>
+                  <input type="time" value={form.closing_time} onChange={(e) => setForm({ ...form, closing_time: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
                 </div>
               </div>

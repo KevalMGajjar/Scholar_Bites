@@ -9,7 +9,8 @@ export const getRestaurantsByUniversity = async (req: Request, res: Response) =>
     }
 
     try {
-        const query = 'SELECT * FROM restaurants WHERE university_id = $1 AND is_open = TRUE ORDER BY rating DESC, name';
+        // Return all restaurants — frontend will handle open/closed state based on times
+        const query = 'SELECT * FROM restaurants WHERE university_id = $1 ORDER BY rating DESC, name';
         const result = await pool.query(query, [university_id]);
         res.json(result.rows);
     } catch (error) {
@@ -19,7 +20,7 @@ export const getRestaurantsByUniversity = async (req: Request, res: Response) =>
 };
 
 export const createRestaurant = async (req: Request, res: Response) => {
-    const { university_id, name, logo_url, cover_url, rating, tags, is_open } = req.body;
+    const { university_id, name, logo_url, cover_url, rating, tags, is_open, opening_time, closing_time } = req.body;
 
     if (!university_id || !name) {
         return res.status(400).json({ message: 'University ID and name are required' });
@@ -27,9 +28,9 @@ export const createRestaurant = async (req: Request, res: Response) => {
 
     try {
         const result = await pool.query(
-            `INSERT INTO restaurants (university_id, name, logo_url, cover_url, rating, tags, is_open) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [university_id, name, logo_url, cover_url, rating || 0.0, tags || [], is_open ?? true]
+            `INSERT INTO restaurants (university_id, name, logo_url, cover_url, rating, tags, is_open, opening_time, closing_time) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [university_id, name, logo_url, cover_url, rating || 0.0, tags || [], is_open ?? true, opening_time || null, closing_time || null]
         );
         res.status(201).json(result.rows[0]);
     } catch (error) {
@@ -55,7 +56,7 @@ export const getAllRestaurants = async (req: Request, res: Response) => {
 // ─── Update Restaurant ───
 export const updateRestaurant = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, logo_url, cover_url, rating, tags, is_open, prep_time_minutes } = req.body;
+    const { name, logo_url, cover_url, rating, tags, is_open, prep_time_minutes, opening_time, closing_time } = req.body;
 
     try {
         const updates: string[] = [];
@@ -69,6 +70,8 @@ export const updateRestaurant = async (req: Request, res: Response) => {
         if (tags !== undefined) { updates.push(`tags = $${idx++}`); params.push(tags); }
         if (is_open !== undefined) { updates.push(`is_open = $${idx++}`); params.push(is_open); }
         if (prep_time_minutes !== undefined) { updates.push(`prep_time_minutes = $${idx++}`); params.push(prep_time_minutes); }
+        if (opening_time !== undefined) { updates.push(`opening_time = $${idx++}`); params.push(opening_time || null); }
+        if (closing_time !== undefined) { updates.push(`closing_time = $${idx++}`); params.push(closing_time || null); }
 
         if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
 

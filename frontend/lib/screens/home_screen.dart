@@ -260,6 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Expanded(
                                   child: TextField(
                                     controller: _homeSearchController,
+                                    autofocus: false,
                                     onSubmitted: (value) {
                                       if (value.trim().isNotEmpty) {
                                         Navigator.push(

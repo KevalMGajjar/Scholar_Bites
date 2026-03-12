@@ -213,6 +213,59 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                       ),
                     ],
                   ),
+                  // Operating Hours
+                  if (widget.restaurant.hoursDisplay.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: widget.restaurant.isCurrentlyOpen
+                              ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                              : const Color(0xFFEF4444).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: widget.restaurant.isCurrentlyOpen
+                                ? const Color(0xFF10B981).withValues(alpha: 0.2)
+                                : const Color(0xFFEF4444).withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              widget.restaurant.isCurrentlyOpen
+                                  ? Icons.check_circle_rounded
+                                  : Icons.cancel_rounded,
+                              color: widget.restaurant.isCurrentlyOpen
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFFEF4444),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              widget.restaurant.isCurrentlyOpen ? 'Open Now' : 'Currently Closed',
+                              style: TextStyle(
+                                color: widget.restaurant.isCurrentlyOpen
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFFEF4444),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              widget.restaurant.hoursDisplay,
+                              style: TextStyle(
+                                color: const Color(0xFF1E1E1E).withValues(alpha: 0.5),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: 8,
@@ -276,6 +329,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                       FoodItem food = _menuItems[index];
                       return FoodCard(
                         food: food,
+                        isAvailable: widget.restaurant.isCurrentlyOpen,
                         onTap: () {
                           Navigator.push(
                             context,
