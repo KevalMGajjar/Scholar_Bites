@@ -236,7 +236,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                   ),
                   const SizedBox(height: 32),
                   const Text(
-                    'Full Menu ðŸ§¾',
+                    'Full Menu \u{1F9FE}',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,

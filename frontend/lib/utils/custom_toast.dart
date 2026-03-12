@@ -79,4 +79,28 @@ class CustomToast {
       ),
     );
   }
+
+  static void showNeutralToast(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+        backgroundColor: const Color(0xFF616161),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        margin: const EdgeInsets.symmetric(horizontal: 64, vertical: 24),
+        elevation: 8,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 }

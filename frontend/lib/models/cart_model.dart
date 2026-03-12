@@ -67,17 +67,34 @@ class CartItem {
 }
 
 class CartProvider with ChangeNotifier {
+  Map<String, CartItem>? _cachedItems;
+  bool _isDirty = true;
+
   Box<CartItem> get _box {
     return Hive.box<CartItem>('cartBox');
   }
 
+  void _markDirty() {
+    _isDirty = true;
+    _cachedItems = null;
+  }
+
   Map<String, CartItem> get items {
     if (!Hive.isBoxOpen('cartBox')) return {};
+    if (!_isDirty && _cachedItems != null) return _cachedItems!;
+    
     Map<String, CartItem> itemsMap = {};
     for (var item in _box.values) {
       itemsMap[item.food.id] = item;
     }
+    _cachedItems = itemsMap;
+    _isDirty = false;
     return itemsMap;
+  }
+
+  bool get isEmpty {
+    if (!Hive.isBoxOpen('cartBox')) return true;
+    return _box.isEmpty;
   }
 
   int get itemCount {
@@ -114,6 +131,7 @@ class CartProvider with ChangeNotifier {
     } else {
       box.add(CartItem(id: DateTime.now().toString(), food: food, quantity: 1));
     }
+    _markDirty();
     notifyListeners();
   }
 
@@ -132,6 +150,7 @@ class CartProvider with ChangeNotifier {
         break;
       }
     }
+    _markDirty();
     notifyListeners();
   }
 
@@ -144,11 +163,13 @@ class CartProvider with ChangeNotifier {
         break;
       }
     }
+    _markDirty();
     notifyListeners();
   }
 
   Future<void> clear() async {
     await _box.clear();
+    _markDirty();
     notifyListeners();
   }
 }

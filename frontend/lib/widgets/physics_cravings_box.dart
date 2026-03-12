@@ -51,6 +51,9 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
   bool _hasSeenHint = true;
   int _hintIndex = 0;
 
+  // Use a ValueNotifier to trigger repaints without calling setState
+  final ValueNotifier<int> _frameNotifier = ValueNotifier<int>(0);
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +67,7 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
     if (!hasSeen && mounted) {
       setState(() {
         _hasSeenHint = false;
-        _hintIndex = Random().nextInt(widget.items.length); // Randomly choose an item for the badge
+        _hintIndex = Random().nextInt(widget.items.length);
       });
     }
   }
@@ -74,17 +77,15 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
     _items = [];
     for (int i = 0; i < widget.items.length; i++) {
       Widget content = widget.items[i];
-
-      // Random initial positions and fast starting velocities
       _items.add(PhysicsItem(
         id: i,
         child: content,
         position: Offset(
-          random.nextDouble() * 300, // Will be clamped in tick
+          random.nextDouble() * 300,
           random.nextDouble() * widget.boxHeight,
         ),
         velocity: Offset(
-          (random.nextDouble() - 0.5) * 600, // Increased starting energy
+          (random.nextDouble() - 0.5) * 600,
           (random.nextDouble() - 0.5) * 600,
         ),
         radius: widget.itemRadius,
@@ -95,88 +96,86 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
   @override
   void dispose() {
     _ticker.dispose();
+    _frameNotifier.dispose();
     super.dispose();
   }
 
   void _tick(Duration elapsed) {
-    if (_boxWidth == 0) return; // Wait for layout
-    final dt = 16.0 / 1000.0; // Assume 60fps for stable physics step
+    if (_boxWidth == 0) return;
+    const dt = 16.0 / 1000.0;
 
-    setState(() {
-      // 1. Update positions & handle wall collisions
-      for (var item in _items) {
-        if (item.isDragged) continue;
+    // Update physics WITHOUT calling setState
+    for (var item in _items) {
+      if (item.isDragged) continue;
 
-        // Apply slight drag/friction so they don't bounce forever at high speed
-        item.velocity *= 0.99; 
-        
-        // Add minimal gravity? "float around" implies floating, so no gravity.
-        // float them around gently if too slow
-        if (item.velocity.distance < 10) {
-           item.velocity += Offset((Random().nextDouble() - 0.5) * 10, (Random().nextDouble() - 0.5) * 10);
-        }
+      item.velocity *= 0.99;
 
-        item.position += item.velocity * dt;
-
-        // Wall collisions (Elastic bounce)
-        if (item.position.dx < 0) {
-          item.position = Offset(0, item.position.dy);
-          item.velocity = Offset(item.velocity.dx.abs() * 0.8, item.velocity.dy);
-        } else if (item.position.dx > _boxWidth - item.radius * 2) {
-          item.position = Offset(_boxWidth - item.radius * 2, item.position.dy);
-          item.velocity = Offset(-item.velocity.dx.abs() * 0.8, item.velocity.dy);
-        }
-
-        if (item.position.dy < 0) {
-          item.position = Offset(item.position.dx, 0);
-          item.velocity = Offset(item.velocity.dx, item.velocity.dy.abs() * 0.8);
-        } else if (item.position.dy > widget.boxHeight - item.radius * 2) {
-          item.position = Offset(item.position.dx, widget.boxHeight - item.radius * 2);
-          item.velocity = Offset(item.velocity.dx, -item.velocity.dy.abs() * 0.8);
-        }
+      if (item.velocity.distance < 10) {
+        item.velocity += Offset(
+          (Random().nextDouble() - 0.5) * 10,
+          (Random().nextDouble() - 0.5) * 10,
+        );
       }
 
-      // 2. Handle Circle vs Circle collisions
-      for (int i = 0; i < _items.length; i++) {
-        for (int j = i + 1; j < _items.length; j++) {
-          final a = _items[i];
-          final b = _items[j];
+      item.position += item.velocity * dt;
 
-          final dx = (b.position.dx + b.radius) - (a.position.dx + a.radius);
-          final dy = (b.position.dy + b.radius) - (a.position.dy + a.radius);
-          final distance = sqrt(dx * dx + dy * dy);
-          final minDist = a.radius + b.radius;
+      // Wall collisions
+      if (item.position.dx < 0) {
+        item.position = Offset(0, item.position.dy);
+        item.velocity = Offset(item.velocity.dx.abs() * 0.8, item.velocity.dy);
+      } else if (item.position.dx > _boxWidth - item.radius * 2) {
+        item.position = Offset(_boxWidth - item.radius * 2, item.position.dy);
+        item.velocity = Offset(-item.velocity.dx.abs() * 0.8, item.velocity.dy);
+      }
 
-          if (distance < minDist && distance > 0) {
-            // Collision resolution
-            final overlap = minDist - distance;
-            final nx = dx / distance;
-            final ny = dy / distance;
+      if (item.position.dy < 0) {
+        item.position = Offset(item.position.dx, 0);
+        item.velocity = Offset(item.velocity.dx, item.velocity.dy.abs() * 0.8);
+      } else if (item.position.dy > widget.boxHeight - item.radius * 2) {
+        item.position = Offset(item.position.dx, widget.boxHeight - item.radius * 2);
+        item.velocity = Offset(item.velocity.dx, -item.velocity.dy.abs() * 0.8);
+      }
+    }
 
-            // Separate overlapping items
-            if (!a.isDragged) {
-              a.position -= Offset(nx * overlap / 2, ny * overlap / 2);
-            }
-            if (!b.isDragged) {
-              b.position += Offset(nx * overlap / 2, ny * overlap / 2);
-            }
+    // Circle vs Circle collisions
+    for (int i = 0; i < _items.length; i++) {
+      for (int j = i + 1; j < _items.length; j++) {
+        final a = _items[i];
+        final b = _items[j];
 
-            // Exchange velocities along the normal vector
-            final dpNorm1 = a.velocity.dx * nx + a.velocity.dy * ny;
-            final dpNorm2 = b.velocity.dx * nx + b.velocity.dy * ny;
+        final dx = (b.position.dx + b.radius) - (a.position.dx + a.radius);
+        final dy = (b.position.dy + b.radius) - (a.position.dy + a.radius);
+        final distance = sqrt(dx * dx + dy * dy);
+        final minDist = a.radius + b.radius;
 
-            final m1 = (dpNorm2 - dpNorm1) * 0.8; // 0.8 is bounce factor
-            
-            if (!a.isDragged) {
-              a.velocity += Offset(nx * m1, ny * m1);
-            }
-            if (!b.isDragged) {
-              b.velocity -= Offset(nx * m1, ny * m1); // Opposite direction
-            }
+        if (distance < minDist && distance > 0) {
+          final overlap = minDist - distance;
+          final nx = dx / distance;
+          final ny = dy / distance;
+
+          if (!a.isDragged) {
+            a.position -= Offset(nx * overlap / 2, ny * overlap / 2);
+          }
+          if (!b.isDragged) {
+            b.position += Offset(nx * overlap / 2, ny * overlap / 2);
+          }
+
+          final dpNorm1 = a.velocity.dx * nx + a.velocity.dy * ny;
+          final dpNorm2 = b.velocity.dx * nx + b.velocity.dy * ny;
+          final m1 = (dpNorm2 - dpNorm1) * 0.8;
+
+          if (!a.isDragged) {
+            a.velocity += Offset(nx * m1, ny * m1);
+          }
+          if (!b.isDragged) {
+            b.velocity -= Offset(nx * m1, ny * m1);
           }
         }
       }
-    });
+    }
+
+    // Trigger repaint via ValueNotifier (no setState!)
+    _frameNotifier.value++;
   }
 
   @override
@@ -184,7 +183,6 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
     return LayoutBuilder(builder: (context, constraints) {
       if (_boxWidth != constraints.maxWidth) {
         _boxWidth = constraints.maxWidth;
-        // Reclamp items if width shrinks
         for (var item in _items) {
           if (item.position.dx > _boxWidth - item.radius * 2) {
             item.position = Offset(max(0, _boxWidth - item.radius * 2), item.position.dy);
@@ -194,109 +192,105 @@ class _PhysicsCravingsBoxState extends State<PhysicsCravingsBox>
 
       return ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Container(
+        child: SizedBox(
           width: double.infinity,
           height: widget.boxHeight,
-          decoration: const BoxDecoration(
-            color: Colors.transparent,
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: _items.map((item) {
-              return Positioned(
-                left: item.position.dx,
-                top: item.position.dy,
-                child: GestureDetector(
-                  onPanStart: (details) {
-                    if (!_hasSeenHint) {
-                      setState(() => _hasSeenHint = true);
-                      TokenStorage.saveHasSeenFlickHint();
-                    }
-                    item.isDragged = true;
-                    item.velocity = Offset.zero;
-                    _lastDragPos = details.localPosition;
-                    _dragStartPos = details.localPosition;
-                    _wasDraggedFar = false;
-                  },
-                  onPanUpdate: (details) {
-                    if (_dragStartPos != null) {
-                      if ((details.localPosition - _dragStartPos!).distance > 8) {
-                        _wasDraggedFar = true;
-                      }
-                    }
-                    if (_lastDragPos != null) {
-                       // Velocity for when released
-                       item.velocity = details.delta * 60.0; // Scale up delta to pixels/sec
-                    }
-                    _lastDragPos = details.localPosition;
-                    
-                    setState(() {
-                      item.position += details.delta;
-                      // Clamp during drag
-                      item.position = Offset(
-                        item.position.dx.clamp(0.0, _boxWidth - item.radius * 2),
-                        item.position.dy.clamp(0.0, widget.boxHeight - item.radius * 2),
-                      );
-                    });
-                  },
-                  onPanEnd: (details) {
-                    item.isDragged = false;
-                    _lastDragPos = null;
-                    
-                    // Detect tap: if drag distance was very short, treat as a tap
-                    if (!_wasDraggedFar && widget.onItemTap != null) {
-                      widget.onItemTap!(item.id);
-                    } else {
-                      // Add flick velocity from gesture
-                      item.velocity = details.velocity.pixelsPerSecond;
-                    }
-                    _dragStartPos = null;
-                  },
-                  onTap: () {
-                    // Instantly detect direct taps without confusing them as drags
-                    if (widget.onItemTap != null) {
-                      widget.onItemTap!(item.id);
-                    }
-                  },
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      item.child,
-                      if (!_hasSeenHint && item.id == _hintIndex)
-                        Positioned(
-                          top: -8,
-                          right: -20,
-                          child: Transform.rotate(
-                            angle: 0.2,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF8B1C28),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ],
-                              ),
-                              child: const Text(
-                                'Flick me!',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+          child: ValueListenableBuilder<int>(
+            valueListenable: _frameNotifier,
+            builder: (context, _, __) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: _items.map((item) {
+                  return Positioned(
+                    left: item.position.dx,
+                    top: item.position.dy,
+                    child: GestureDetector(
+                      onPanStart: (details) {
+                        if (!_hasSeenHint) {
+                          setState(() => _hasSeenHint = true);
+                          TokenStorage.saveHasSeenFlickHint();
+                        }
+                        item.isDragged = true;
+                        item.velocity = Offset.zero;
+                        _lastDragPos = details.localPosition;
+                        _dragStartPos = details.localPosition;
+                        _wasDraggedFar = false;
+                      },
+                      onPanUpdate: (details) {
+                        if (_dragStartPos != null) {
+                          if ((details.localPosition - _dragStartPos!).distance > 8) {
+                            _wasDraggedFar = true;
+                          }
+                        }
+                        if (_lastDragPos != null) {
+                          item.velocity = details.delta * 60.0;
+                        }
+                        _lastDragPos = details.localPosition;
+                        
+                        item.position += details.delta;
+                        item.position = Offset(
+                          item.position.dx.clamp(0.0, _boxWidth - item.radius * 2),
+                          item.position.dy.clamp(0.0, widget.boxHeight - item.radius * 2),
+                        );
+                        // No setState needed — the ticker's ValueNotifier handles repaints
+                      },
+                      onPanEnd: (details) {
+                        item.isDragged = false;
+                        _lastDragPos = null;
+                        
+                        if (!_wasDraggedFar && widget.onItemTap != null) {
+                          widget.onItemTap!(item.id);
+                        } else {
+                          item.velocity = details.velocity.pixelsPerSecond;
+                        }
+                        _dragStartPos = null;
+                      },
+                      onTap: () {
+                        if (widget.onItemTap != null) {
+                          widget.onItemTap!(item.id);
+                        }
+                      },
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          item.child,
+                          if (!_hasSeenHint && item.id == _hintIndex)
+                            Positioned(
+                              top: -8,
+                              right: -20,
+                              child: Transform.rotate(
+                                angle: 0.2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF8B1C28),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      )
+                                    ],
+                                  ),
+                                  child: const Text(
+                                    'Flick me!',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
         ),
       );

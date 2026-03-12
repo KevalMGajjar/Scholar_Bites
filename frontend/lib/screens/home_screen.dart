@@ -11,12 +11,15 @@ import 'detail_screen.dart';
 import 'restaurant_detail_screen.dart';
 import '../services/menu_service.dart';
 import '../services/restaurant_service.dart';
+import '../services/speech_service.dart';
 import '../utils/token_storage.dart';
 import '../utils/animation_utils.dart';
 import '../widgets/physics_cravings_box.dart';
 import '../widgets/filter_bottom_sheet.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'search_screen.dart';
+import '../utils/custom_toast.dart';
 
 import 'cart_screen.dart';
 import 'profile_screen.dart';
@@ -41,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Restaurant> _restaurants = [];
   bool _isLoading = true;
   SearchFilters _homeFilters = const SearchFilters();
+  DateTime? _currentBackPressTime;
 
   // Mock Categories for Story UI
   final List<Map<String, String>> _categories = [
@@ -58,9 +62,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchHomeData();
     _startAutoScroll();
-    _homeSearchController.addListener(() {
-      setState(() {}); // Rebuild to swap filter/search icon
-    });
   }
 
   void _startAutoScroll() {
@@ -179,9 +180,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: Stack(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        final now = DateTime.now();
+        if (_currentBackPressTime == null ||
+            now.difference(_currentBackPressTime!) > const Duration(seconds: 2)) {
+          _currentBackPressTime = now;
+          CustomToast.showNeutralToast(context, 'Press back again to exit');
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        body: Stack(
         children: [
           SafeArea(
             bottom: false,
@@ -261,58 +275,99 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                 ),
-                                // Dynamic button: filter (when empty) vs search (when typing/filtered)
-                                GestureDetector(
-                                  onTap: () {
-                                    final hasText = _homeSearchController.text.trim().isNotEmpty;
-                                    final hasFilters = _homeFilters.hasActiveFilters;
-                                    if (hasText || hasFilters) {
-                                      // Navigate to SearchScreen with query and/or filters
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => SearchScreen(
-                                            initialQuery: hasText ? _homeSearchController.text.trim() : null,
-                                            initialCategory: _homeFilters.category != 'All' ? _homeFilters.category : null,
-                                            initialFilters: _homeFilters,
-                                          ),
+                                // Voice Search Mic Button
+                                ListenableBuilder(
+                                  listenable: SpeechService(),
+                                  builder: (context, _) {
+                                    final isListening = SpeechService().isListening;
+                                    return GestureDetector(
+                                      onTap: () async {
+                                        if (isListening) {
+                                          await SpeechService().stopListening();
+                                        } else {
+                                          await SpeechService().startListening(
+                                            onResult: (text) {
+                                              if (text.isNotEmpty) {
+                                                _homeSearchController.text = text;
+                                              }
+                                            },
+                                          );
+                                        }
+                                      },
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 300),
+                                        padding: const EdgeInsets.all(8),
+                                        margin: const EdgeInsets.only(right: 6),
+                                        decoration: BoxDecoration(
+                                          color: isListening ? const Color(0xFF8B1C28).withValues(alpha: 0.1) : Colors.transparent,
+                                          shape: BoxShape.circle,
                                         ),
-                                      ).then((_) {
-                                        _homeSearchController.clear();
-                                        setState(() => _homeFilters = const SearchFilters());
-                                      });
-                                    } else {
-                                      // Show filter popup
-                                      _showFilterPopup();
-                                    }
+                                        child: Icon(
+                                          isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                                          color: isListening ? const Color(0xFF8B1C28) : Colors.grey,
+                                          size: 24,
+                                        ).animate(target: isListening ? 1 : 0)
+                                          .scaleXY(begin: 1.0, end: 1.1)
+                                          .tint(color: const Color(0xFF8B1C28)),
+                                      ),
+                                    );
                                   },
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 250),
-                                    transitionBuilder: (Widget child, Animation<double> animation) {
-                                      return ScaleTransition(scale: animation, child: child);
-                                    },
-                                    child: (_homeSearchController.text.trim().isNotEmpty || _homeFilters.hasActiveFilters)
-                                        ? Container(
-                                            key: const ValueKey('search_go'),
-                                            width: 40,
-                                            height: 40,
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF8B1C28),
-                                              shape: BoxShape.circle,
+                                ),
+                                // Dynamic button: filter (when empty) vs search (when typing/filtered)
+                                ValueListenableBuilder<TextEditingValue>(
+                                  valueListenable: _homeSearchController,
+                                  builder: (context, value, _) {
+                                    final hasText = value.text.trim().isNotEmpty;
+                                    final hasFilters = _homeFilters.hasActiveFilters;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        if (hasText || hasFilters) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => SearchScreen(
+                                                initialQuery: hasText ? _homeSearchController.text.trim() : null,
+                                                initialCategory: _homeFilters.category != 'All' ? _homeFilters.category : null,
+                                                initialFilters: _homeFilters,
+                                              ),
                                             ),
-                                            child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                                          )
-                                        : Container(
-                                            key: const ValueKey('filter'),
-                                            width: 40,
-                                            height: 40,
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF8B1C28),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
-                                          ),
-                                  ),
+                                          ).then((_) {
+                                            _homeSearchController.clear();
+                                            setState(() => _homeFilters = const SearchFilters());
+                                          });
+                                        } else {
+                                          _showFilterPopup();
+                                        }
+                                      },
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 250),
+                                        transitionBuilder: (Widget child, Animation<double> animation) {
+                                          return ScaleTransition(scale: animation, child: child);
+                                        },
+                                        child: (hasText || hasFilters)
+                                            ? Container(
+                                                key: const ValueKey('search_go'),
+                                                width: 40,
+                                                height: 40,
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF8B1C28),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                                              )
+                                            : Container(
+                                                key: const ValueKey('filter'),
+                                                width: 40,
+                                                height: 40,
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF8B1C28),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+                                              ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -582,7 +637,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ],
                                   ),
-                                ).animate().fadeIn(delay: (200 * index).ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic),
+                                ),
                               );
                             },
                             childCount: _restaurants.length,
@@ -607,7 +662,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 

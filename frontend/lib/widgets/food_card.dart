@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/food_item.dart';
 import '../models/favorites_model.dart';
@@ -44,10 +43,6 @@ class _FoodCardState extends State<FoodCard> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onTap,
-      onDoubleTap: () {
-        final favorites = Provider.of<FavoritesProvider>(context, listen: false);
-        _handleDoubleTap(favorites);
-      },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -64,87 +59,93 @@ class _FoodCardState extends State<FoodCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Hero(
-                    key: _imageKey,
-                    tag: 'food-image-${widget.food.id}',
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(32),
-                      ),
-                      child: CachedNetworkImage(
-                        imageUrl: widget.food.imageUrl,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                        placeholder: (context, url) => Container(
-                          color: const Color(0xFFFDF0F0),
-                          child: const Center(
-                            child: SizedBox(
-                              width: 24, height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B1C28)),
-                            ),
-                          ),
+              child: GestureDetector(
+                onDoubleTap: () {
+                  final favorites = Provider.of<FavoritesProvider>(context, listen: false);
+                  _handleDoubleTap(favorites);
+                },
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Hero(
+                      key: _imageKey,
+                      tag: 'food-image-${widget.food.id}',
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(32),
                         ),
-                        errorWidget: (context, url, error) {
-                          return Container(
+                        child: CachedNetworkImage(
+                          imageUrl: widget.food.imageUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          placeholder: (context, url) => Container(
                             color: const Color(0xFFFDF0F0),
                             child: const Center(
-                              child: Icon(
-                                Icons.fastfood_rounded,
-                                color: Color(0xFF8B1C28),
-                                size: 40,
+                              child: SizedBox(
+                                width: 24, height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B1C28)),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) {
+                            return Container(
+                              color: const Color(0xFFFDF0F0),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.fastfood_rounded,
+                                  color: Color(0xFF8B1C28),
+                                  size: 40,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Consumer<FavoritesProvider>(
+                        builder: (context, favorites, child) {
+                          bool isFavorite = favorites.isFavorite(widget.food.id);
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
+                              ),
+                              child: FavoriteButton(
+                                isFavorite: isFavorite,
+                                onTap: () {
+                                  favorites.toggleFavorite(widget.food.id, widget.food);
+                                  widget.onInteraction?.call();
+                                },
+                                size: 20,
                               ),
                             ),
                           );
                         },
                       ),
                     ),
-                  ),
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: Consumer<FavoritesProvider>(
-                      builder: (context, favorites, child) {
-                        bool isFavorite = favorites.isFavorite(widget.food.id);
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                )
-                              ],
-                            ),
-                            child: FavoriteButton(
-                              isFavorite: isFavorite,
-                              onTap: () {
-                                favorites.toggleFavorite(widget.food.id, widget.food);
-                                widget.onInteraction?.call();
-                              },
-                              size: 20,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  if (_showHeart)
-                    HeartOverlay(
-                      emoji: 'â¤ï¸',
-                      onComplete: () {
-                        if (mounted) setState(() => _showHeart = false);
-                      },
-                    ),
-                ],
+                    if (_showHeart)
+                      HeartOverlay(
+                        emoji: '\u{2764}\u{FE0F}',
+                        onComplete: () {
+                          if (mounted) setState(() => _showHeart = false);
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
             Padding(
@@ -209,7 +210,7 @@ class _FoodCardState extends State<FoodCard> {
                             color: Colors.white,
                             size: 20,
                           ),
-                        ).animate().scaleXY(begin: 0.9, end: 1.0, duration: 200.ms),
+                        ),
                       ),
                     ],
                   ),
@@ -218,7 +219,7 @@ class _FoodCardState extends State<FoodCard> {
             ),
           ],
         ),
-      ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic),
+      ),
     );
   }
 }

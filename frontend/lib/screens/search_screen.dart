@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
 import '../utils/animation_utils.dart';
 import '../services/menu_service.dart';
+import '../services/speech_service.dart';
 import '../utils/token_storage.dart';
 import 'cart_screen.dart';
 
@@ -258,9 +259,47 @@ class _SearchScreenState extends State<SearchScreen> {
                                 .withValues(alpha: 0.35),
                             fontWeight: FontWeight.w500,
                           ),
-                          prefixIcon: Icon(Icons.search_rounded,
-                              color: const Color(0xFF8B1C28)
-                                  .withValues(alpha: 0.5)),
+                          prefixIcon: ListenableBuilder(
+                            listenable: SpeechService(),
+                            builder: (context, _) {
+                              final isListening = SpeechService().isListening;
+                              return GestureDetector(
+                                onTap: () async {
+                                  if (isListening) {
+                                    await SpeechService().stopListening();
+                                  } else {
+                                    _searchController.clear();
+                                    await SpeechService().startListening(
+                                      onResult: (text) {
+                                        if (text.isNotEmpty) {
+                                          _searchController.text = text;
+                                          _searchController.selection = TextSelection.fromPosition(
+                                              TextPosition(offset: _searchController.text.length));
+                                          _filterResults();
+                                        }
+                                      },
+                                    );
+                                  }
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  padding: const EdgeInsets.all(8),
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: isListening ? const Color(0xFF8B1C28).withValues(alpha: 0.1) : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    isListening ? Icons.mic_rounded : Icons.search_rounded,
+                                    color: isListening ? const Color(0xFF8B1C28) : const Color(0xFF8B1C28).withValues(alpha: 0.5),
+                                    size: 20,
+                                  ).animate(target: isListening ? 1 : 0)
+                                    .scaleXY(begin: 1.0, end: 1.2)
+                                    .tint(color: const Color(0xFF8B1C28)),
+                                ),
+                              );
+                            },
+                          ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 14),

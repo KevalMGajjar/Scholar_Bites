@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -24,39 +24,41 @@ class CustomBottomBar extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(left: 24, right: 24, bottom: 32),
       height: 72,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(36),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF8B1C28).withValues(alpha: 0.15),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
+      child: RepaintBoundary(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(36),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  width: 1.5,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildNavItem(Icons.home_rounded, 0, context),
-                _buildNavItem(Icons.favorite_rounded, 1, context, key: favKey),
-                _buildNavItem(Icons.shopping_bag_rounded, 2, context, key: cartKey),
-                _buildNavItem(Icons.person_rounded, 3, context),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B1C28).withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildNavItem(Icons.home_rounded, 0, context),
+                  _buildNavItem(Icons.favorite_rounded, 1, context, key: favKey),
+                  _buildNavItem(Icons.shopping_bag_rounded, 2, context, key: cartKey),
+                  _buildNavItem(Icons.person_rounded, 3, context),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ).animate().slideY(begin: 1.5, end: 0, duration: 600.ms, curve: Curves.easeOutBack);
+    );
   }
 
   Widget _buildNavItem(IconData icon, int index, BuildContext context, {GlobalKey? key}) {

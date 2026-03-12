@@ -50,5 +50,9 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>We need speech recognition to easily convert your voice into search queries.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need microphone access so you can speak your search queries.</string>
 </dict>
 </plist>

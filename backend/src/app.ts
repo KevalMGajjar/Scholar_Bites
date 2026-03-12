@@ -9,6 +9,7 @@ import orderRoutes from './routes/orderRoutes';
 import lobbyRoutes from './routes/lobbyRoutes';
 import restaurantRoutes from './routes/restaurantRoutes';
 import adminRoutes from './routes/adminRoutes';
+import walletRoutes from './routes/walletRoutes';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/lobby', lobbyRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/wallet', walletRoutes);
 
 app.get('/api', (req, res) => {
     res.send('University Canteen API is running');
