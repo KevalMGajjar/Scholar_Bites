@@ -89,12 +89,12 @@ class _OtpScreenState extends State<OtpScreen> {
         final isConnectionError = errorMessage.contains('connect') || 
             errorMessage.contains('SocketException') || 
             errorMessage.contains('Connection');
-        CustomToast.showErrorToast(
-          context,
-          isConnectionError
-              ? 'Unable to connect to the server. Please check your connection.'
-              : 'Verification failed. Please try again.',
-        );
+            
+        final displayMessage = isConnectionError
+              ? 'Unable to connect to server. Please check your connection.'
+              : errorMessage.replaceAll('Exception: ', '');
+
+        CustomToast.showErrorToast(context, displayMessage);
       }
     }
   }

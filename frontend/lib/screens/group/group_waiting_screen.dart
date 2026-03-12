@@ -79,6 +79,16 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
         return;
       }
 
+      if (status == 'paid' || status == 'preparing') {
+        final pickupRestaurant = data['pickup_restaurant']?.toString() ?? 'Restaurant';
+        final orderToken = data['order_token']?.toString() ?? '';
+        _socketService.disconnect();
+        if (mounted) {
+          _handleOrderCompleted(pickupRestaurant, orderToken);
+        }
+        return;
+      }
+
       setState(() {
         _members = List<Map<String, dynamic>>.from(data['members'] ?? []);
         _isLoading = false;
@@ -125,28 +135,62 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
       onOrderCompleted: (data) {
         final pickupRestaurant = data['pickup_restaurant'] ?? 'Restaurant';
         final orderToken = data['order_token'] ?? '';
-
-        if (widget.isLeader) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => GroupSuccessScreen(
-                groupCode: widget.groupCode,
-                members: _members,
-                pickupRestaurant: pickupRestaurant,
-                orderToken: orderToken,
-              ),
-            ),
-          );
-        } else {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-          );
+        _socketService.disconnect();
+        if (mounted) {
+          _handleOrderCompleted(pickupRestaurant, orderToken);
         }
       },
     );
+  }
+
+  Future<void> _handleOrderCompleted(String pickupRestaurant, String orderToken) async {
+    if (widget.isLeader) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GroupSuccessScreen(
+            groupCode: widget.groupCode,
+            members: _members,
+            pickupRestaurant: pickupRestaurant,
+            orderToken: orderToken,
+          ),
+        ),
+      );
+    } else {
+      // Show popup before going home
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFFFDF0F0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Payment Successful! 🎉', textAlign: TextAlign.center),
+          content: const Text('You paid successfully. Please wait for your order to be prepared.', textAlign: TextAlign.center),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B1C28),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                child: const Text('Back to Home'),
+              ),
+            ),
+          ],
+        ),
+      );
+      
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    }
   }
 
   void _checkAllPaid() {

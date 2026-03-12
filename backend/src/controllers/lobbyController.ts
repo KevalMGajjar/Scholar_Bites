@@ -188,6 +188,30 @@ export const getLobbyState = async (req: AuthRequest, res: Response) => {
             [groupOrder.id]
         );
 
+        let pickup_restaurant = '';
+        let order_token = '';
+
+        if (groupOrder.status === 'paid' || groupOrder.status === 'preparing') {
+            const restaurantRes = await pool.query(
+                `SELECT o.restaurant_id, r.name, COUNT(oi.id) as item_count
+                 FROM orders o
+                 JOIN order_items oi ON oi.order_id = o.id
+                 JOIN restaurants r ON o.restaurant_id = r.id
+                 WHERE o.group_order_id = $1
+                 GROUP BY o.restaurant_id, r.name
+                 ORDER BY item_count DESC
+                 LIMIT 1`,
+                [groupOrder.id]
+            );
+            pickup_restaurant = restaurantRes.rows[0]?.name || 'Restaurant';
+
+            const tokenRes = await pool.query(
+                "SELECT order_token FROM orders WHERE group_order_id = $1 AND order_token IS NOT NULL LIMIT 1",
+                [groupOrder.id]
+            );
+            order_token = tokenRes.rows[0]?.order_token || '';
+        }
+
         res.json({
             id: groupOrder.id,
             code: groupOrder.code,
@@ -198,6 +222,8 @@ export const getLobbyState = async (req: AuthRequest, res: Response) => {
             created_at: groupOrder.created_at,
             members: membersRes.rows,
             items: itemsRes.rows,
+            pickup_restaurant,
+            order_token,
         });
     } catch (error) {
         console.error('getLobbyState error:', error);
