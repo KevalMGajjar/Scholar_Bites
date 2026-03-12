@@ -11,8 +11,11 @@ const generateCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
+// ─── Create Group ───
 export const createLobby = async (req: AuthRequest, res: Response) => {
     const userId = req.user.id;
+    const { nickname } = req.body;
+
     try {
         const code = generateCode();
         const result = await pool.query(
@@ -21,10 +24,10 @@ export const createLobby = async (req: AuthRequest, res: Response) => {
         );
         const groupOrder = result.rows[0];
 
-        // Add creator as member
+        // Add creator as member with nickname
         await pool.query(
-            "INSERT INTO group_order_members (group_order_id, user_id, share_amount, payment_status) VALUES ($1, $2, 0, 'pending')",
-            [groupOrder.id, userId]
+            "INSERT INTO group_order_members (group_order_id, user_id, nickname, share_amount, payment_status) VALUES ($1, $2, $3, 0, 'pending')",
+            [groupOrder.id, userId, nickname || 'Leader']
         );
 
         res.status(201).json(groupOrder);
@@ -34,13 +37,14 @@ export const createLobby = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// ─── Join Group ───
 export const joinLobby = async (req: AuthRequest, res: Response) => {
-    const { code } = req.body;
+    const { code, nickname } = req.body;
     const userId = req.user.id;
 
     try {
         const groupRes = await pool.query("SELECT * FROM group_orders WHERE code = $1 AND status = 'open'", [code]);
-        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Lobby not found or locked' });
+        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Group not found or locked' });
         const groupOrder = groupRes.rows[0];
 
         // Check if already joined
@@ -51,95 +55,145 @@ export const joinLobby = async (req: AuthRequest, res: Response) => {
 
         if (memberCheck.rows.length === 0) {
             await pool.query(
-                "INSERT INTO group_order_members (group_order_id, user_id, share_amount, payment_status) VALUES ($1, $2, 0, 'pending')",
-                [groupOrder.id, userId]
+                "INSERT INTO group_order_members (group_order_id, user_id, nickname, share_amount, payment_status) VALUES ($1, $2, $3, 0, 'pending')",
+                [groupOrder.id, userId, nickname || 'Member']
             );
-            emitGroupUpdate(code, 'member_joined', { userId });
+            emitGroupUpdate(code, 'member_joined', { userId, nickname: nickname || 'Member' });
         }
 
-        res.json({ message: 'Joined lobby', groupOrder });
+        res.json({ message: 'Joined group', groupOrder });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-export const addItemToLobby = async (req: AuthRequest, res: Response) => {
-    const { code, menu_item_id, quantity, is_shared } = req.body;
-    const userId = req.user.id;
+// ─── Get Full Group State ───
+export const getLobbyState = async (req: AuthRequest, res: Response) => {
+    const { code } = req.params;
 
-    // Logic:
-    // Find Group Order.
-    // Find or Create valid "Temp" Order record in `orders` table.
-    // IF is_shared: user_id = NULL
-    // ELSE: user_id = userId
-    // Add item to `order_items`.
+    try {
+        // Get group order
+        const groupRes = await pool.query('SELECT * FROM group_orders WHERE code = $1', [code]);
+        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Group not found' });
+        const groupOrder = groupRes.rows[0];
+
+        // Get members with nicknames
+        const membersRes = await pool.query(
+            `SELECT gom.user_id, gom.nickname, gom.share_amount, gom.payment_status, gom.joined_at
+             FROM group_order_members gom
+             WHERE gom.group_order_id = $1
+             ORDER BY gom.joined_at ASC`,
+            [groupOrder.id]
+        );
+
+        // Get all items added to this group (across all temp orders)
+        const itemsRes = await pool.query(
+            `SELECT oi.menu_item_id, oi.quantity, oi.price_at_time,
+                    mi.name as item_name, mi.image_url as item_image, mi.category,
+                    o.user_id as added_by,
+                    r.name as restaurant_name, r.id as restaurant_id
+             FROM order_items oi
+             JOIN orders o ON oi.order_id = o.id
+             JOIN menu_items mi ON oi.menu_item_id = mi.id
+             JOIN restaurants r ON mi.restaurant_id = r.id
+             WHERE o.group_order_id = $1
+             ORDER BY o.created_at ASC`,
+            [groupOrder.id]
+        );
+
+        res.json({
+            id: groupOrder.id,
+            code: groupOrder.code,
+            creator_id: groupOrder.creator_id,
+            status: groupOrder.status,
+            total_amount: groupOrder.total_amount,
+            created_at: groupOrder.created_at,
+            members: membersRes.rows,
+            items: itemsRes.rows,
+        });
+    } catch (error) {
+        console.error('getLobbyState error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Add Item to Group ───
+export const addItemToLobby = async (req: AuthRequest, res: Response) => {
+    const { code, menu_item_id, quantity } = req.body;
+    const userId = req.user.id;
 
     try {
         const groupRes = await pool.query('SELECT * FROM group_orders WHERE code = $1', [code]);
-        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Lobby not found' });
+        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Group not found' });
         const groupOrder = groupRes.rows[0];
 
-        if (groupOrder.status !== 'open') return res.status(400).json({ message: 'Lobby is locked' });
+        if (groupOrder.status !== 'open') return res.status(400).json({ message: 'Group is locked' });
 
-        // Get Price
-        const itemRes = await pool.query('SELECT price FROM menu_items WHERE id = $1', [menu_item_id]);
+        // Get Price + item details
+        const itemRes = await pool.query(
+            'SELECT mi.price, mi.name, mi.image_url, mi.restaurant_id, r.university_id FROM menu_items mi JOIN restaurants r ON mi.restaurant_id = r.id WHERE mi.id = $1',
+            [menu_item_id]
+        );
         if (itemRes.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
-        const price = itemRes.rows[0].price;
+        const menuItem = itemRes.rows[0];
+        const price = parseFloat(menuItem.price);
 
-        // Find existing Cart Order
-        let orderQuery = 'SELECT id, total_amount FROM orders WHERE group_order_id = $1 AND status = \'pending\' AND ';
-        let orderParams = [groupOrder.id];
+        // Find existing temp order for this user in this group
+        let orderRes = await pool.query(
+            "SELECT id FROM orders WHERE group_order_id = $1 AND user_id = $2 AND status = 'pending'",
+            [groupOrder.id, userId]
+        );
 
-        if (is_shared) {
-            orderQuery += 'user_id IS NULL';
-        } else {
-            orderQuery += 'user_id = $2';
-            orderParams.push(userId);
-        }
-
-        let orderRes = await pool.query(orderQuery, orderParams);
         let orderId;
-
         if (orderRes.rows.length === 0) {
-            // Create New Temp Order
-            const paymentId = `TEMP_${uuidv4()}`;
-            // Need University ID via user or group creator.
-            // Let's get it from any available source or passed in. 
-            // For now, assume passed or fetch from menu_item's university (safest).
-            const uniRes = await pool.query('SELECT university_id FROM menu_items WHERE id = $1', [menu_item_id]);
-            const universityId = uniRes.rows[0].university_id;
-
-            const insertQ = `INSERT INTO orders (user_id, university_id, group_order_id, status, total_amount, payment_id) 
-                             VALUES ($1, $2, $3, 'pending', 0, $4) RETURNING id`;
-            const insertParams = [is_shared ? null : userId, universityId, groupOrder.id, paymentId];
-
-            const insertRes = await pool.query(insertQ, insertParams);
+            // Create new temp order
+            const paymentId = `GROUP_${uuidv4()}`;
+            const insertRes = await pool.query(
+                `INSERT INTO orders (user_id, university_id, restaurant_id, group_order_id, status, total_amount, payment_id)
+                 VALUES ($1, $2, $3, $4, 'pending', 0, $5) RETURNING id`,
+                [userId, menuItem.university_id, menuItem.restaurant_id, groupOrder.id, paymentId]
+            );
             orderId = insertRes.rows[0].id;
         } else {
             orderId = orderRes.rows[0].id;
         }
 
-        // Add Item
+        // Add item
         await pool.query(
             'INSERT INTO order_items (order_id, menu_item_id, quantity, price_at_time) VALUES ($1, $2, $3, $4)',
             [orderId, menu_item_id, quantity, price]
         );
 
-        // Update Total
+        // Update order total
         await pool.query(
             'UPDATE orders SET total_amount = total_amount + $1 WHERE id = $2',
             [price * quantity, orderId]
         );
 
-        emitGroupUpdate(code, 'item_added', { userId, menu_item_id, quantity, is_shared });
-        res.json({ message: 'Item added' });
+        // Get member nickname for the event
+        const nickRes = await pool.query(
+            'SELECT nickname FROM group_order_members WHERE group_order_id = $1 AND user_id = $2',
+            [groupOrder.id, userId]
+        );
 
+        emitGroupUpdate(code, 'item_added', {
+            userId,
+            nickname: nickRes.rows[0]?.nickname || 'Member',
+            menu_item_id,
+            item_name: menuItem.name,
+            item_image: menuItem.image_url,
+            quantity,
+            price,
+        });
+
+        res.json({ message: 'Item added', item_name: menuItem.name, price, quantity });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
+// ─── Lock Group (Leader Only) ───
 export const lockLobby = async (req: AuthRequest, res: Response) => {
     const { code } = req.body;
     const userId = req.user.id;
@@ -150,51 +204,41 @@ export const lockLobby = async (req: AuthRequest, res: Response) => {
             await client.query('BEGIN');
 
             const groupRes = await client.query('SELECT * FROM group_orders WHERE code = $1', [code]);
-            if (groupRes.rows.length === 0) throw new Error('Lobby not found');
+            if (groupRes.rows.length === 0) throw new Error('Group not found');
             const groupOrder = groupRes.rows[0];
 
             if (groupOrder.creator_id !== userId && req.user.role !== 'admin') {
-                throw new Error('Only creator can lock lobby');
+                throw new Error('Only the leader can lock the group');
             }
 
-            // Calculate Splits
-            // 1. Get Shared Total
-            const sharedRes = await client.query(
-                "SELECT SUM(total_amount) as total FROM orders WHERE group_order_id = $1 AND user_id IS NULL",
+            // Calculate each member's personal total
+            const membersRes = await client.query(
+                'SELECT user_id, nickname FROM group_order_members WHERE group_order_id = $1',
                 [groupOrder.id]
             );
-            const sharedTotal = parseFloat(sharedRes.rows[0].total || '0');
-
-            // 2. Get Members
-            const membersRes = await client.query('SELECT user_id FROM group_order_members WHERE group_order_id = $1', [groupOrder.id]);
             const members = membersRes.rows;
-            const n_members = members.length;
+            if (members.length === 0) throw new Error('No members');
 
-            if (n_members === 0) throw new Error('No members');
-
-            const sharedSplit = sharedTotal / n_members;
-
-            // 3. Update each member
             let totalGroupBill = 0;
+            const memberShares: { user_id: string; nickname: string; share: number }[] = [];
 
             for (const member of members) {
-                // Get Personal Total
                 const personalRes = await client.query(
-                    "SELECT SUM(total_amount) as total FROM orders WHERE group_order_id = $1 AND user_id = $2",
+                    "SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE group_order_id = $1 AND user_id = $2",
                     [groupOrder.id, member.user_id]
                 );
-                const personalTotal = parseFloat(personalRes.rows[0].total || '0');
-
-                const finalShare = sharedSplit + personalTotal;
-                totalGroupBill += finalShare;
+                const personalTotal = parseFloat(personalRes.rows[0].total);
+                totalGroupBill += personalTotal;
 
                 await client.query(
                     'UPDATE group_order_members SET share_amount = $1 WHERE group_order_id = $2 AND user_id = $3',
-                    [finalShare, groupOrder.id, member.user_id]
+                    [personalTotal, groupOrder.id, member.user_id]
                 );
+
+                memberShares.push({ user_id: member.user_id, nickname: member.nickname, share: personalTotal });
             }
 
-            // Update Group Order
+            // Update group order
             await client.query(
                 "UPDATE group_orders SET status = 'locked', total_amount = $1 WHERE id = $2",
                 [totalGroupBill, groupOrder.id]
@@ -202,8 +246,8 @@ export const lockLobby = async (req: AuthRequest, res: Response) => {
 
             await client.query('COMMIT');
 
-            emitGroupUpdate(code, 'lobby_locked', { total: totalGroupBill });
-            res.json({ message: 'Lobby locked', total: totalGroupBill });
+            emitGroupUpdate(code, 'lobby_locked', { total: totalGroupBill, shares: memberShares });
+            res.json({ message: 'Group locked', total: totalGroupBill, shares: memberShares });
 
         } catch (err: any) {
             await client.query('ROLLBACK');
@@ -211,19 +255,19 @@ export const lockLobby = async (req: AuthRequest, res: Response) => {
         } finally {
             client.release();
         }
-
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
 };
 
+// ─── Pay Share (Razorpay or Wallet) ───
 export const payShare = async (req: AuthRequest, res: Response) => {
-    const { code } = req.body;
+    const { code, payment_method } = req.body; // payment_method: 'razorpay' | 'wallet'
     const userId = req.user.id;
 
     try {
         const groupRes = await pool.query('SELECT * FROM group_orders WHERE code = $1', [code]);
-        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Lobby not found' });
+        if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Group not found' });
         const groupOrder = groupRes.rows[0];
 
         const memberRes = await pool.query(
@@ -233,20 +277,79 @@ export const payShare = async (req: AuthRequest, res: Response) => {
         const member = memberRes.rows[0];
 
         if (!member) return res.status(403).json({ message: 'Not a member' });
-        if (member.share_amount <= 0) return res.status(400).json({ message: 'Nothing to pay' });
+        if (Number(member.share_amount) <= 0) return res.status(400).json({ message: 'Nothing to pay' });
         if (member.payment_status === 'paid') return res.status(400).json({ message: 'Already paid' });
 
-        // Create Razorpay Order
-        const rzpOrder = await razorpay.orders.create({
-            amount: Math.round(Number(member.share_amount) * 100),
-            currency: 'INR',
-            receipt: `share_${member.id}`,
-        });
+        const shareAmount = Number(member.share_amount);
+
+        // ─── Wallet Payment ───
+        if (payment_method === 'wallet') {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+
+                // Check wallet balance
+                const userRes = await client.query('SELECT wallet_balance FROM users WHERE id = $1', [userId]);
+                const balance = parseFloat(userRes.rows[0].wallet_balance);
+
+                if (balance < shareAmount) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ message: 'Insufficient wallet balance' });
+                }
+
+                // Deduct wallet
+                await client.query(
+                    'UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2',
+                    [shareAmount, userId]
+                );
+
+                // Record transaction
+                await client.query(
+                    "INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id) VALUES ($1, $2, 'debit', $3, $4)",
+                    [userId, shareAmount, `Group order share (${code})`, `group_${groupOrder.id}`]
+                );
+
+                // Mark as paid
+                const walletPaymentId = `wallet_${uuidv4()}`;
+                await client.query(
+                    "UPDATE group_order_members SET payment_status = 'paid', payment_id = $1 WHERE group_order_id = $2 AND user_id = $3",
+                    [walletPaymentId, groupOrder.id, userId]
+                );
+
+                await client.query('COMMIT');
+
+                // Check if all paid
+                await _checkAllPaid(groupOrder, code, userId);
+
+                return res.json({ status: 'success', payment_method: 'wallet', amount: shareAmount });
+
+            } catch (err: any) {
+                await client.query('ROLLBACK');
+                return res.status(500).json({ message: err.message });
+            } finally {
+                client.release();
+            }
+        }
+
+        // ─── Razorpay Payment ───
+        const amountPaise = Math.round(shareAmount * 100);
+        let orderId = `mock_group_${crypto.randomBytes(4).toString('hex')}`;
+
+        if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.includes('placeholder')) {
+            const rzpOrder = await razorpay.orders.create({
+                amount: amountPaise,
+                currency: 'INR',
+                receipt: `share_${member.id}`,
+            });
+            orderId = rzpOrder.id;
+        }
 
         res.json({
+            status: 'razorpay',
             key_id: process.env.RAZORPAY_KEY_ID,
-            order_id: rzpOrder.id,
-            amount: member.share_amount
+            order_id: orderId,
+            amount: shareAmount,
+            amount_in_paise: amountPaise,
         });
 
     } catch (error) {
@@ -255,62 +358,38 @@ export const payShare = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// ─── Verify Share Payment (Razorpay callback) ───
 export const verifyShare = async (req: AuthRequest, res: Response) => {
     const { code, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     const userId = req.user.id;
 
     try {
-        // Verify Signature
-        const body = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSignature = crypto
-            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
-            .update(body.toString())
-            .digest('hex');
+        let isValid = false;
 
-        if (expectedSignature !== razorpay_signature) {
-            return res.status(400).json({ status: 'failure', message: 'Invalid signature' });
+        if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
+            const body = razorpay_order_id + "|" + razorpay_payment_id;
+            const expectedSignature = crypto
+                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+                .update(body.toString())
+                .digest('hex');
+            isValid = (expectedSignature === razorpay_signature);
+        } else {
+            isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
         }
+
+        if (!isValid) return res.status(400).json({ status: 'failure', message: 'Invalid signature' });
 
         const groupRes = await pool.query('SELECT * FROM group_orders WHERE code = $1', [code]);
         const groupOrder = groupRes.rows[0];
 
-        // Update Member Status
+        // Update member status
         await pool.query(
             "UPDATE group_order_members SET payment_status = 'paid', payment_id = $1 WHERE group_order_id = $2 AND user_id = $3",
             [razorpay_payment_id, groupOrder.id, userId]
         );
 
-        // Check if ALL paid
-        const pendingRes = await pool.query(
-            "SELECT COUNT(*) FROM group_order_members WHERE group_order_id = $1 AND payment_status != 'paid'",
-            [groupOrder.id]
-        );
-
-        const pendingCount = parseInt(pendingRes.rows[0].count);
-
-        if (pendingCount === 0) {
-            // ALL PAID -> Finalize
-            await pool.query("UPDATE group_orders SET status = 'paid' WHERE id = $1", [groupOrder.id]);
-
-            // Update all linked orders to 'preparing'
-            await pool.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE group_order_id = $1", [groupOrder.id]);
-
-            // Notify Kitchen (find one order to get uni id)
-            // Just get uni id from group order -> Creator -> Uni? No user -> uni.
-            // Or from temp orders.
-            const orderRes = await pool.query('SELECT university_id FROM orders WHERE group_order_id = $1 LIMIT 1', [groupOrder.id]);
-            if (orderRes.rows.length > 0) {
-                emitNewOrder(orderRes.rows[0].university_id, {
-                    type: 'group_order',
-                    group_order_id: groupOrder.id,
-                    total_amount: groupOrder.total_amount
-                });
-            }
-
-            emitGroupUpdate(code, 'order_completed', { message: 'All paid! Order sent to kitchen.' });
-        } else {
-            emitGroupUpdate(code, 'member_paid', { userId });
-        }
+        // Check if all paid
+        await _checkAllPaid(groupOrder, code, userId);
 
         res.json({ status: 'success' });
 
@@ -319,3 +398,60 @@ export const verifyShare = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ─── Internal: Check if all members paid and finalize ───
+async function _checkAllPaid(groupOrder: any, code: string, paidUserId: string) {
+    const pendingRes = await pool.query(
+        "SELECT COUNT(*) FROM group_order_members WHERE group_order_id = $1 AND payment_status != 'paid'",
+        [groupOrder.id]
+    );
+    const pendingCount = parseInt(pendingRes.rows[0].count);
+
+    if (pendingCount === 0) {
+        // ALL PAID → Finalize
+        await pool.query("UPDATE group_orders SET status = 'paid' WHERE id = $1", [groupOrder.id]);
+
+        // Determine main restaurant (most items) for pickup
+        const restaurantRes = await pool.query(
+            `SELECT o.restaurant_id, r.name, COUNT(oi.id) as item_count
+             FROM orders o
+             JOIN order_items oi ON oi.order_id = o.id
+             JOIN restaurants r ON o.restaurant_id = r.id
+             WHERE o.group_order_id = $1
+             GROUP BY o.restaurant_id, r.name
+             ORDER BY item_count DESC
+             LIMIT 1`,
+            [groupOrder.id]
+        );
+
+        // Generate order tokens and set status to preparing
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let token = '';
+        for (let i = 0; i < 4; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+
+        await pool.query(
+            "UPDATE orders SET status = 'preparing', order_token = $1, updated_at = NOW() WHERE group_order_id = $2",
+            [token, groupOrder.id]
+        );
+
+        // Notify kitchen
+        const orderRes = await pool.query('SELECT university_id FROM orders WHERE group_order_id = $1 LIMIT 1', [groupOrder.id]);
+        if (orderRes.rows.length > 0) {
+            emitNewOrder(orderRes.rows[0].university_id, {
+                type: 'group_order',
+                group_order_id: groupOrder.id,
+                total_amount: groupOrder.total_amount,
+            });
+        }
+
+        const pickupRestaurant = restaurantRes.rows[0]?.name || 'Restaurant';
+
+        emitGroupUpdate(code, 'order_completed', {
+            message: 'All paid! Order sent to kitchen.',
+            pickup_restaurant: pickupRestaurant,
+            order_token: token,
+        });
+    } else {
+        emitGroupUpdate(code, 'member_paid', { userId: paidUserId });
+    }
+}

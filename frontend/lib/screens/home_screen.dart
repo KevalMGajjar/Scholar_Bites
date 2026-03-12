@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../widgets/spoon_loader.dart';
 import '../widgets/custom_bottom_bar.dart';
 import 'detail_screen.dart';
 import 'restaurant_detail_screen.dart';
+import 'group/group_entry_screen.dart';
 import '../services/menu_service.dart';
 import '../services/restaurant_service.dart';
 import '../services/speech_service.dart';
@@ -656,6 +658,33 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
           ),
           
+          // Floating Group Order Button
+          Positioned(
+            right: 20,
+            bottom: 90,
+            child: GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupEntryScreen())),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF8B1C28), Color(0xFFB52A3A)]),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF8B1C28).withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.group_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Group Order', style: GoogleFonts.poppins(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           // Floating Bottom Navigation Bar
           Positioned(
             left: 0,

@@ -169,6 +169,7 @@ model GroupOrderMember {
   id             String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   group_order_id String        @db.Uuid
   user_id        String        @db.Uuid
+  nickname       String?       @db.VarChar(30)
   share_amount   Decimal       @db.Decimal(10, 2)
   payment_status PaymentStatus
   payment_id     String?       @unique @db.VarChar(255)
