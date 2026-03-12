@@ -84,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (status == 'locked') {
           // Redirect to payment screen
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => GroupPaymentScreen(
@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         } else if (status == 'open') {
           // Redirect to lobby screen
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => GroupLobbyScreen(

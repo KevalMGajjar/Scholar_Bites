@@ -26,6 +26,7 @@ class GroupSocketService {
     _socket = io.io(uri, io.OptionBuilder()
         .setTransports(['websocket'])
         .disableAutoConnect()
+        .enableForceNewConnection() // Ensure each screen gets its own isolated connection
         .build());
 
     _socket!.onConnect((_) {

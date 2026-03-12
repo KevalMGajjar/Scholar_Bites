@@ -78,6 +78,11 @@ class AuthService {
   }
 
   static Future<void> logout() async {
+    try {
+      await _dio.post('/auth/logout');
+    } catch (_) {
+      // Ignore errors when logging out — perform local cleanup anyway
+    }
     await TokenStorage.deleteToken();
     final userBox = Hive.box<UserModel>('userBox');
     await userBox.delete('currentUser');

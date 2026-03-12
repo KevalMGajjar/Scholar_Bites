@@ -46,6 +46,11 @@ export const loginOtp = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
+        // Block if already logged in elsewhere
+        if (user.active_token) {
+            return res.status(409).json({ message: 'Phone number already used on another device' });
+        }
+
         const token = generateToken({ id: user.id, phone: user.phone, role });
 
         // Save token hash for single-device enforcement
@@ -147,6 +152,11 @@ export const staffLogin = async (req: Request, res: Response) => {
             return res.status(401).json({ message: 'Invalid password' });
         }
 
+        // Block if already logged in elsewhere
+        if (staff.active_token) {
+            return res.status(409).json({ message: 'Accound already logged in on another device' });
+        }
+
         const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
 
         // Save token hash for single-device enforcement
@@ -190,6 +200,22 @@ export const registerStaff = async (req: Request, res: Response) => {
             return res.status(409).json({ message: 'Email already registered' });
         }
         console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Logout (Clears active session) ───
+export const logout = async (req: Request, res: Response) => {
+    // We expect the auth middleware to pass req.user
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    try {
+        const table = user.role === 'student' ? 'users' : 'staff';
+        await pool.query(`UPDATE ${table} SET active_token = NULL WHERE id = $1`, [user.id]);
+        res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+        console.error('Logout error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
