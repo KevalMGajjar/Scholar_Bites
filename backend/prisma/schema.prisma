@@ -96,7 +96,9 @@ enum Role {
 model Staff {
   id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   university_id String   @db.Uuid
-  phone         String   @unique @db.VarChar(15)
+  email         String?  @unique @db.VarChar(255)
+  password_hash String?  @db.VarChar(255)
+  phone         String?  @unique @db.VarChar(15)
   name          String   @db.VarChar(100)
   role          Role
   permissions   Json     @default("{}")
