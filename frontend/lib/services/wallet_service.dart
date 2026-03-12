@@ -66,4 +66,21 @@ class WalletService {
       );
     }
   }
+
+  /// Pay for an existing order using wallet balance.
+  /// Returns a map with 'status', 'balance', 'order_token', and 'message'.
+  Future<Map<String, dynamic>> payOrderWithWallet(String orderId) async {
+    try {
+      final response = await _dio.post(
+        '/wallet/pay-order',
+        data: {'order_id': orderId},
+      );
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data is Map
+          ? e.response?.data['message'] ?? e.message
+          : e.message;
+      throw Exception(errorMsg);
+    }
+  }
 }

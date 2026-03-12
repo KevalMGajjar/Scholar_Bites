@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/cart_model.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
+import '../services/wallet_service.dart';
 import '../utils/token_storage.dart';
 import 'detail_screen.dart';
 import 'order_success_screen.dart';
@@ -25,6 +26,8 @@ class _CartScreenState extends State<CartScreen> {
   bool _isProcessingPayment = false;
   String? _currentOrderToken;
   String? _currentDbOrderId;
+  double _walletBalance = 0.0;
+  bool _isLoadingBalance = true;
 
   @override
   void initState() {
@@ -34,6 +37,21 @@ class _CartScreenState extends State<CartScreen> {
       onFailure: _handlePaymentError,
       onExternalWallet: _handleExternalWallet,
     );
+    _fetchWalletBalance();
+  }
+
+  Future<void> _fetchWalletBalance() async {
+    try {
+      final data = await WalletService().getWalletData();
+      if (mounted) {
+        setState(() {
+          _walletBalance = double.tryParse(data['balance'].toString()) ?? 0.0;
+          _isLoadingBalance = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingBalance = false);
+    }
   }
 
   @override
@@ -172,6 +190,62 @@ class _CartScreenState extends State<CartScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to initiate checkout: $e')),
         );
+      }
+    }
+  }
+
+  Future<void> _startWalletPayment(CartProvider cart) async {
+    if (cart.totalAmount <= 0) return;
+
+    final universityId = await TokenStorage.getUniversityId();
+    if (universityId == null || universityId.isEmpty) {
+      if (mounted) {
+        _showCustomToast('Please log in again.', isError: true, icon: Icons.error_outline_rounded);
+      }
+      return;
+    }
+
+    setState(() => _isProcessingPayment = true);
+
+    try {
+      // 1. Create the order on the backend (same as Razorpay flow)
+      debugPrint('💰 Creating order for wallet payment...');
+      final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+      final String dbOrderId = orderResponse['id'];
+      final String orderToken = orderResponse['order_token'] ?? '';
+
+      // 2. Pay using wallet balance
+      debugPrint('💰 Paying order $dbOrderId with wallet...');
+      final walletResult = await WalletService().payOrderWithWallet(dbOrderId);
+
+      if (walletResult['status'] == 'success') {
+        debugPrint('✅ Wallet payment succeeded! New balance: ${walletResult['balance']}');
+        
+        if (mounted) {
+          setState(() {
+            _isProcessingPayment = false;
+            _walletBalance = double.tryParse(walletResult['balance'].toString()) ?? 0.0;
+          });
+          await cart.clear();
+
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => OrderSuccessScreen(
+                orderId: dbOrderId,
+                amount: cart.totalAmount,
+                orderToken: walletResult['order_token'] ?? orderToken,
+              ),
+            ),
+          );
+        }
+      } else {
+        throw Exception(walletResult['message'] ?? 'Wallet payment failed');
+      }
+    } catch (e) {
+      debugPrint('❌ Wallet payment failed: $e');
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        _showCustomToast('$e', isError: true, icon: Icons.account_balance_wallet_rounded);
       }
     }
   }
@@ -539,6 +613,8 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCheckoutSection(BuildContext context, CartProvider cart) {
+    final bool canPayWithWallet = !_isLoadingBalance && _walletBalance >= cart.totalAmount;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
       decoration: BoxDecoration(
@@ -586,10 +662,10 @@ class _CartScreenState extends State<CartScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Checkout button
+          // Pay Button (Razorpay)
           SizedBox(
             width: double.infinity,
-            height: 58,
+            height: 56,
             child: ElevatedButton(
               onPressed: _isProcessingPayment ? null : () => _startCheckoutFlow(cart),
               style: ElevatedButton.styleFrom(
@@ -598,7 +674,7 @@ class _CartScreenState extends State<CartScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(22),
                 ),
-                elevation: 8,
+                elevation: 6,
                 shadowColor: _maroon.withValues(alpha: 0.5),
               ),
               child: _isProcessingPayment 
@@ -613,11 +689,55 @@ class _CartScreenState extends State<CartScreen> {
                   Icon(Icons.payment_rounded, size: 22),
                   SizedBox(width: 10),
                   Text(
-                    'Pay via Razorpay',
+                    'Pay',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Pay with Wallet Button
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: OutlinedButton(
+              onPressed: (_isProcessingPayment || !canPayWithWallet)
+                  ? null
+                  : () => _startWalletPayment(cart),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: canPayWithWallet ? _maroon : Colors.grey.shade300,
+                  width: 1.5,
+                ),
+                foregroundColor: _maroon,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                disabledForegroundColor: Colors.grey.shade400,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.account_balance_wallet_rounded, size: 22,
+                    color: canPayWithWallet ? _maroon : Colors.grey.shade400),
+                  const SizedBox(width: 10),
+                  Text(
+                    _isLoadingBalance
+                        ? 'Loading Wallet...'
+                        : canPayWithWallet
+                            ? 'Pay with Wallet (\u{20B9}${_walletBalance.toStringAsFixed(0)})'
+                            : 'Wallet (\u{20B9}${_walletBalance.toStringAsFixed(0)} — Insufficient)',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: canPayWithWallet ? _maroon : Colors.grey.shade400,
                     ),
                   ),
                 ],
