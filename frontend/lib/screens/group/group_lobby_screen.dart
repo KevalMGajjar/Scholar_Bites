@@ -39,6 +39,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
 
   bool _isLoading = true;
   bool _showQR = false;
+  bool _isExiting = false;
   String _status = 'open';
   String _creatorId = '';
 
@@ -100,7 +101,8 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
         _loadState();
       },
       onGroupDeleted: (data) {
-        if (mounted) {
+        if (mounted && !_isExiting) {
+          _isExiting = true;
           _socketService.disconnect();
           CustomToast.showErrorToast(context, 'Group has been disbanded by the leader');
           Navigator.pop(context);
@@ -299,12 +301,15 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     final confirmed = await _showExitConfirmation();
     if (!confirmed || !mounted) return;
 
+    _isExiting = true;
+    // Disconnect socket BEFORE calling API to prevent group_deleted event double-pop
+    _socketService.disconnect();
+
     try {
       await _groupService.leaveGroup(widget.groupCode);
     } catch (_) {
       // Silently handle — still navigate out
     }
-    _socketService.disconnect();
     if (mounted) Navigator.pop(context);
   }
 
@@ -758,10 +763,12 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
             const SizedBox(width: 12),
 
           // Lock button (leader only)
-          if (_status == 'open' && widget.isLeader)
+          if (_status == 'open' && widget.isLeader && _items.isNotEmpty)
             Expanded(
               child: GestureDetector(
-                onTap: _showSplitModeDialog,
+                onTap: _members.length < 2
+                    ? () => CustomToast.showErrorToast(context, 'Need at least 2 members')
+                    : _showSplitModeDialog,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(

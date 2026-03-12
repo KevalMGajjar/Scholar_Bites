@@ -59,19 +59,34 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
       final members = List<Map<String, dynamic>>.from(data['members'] ?? []);
       final items = List<Map<String, dynamic>>.from(data['items'] ?? []);
 
-      // Find my share by user_id
+      // Find my member record — try user_id first, then fall back to nickname
+      Map<String, dynamic>? myMember;
       for (final m in members) {
-        if (m['user_id'] == _myUserId) {
-          _myShare = double.tryParse(m['share_amount']?.toString() ?? '0') ?? 0;
-
-          // Check if already paid
-          if (m['payment_status'] == 'paid') {
-            if (mounted) {
-              _navigateToWaiting();
-              return;
-            }
-          }
+        if (_myUserId != null && _myUserId!.isNotEmpty && m['user_id'] == _myUserId) {
+          myMember = m;
           break;
+        }
+      }
+      // Fallback: match by nickname if userId wasn't found
+      if (myMember == null) {
+        for (final m in members) {
+          if (m['nickname'] == widget.myNickname) {
+            myMember = m;
+            _myUserId = m['user_id']?.toString();
+            break;
+          }
+        }
+      }
+
+      if (myMember != null) {
+        _myShare = double.tryParse(myMember['share_amount']?.toString() ?? '0') ?? 0;
+
+        // Check if already paid
+        if (myMember['payment_status'] == 'paid') {
+          if (mounted) {
+            _navigateToWaiting();
+            return;
+          }
         }
       }
 
