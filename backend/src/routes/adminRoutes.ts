@@ -4,6 +4,8 @@ import { staffLogin, registerStaff } from '../controllers/authController';
 import { getAllOrders, getOrderDetails, refundOrder, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
 import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant } from '../controllers/restaurantController';
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
+import { upload, uploadImage } from '../controllers/uploadController';
+import { getStatistics } from '../controllers/statisticsController';
 
 const router = Router();
 
@@ -33,6 +35,12 @@ router.delete('/restaurants/:id', authorizeRole(['admin', 'super_admin']), delet
 router.post('/menu', authorizeRole(['admin', 'super_admin']), addMenuItem);
 router.patch('/menu/:id', authorizeRole(['admin', 'super_admin']), updateMenuItem);
 router.delete('/menu/:id', authorizeRole(['admin', 'super_admin']), deleteMenuItem);
+
+// ─── Image Upload (Admin only) ───
+router.post('/upload', authorizeRole(['admin', 'super_admin']), upload.single('image'), uploadImage);
+
+// ─── Statistics (Admin only) ───
+router.get('/statistics', authorizeRole(['admin', 'super_admin']), getStatistics);
 
 // ─── Staff Management (Super Admin only) ───
 router.post('/staff', authorizeRole(['super_admin']), registerStaff);

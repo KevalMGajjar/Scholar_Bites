@@ -6,6 +6,7 @@ import LiveOrders from './pages/LiveOrders';
 import OrderHistory from './pages/OrderHistory';
 import Restaurants from './pages/Restaurants';
 import MenuItems from './pages/MenuItems';
+import Statistics from './pages/Statistics';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/orders" element={<AdminRoute><OrderHistory /></AdminRoute>} />
             <Route path="/restaurants" element={<AdminRoute><Restaurants /></AdminRoute>} />
             <Route path="/menu" element={<AdminRoute><MenuItems /></AdminRoute>} />
+            <Route path="/statistics" element={<AdminRoute><Statistics /></AdminRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

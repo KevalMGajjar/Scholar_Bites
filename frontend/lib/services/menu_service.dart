@@ -34,4 +34,35 @@ class MenuService {
       throw Exception('Error fetching menu items: $e');
     }
   }
+
+  // ─── Reviews ───────────────────────────────────────
+  Future<Map<String, dynamic>> getItemRating(String menuItemId) async {
+    try {
+      final response = await _dio.get('/menu/reviews/$menuItemId');
+      return response.data;
+    } catch (e) {
+      return {'avg_rating': 0.0, 'review_count': 0, 'user_rating': 0};
+    }
+  }
+
+  Future<void> submitReview(String menuItemId, int rating) async {
+    await _dio.post('/menu/reviews', data: {
+      'menu_item_id': menuItemId,
+      'rating': rating,
+    });
+  }
+
+  // ─── Trending ──────────────────────────────────────
+  Future<List<FoodItem>> getTrendingItems(String universityId) async {
+    try {
+      final response = await _dio.get('/menu/trending/$universityId');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data;
+        return data.map((json) => FoodItem.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }

@@ -108,14 +108,38 @@ export default function Restaurants() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Logo URL</label>
-                  <input value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                  <label className="block text-sm text-slate-300 mb-1">Logo</label>
+                  {form.logo_url && (
+                    <img src={form.logo_url.startsWith('/') ? (import.meta.env.VITE_API_URL || '').replace('/api','') + form.logo_url : form.logo_url} alt="logo" className="w-16 h-16 rounded-lg object-cover mb-2" />
+                  )}
+                  <input type="file" accept="image/*" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const fd = new FormData();
+                    fd.append('image', file);
+                    try {
+                      const res = await api.post('/admin/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      setForm({ ...form, logo_url: res.data.image_url });
+                    } catch (err) { console.error('Upload failed:', err); }
+                  }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Cover URL</label>
-                  <input value={form.cover_url} onChange={(e) => setForm({ ...form, cover_url: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                  <label className="block text-sm text-slate-300 mb-1">Cover</label>
+                  {form.cover_url && (
+                    <img src={form.cover_url.startsWith('/') ? (import.meta.env.VITE_API_URL || '').replace('/api','') + form.cover_url : form.cover_url} alt="cover" className="w-full h-16 rounded-lg object-cover mb-2" />
+                  )}
+                  <input type="file" accept="image/*" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const fd = new FormData();
+                    fd.append('image', file);
+                    try {
+                      const res = await api.post('/admin/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      setForm({ ...form, cover_url: res.data.image_url });
+                    } catch (err) { console.error('Upload failed:', err); }
+                  }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">

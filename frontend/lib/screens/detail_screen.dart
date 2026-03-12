@@ -6,6 +6,7 @@ import '../models/favorites_model.dart';
 import '../models/cart_model.dart';
 import '../widgets/favorite_button.dart';
 import '../utils/animation_utils.dart';
+import '../services/menu_service.dart';
 import 'cart_screen.dart';
 
 class DetailScreen extends StatefulWidget {
@@ -20,6 +21,34 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   final GlobalKey _cartKey = GlobalKey();
   final GlobalKey _addBtnKey = GlobalKey();
+  double _avgRating = 0.0;
+  int _reviewCount = 0;
+  int _userRating = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRating();
+  }
+
+  Future<void> _fetchRating() async {
+    final data = await MenuService().getItemRating(widget.food.id);
+    if (mounted) {
+      setState(() {
+        _avgRating = (data['avg_rating'] as num).toDouble();
+        _reviewCount = (data['review_count'] as num).toInt();
+        _userRating = (data['user_rating'] as num).toInt();
+      });
+    }
+  }
+
+  Future<void> _submitRating(int rating) async {
+    setState(() => _userRating = rating);
+    try {
+      await MenuService().submitReview(widget.food.id, rating);
+      await _fetchRating(); // refresh avg
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +174,39 @@ class _DetailScreenState extends State<DetailScreen> {
           true, // Make body go behind app bar for the hero image
       body: Stack(
         children: [
-          // Background Image / Hero
+          // Floating Leaf Elements (behind the food image)
+          Positioned(
+            top: 100,
+            right: -20,
+            child: Opacity(
+              opacity: 0.6,
+              child: Transform.rotate(
+                angle: 0.5,
+                child: Icon(
+                  Icons.eco,
+                  color: const Color(0xFF8B1C28).withValues(alpha: 0.4),
+                  size: 100,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 250,
+            left: -30,
+            child: Opacity(
+              opacity: 0.4,
+              child: Transform.rotate(
+                angle: -0.5,
+                child: Icon(
+                  Icons.eco,
+                  color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
+                  size: 150,
+                ),
+              ),
+            ),
+          ),
+
+          // Food Image / Hero (renders above leaves)
           Positioned(
             top: 0,
             left: 0,
@@ -176,38 +237,6 @@ class _DetailScreenState extends State<DetailScreen> {
                     ),
                   );
                 },
-              ),
-            ),
-          ),
-
-          // Floating Leaf Elements (Simulated)
-          Positioned(
-            top: 100,
-            right: -20,
-            child: Opacity(
-              opacity: 0.6,
-              child: Transform.rotate(
-                angle: 0.5,
-                child: Icon(
-                  Icons.eco,
-                  color: const Color(0xFF8B1C28).withValues(alpha: 0.4),
-                  size: 100,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 250,
-            left: -30,
-            child: Opacity(
-              opacity: 0.4,
-              child: Transform.rotate(
-                angle: -0.5,
-                child: Icon(
-                  Icons.eco,
-                  color: const Color(0xFF8B1C28).withValues(alpha: 0.3),
-                  size: 150,
-                ),
               ),
             ),
           ),
@@ -261,7 +290,7 @@ class _DetailScreenState extends State<DetailScreen> {
                         '${widget.food.weight}g',
                       ),
                       const SizedBox(width: 16),
-                      _buildMetadataChip(Icons.star_rounded, '4.8'),
+                      _buildMetadataChip(Icons.star_rounded, _avgRating > 0 ? _avgRating.toString() : '—'),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -283,6 +312,48 @@ class _DetailScreenState extends State<DetailScreen> {
                       fontSize: 14,
                       height: 1.6,
                     ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Star Rating
+                  Row(
+                    children: [
+                      Text(
+                        'Rate this item',
+                        style: TextStyle(
+                          color: const Color(0xFF4A0E13).withValues(alpha: 0.6),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ...List.generate(5, (i) {
+                        final starIndex = i + 1;
+                        return GestureDetector(
+                          onTap: () => _submitRating(starIndex),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Icon(
+                              starIndex <= _userRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                              color: starIndex <= _userRating ? const Color(0xFFF59E0B) : const Color(0xFF8B1C28).withValues(alpha: 0.3),
+                              size: 28,
+                            ),
+                          ),
+                        );
+                      }),
+                      if (_reviewCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            '($_reviewCount)',
+                            style: TextStyle(
+                              color: const Color(0xFF4A0E13).withValues(alpha: 0.4),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
 
                   const Spacer(),

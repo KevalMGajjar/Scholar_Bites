@@ -109,12 +109,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final uniId = await TokenStorage.getUniversityId();
       if (uniId != null) {
         final rests = await restService.getRestaurantsByUniversity(uniId);
-        final trending = await menuService.getMenuItems(uniId); // Adjusted to fetch uni trending
+        
+        // Fetch real trending items (most ordered), fallback to first 5 menu items
+        List<FoodItem> trending = await menuService.getTrendingItems(uniId);
+        if (trending.isEmpty) {
+          final allItems = await menuService.getMenuItems(uniId);
+          trending = allItems.take(5).toList();
+        }
 
         if (mounted) {
           setState(() {
             _restaurants = rests;
-            _trendingItems = trending.take(5).toList(); // Top 5 trending
+            _trendingItems = trending;
             _isLoading = false;
           });
         }

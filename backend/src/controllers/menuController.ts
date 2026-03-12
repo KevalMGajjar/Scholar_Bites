@@ -2,6 +2,36 @@ import { Request, Response } from 'express';
 import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
 
+// ─── Get Trending Items (most ordered) ───────────────
+export const getTrendingItems = async (req: Request, res: Response) => {
+    const { university_id } = req.params;
+
+    if (!university_id) {
+        return res.status(400).json({ message: 'University ID is required' });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT m.*, COUNT(oi.id)::int as order_count
+             FROM menu_items m
+             JOIN order_items oi ON m.id = oi.menu_item_id
+             JOIN orders o ON oi.order_id = o.id
+             WHERE o.university_id = $1
+               AND o.status IN ('preparing', 'ready', 'completed')
+               AND m.is_available = TRUE
+             GROUP BY m.id
+             ORDER BY order_count DESC
+             LIMIT 5`,
+            [university_id]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching trending items:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 export const getMenu = async (req: Request, res: Response) => {
     const { restaurant_id, university_id, category } = req.query;
 
@@ -15,7 +45,7 @@ export const getMenu = async (req: Request, res: Response) => {
         let pIndex = 1;
 
         if (restaurant_id) {
-            query = `SELECT DISTINCT * FROM menu_items WHERE restaurant_id = $${pIndex++} AND is_available = TRUE`;
+            query = `SELECT m.* FROM menu_items m WHERE m.restaurant_id = $${pIndex++} AND m.is_available = TRUE`;
             params.push(restaurant_id);
         } else if (university_id) {
             query = `
@@ -31,7 +61,7 @@ export const getMenu = async (req: Request, res: Response) => {
             params.push(category);
         }
 
-        query += ' ORDER BY m.name, category';
+        query += ' ORDER BY m.name, m.category';
 
         const result = await pool.query(query, params);
         res.json(result.rows);

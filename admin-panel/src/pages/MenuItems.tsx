@@ -151,9 +151,21 @@ export default function MenuItems() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Image URL</label>
-                <input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                <label className="block text-sm text-slate-300 mb-1">Image</label>
+                {form.image_url && (
+                  <img src={form.image_url.startsWith('/') ? (import.meta.env.VITE_API_URL || '').replace('/api','') + form.image_url : form.image_url} alt="preview" className="w-20 h-20 rounded-lg object-cover mb-2" />
+                )}
+                <input type="file" accept="image/*" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const fd = new FormData();
+                  fd.append('image', file);
+                  try {
+                    const res = await api.post('/admin/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    setForm({ ...form, image_url: res.data.image_url });
+                  } catch (err) { console.error('Upload failed:', err); }
+                }}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
               </div>
               {!editing && (
                 <div>

@@ -10,6 +10,7 @@ import '../services/menu_service.dart';
 import '../services/speech_service.dart';
 import '../utils/token_storage.dart';
 import 'cart_screen.dart';
+import 'detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? initialQuery;
@@ -639,7 +640,12 @@ class _SearchScreenState extends State<SearchScreen> {
                         return FoodCard(
                           food: _displayedMeals[index],
                           onTap: () {
-                            // Later: Navigate to food detail
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DetailScreen(food: _displayedMeals[index]),
+                              ),
+                            );
                           },
                           onAddTap: (key) {
                             Provider.of<CartProvider>(context, listen: false).addItem(_displayedMeals[index]);

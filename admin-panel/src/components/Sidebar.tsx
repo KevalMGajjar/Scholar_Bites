@@ -7,6 +7,7 @@ const navItems = [
   { path: '/orders', label: 'Order History', icon: '📋', roles: ['admin', 'super_admin'] },
   { path: '/restaurants', label: 'Restaurants', icon: '🍽️', roles: ['admin', 'super_admin'] },
   { path: '/menu', label: 'Menu Items', icon: '🍔', roles: ['admin', 'super_admin'] },
+  { path: '/statistics', label: 'Statistics', icon: '📊', roles: ['admin', 'super_admin'] },
 ];
 
 export default function Sidebar() {
