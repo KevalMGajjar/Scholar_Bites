@@ -473,7 +473,7 @@ export const payShare = async (req: AuthRequest, res: Response) => {
                 const rzpOrder = await razorpay.orders.create({
                     amount: amountPaise,
                     currency: 'INR',
-                    receipt: `share_${member.id}`,
+                    receipt: `sh_${member.id}`.substring(0, 40),
                 });
                 orderId = rzpOrder.id;
             } catch (rzpError) {
