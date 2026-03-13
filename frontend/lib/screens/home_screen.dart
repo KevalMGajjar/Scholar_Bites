@@ -259,10 +259,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _isLoading
                 ? Center(
                     child: SpoonLoader(size: 60))
-                : CustomScrollView(
-                    physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics()),
-                    slivers: [
+                : RefreshIndicator(
+                    color: const Color(0xFF8B1C28),
+                    backgroundColor: Colors.white,
+                    onRefresh: _fetchHomeData,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics()),
+                      slivers: [
                       // 1. Dynamic Contextual Header
                       SliverToBoxAdapter(
                         child: Padding(
@@ -704,6 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
+                ),
           ),
           
           // Floating Group Order Button

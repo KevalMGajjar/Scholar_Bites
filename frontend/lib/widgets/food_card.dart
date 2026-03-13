@@ -13,7 +13,8 @@ class FoodCard extends StatefulWidget {
   final VoidCallback onTap;
   final Function(GlobalKey)? onAddTap;
   final VoidCallback? onInteraction;
-  final bool isAvailable;
+  final bool? isAvailable;
+  final String unavailableText;
 
   const FoodCard({
     super.key,
@@ -21,7 +22,8 @@ class FoodCard extends StatefulWidget {
     required this.onTap,
     this.onAddTap,
     this.onInteraction,
-    this.isAvailable = true,
+    this.isAvailable,
+    this.unavailableText = 'Unavailable',
   });
 
   @override
@@ -45,10 +47,12 @@ class _FoodCardState extends State<FoodCard> {
 
   @override
   Widget build(BuildContext context) {
+    final bool actuallyAvailable = widget.isAvailable ?? widget.food.isAvailable;
+
     return GestureDetector(
-      onTap: widget.isAvailable ? widget.onTap : null,
+      onTap: actuallyAvailable ? widget.onTap : null,
       child: Opacity(
-        opacity: widget.isAvailable ? 1.0 : 0.55,
+        opacity: actuallyAvailable ? 1.0 : 0.55,
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -110,7 +114,7 @@ class _FoodCardState extends State<FoodCard> {
                         ),
                       ),
                       // Unavailable overlay
-                      if (!widget.isAvailable)
+                      if (!actuallyAvailable)
                         Positioned.fill(
                           child: ClipRRect(
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -123,13 +127,13 @@ class _FoodCardState extends State<FoodCard> {
                                     color: Colors.black.withValues(alpha: 0.65),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(Icons.access_time_rounded, color: Colors.white70, size: 14),
                                       SizedBox(width: 6),
                                       Text(
-                                        'Unavailable',
+                                        widget.unavailableText,
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
@@ -144,7 +148,7 @@ class _FoodCardState extends State<FoodCard> {
                             ),
                           ),
                         ),
-                      if (widget.isAvailable)
+                      if (actuallyAvailable)
                         Positioned(
                           top: 16,
                           right: 16,
@@ -226,7 +230,7 @@ class _FoodCardState extends State<FoodCard> {
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        if (widget.isAvailable)
+                        if (actuallyAvailable)
                           GestureDetector(
                             onTap: () {
                               if (widget.onAddTap != null) widget.onAddTap!(_imageKey);
@@ -263,7 +267,7 @@ class _FoodCardState extends State<FoodCard> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              'Closed',
+                              widget.unavailableText,
                               style: TextStyle(
                                 color: Colors.grey.shade500,
                                 fontSize: 12,

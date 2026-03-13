@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:lottie/lottie.dart';
 import '../widgets/spoon_loader.dart';
 import '../models/restaurant_model.dart';
 import '../models/food_item.dart';
@@ -181,6 +182,17 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (!widget.restaurant.isCurrentlyOpen)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Lottie.asset(
+                          'assets/lottie/Closed tag.json',
+                          height: 120,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
                   Row(
                     children: [
                       const Icon(
@@ -267,7 +279,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 16),
                   Wrap(
                     spacing: 8,
                     children: widget.restaurant.tags.map((tag) {
@@ -330,7 +341,8 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                       FoodItem food = _menuItems[index];
                       return FoodCard(
                         food: food,
-                        isAvailable: widget.restaurant.isCurrentlyOpen,
+                        isAvailable: widget.restaurant.isCurrentlyOpen && food.isAvailable,
+                        unavailableText: !widget.restaurant.isCurrentlyOpen ? 'Closed' : 'Unavailable',
                         onTap: () {
                           Navigator.push(
                             context,

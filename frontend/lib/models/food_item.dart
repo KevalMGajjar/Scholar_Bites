@@ -7,6 +7,7 @@ class FoodItem {
   final int weight;
   final String description;
   final String category;
+  final bool isAvailable;
 
   const FoodItem({
     required this.id,
@@ -17,6 +18,7 @@ class FoodItem {
     required this.weight,
     required this.description,
     this.category = 'Dinner',
+    this.isAvailable = true,
   });
 
   factory FoodItem.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class FoodItem {
       weight: nutrition['weight'] as int? ?? 0,
       description: json['description'] ?? '',
       category: json['category'] ?? 'Dinner',
+      isAvailable: json['is_available'] ?? true,
     );
   }
 
@@ -46,6 +49,7 @@ class FoodItem {
       'nutritional_info': {'calories': calories, 'weight': weight},
       'description': description,
       'category': category,
+      'is_available': isAvailable,
     };
   }
 }

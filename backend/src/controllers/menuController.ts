@@ -18,7 +18,6 @@ export const getTrendingItems = async (req: Request, res: Response) => {
              JOIN orders o ON oi.order_id = o.id
              WHERE o.university_id = $1
                AND o.status IN ('preparing', 'ready', 'completed')
-               AND m.is_available = TRUE
              GROUP BY m.id
              ORDER BY order_count DESC
              LIMIT 5`,
@@ -43,7 +42,7 @@ export const getMenu = async (req: Request, res: Response) => {
         let query = '';
         let params: any[] = [];
         let pIndex = 1;
-        const availFilter = include_unavailable === 'true' ? '' : ' AND m.is_available = TRUE';
+        const availFilter = '';
 
         if (restaurant_id) {
             query = `SELECT m.* FROM menu_items m WHERE m.restaurant_id = $${pIndex++}${availFilter}`;
