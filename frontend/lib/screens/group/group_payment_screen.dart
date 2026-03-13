@@ -6,6 +6,7 @@ import '../../services/group_socket_service.dart';
 import '../../utils/custom_toast.dart';
 import '../../utils/token_storage.dart';
 import '../../widgets/spoon_loader.dart';
+import '../../services/wallet_service.dart';
 import 'group_lobby_screen.dart';
 import 'group_waiting_screen.dart';
 import '../home_screen.dart';
@@ -45,12 +46,29 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
   String? _myUserId;
   List<Map<String, dynamic>> _myItems = [];
   List<Map<String, dynamic>> _allItems = [];
+  double _walletBalance = 0.0;
+  bool _isLoadingBalance = true;
 
   @override
   void initState() {
     super.initState();
     _loadPaymentDetails();
+    _fetchWalletBalance();
     _connectSocket();
+  }
+
+  Future<void> _fetchWalletBalance() async {
+    try {
+      final data = await WalletService().getWalletData();
+      if (mounted) {
+        setState(() {
+          _walletBalance = double.tryParse(data['balance'].toString()) ?? 0.0;
+          _isLoadingBalance = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingBalance = false);
+    }
   }
 
   @override
@@ -435,21 +453,34 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
                   if (_myShare > 0) ...[
                     // Wallet pay
                     GestureDetector(
-                      onTap: _payWithWallet,
+                      onTap: (_isPaying || _walletBalance < _myShare) ? null : _payWithWallet,
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [_maroon, Color(0xFFB52A3A)]),
+                          gradient: LinearGradient(
+                            colors: (_walletBalance >= _myShare)
+                                ? const [_maroon, Color(0xFFB52A3A)]
+                                : [Colors.grey.shade400, Colors.grey.shade500],
+                          ),
                           borderRadius: BorderRadius.circular(18),
-                          boxShadow: [BoxShadow(color: _maroon.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
+                          boxShadow: (_walletBalance >= _myShare)
+                              ? [BoxShadow(color: _maroon.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))]
+                              : [],
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 22),
                             const SizedBox(width: 10),
-                            Text('Pay ₹${_myShare.toStringAsFixed(0)} with Wallet', style: GoogleFonts.poppins(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                            Text(
+                              _isLoadingBalance 
+                                ? 'Loading Wallet...' 
+                                : (_walletBalance >= _myShare)
+                                    ? 'Pay ₹${_myShare.toStringAsFixed(0)} with Wallet'
+                                    : 'Wallet (Insufficient Balance)', 
+                              style: GoogleFonts.poppins(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                            ),
                           ],
                         ),
                       ),

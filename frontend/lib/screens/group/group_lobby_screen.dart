@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,9 +7,10 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../services/group_service.dart';
 import '../../services/group_socket_service.dart';
 import '../../utils/custom_toast.dart';
+import '../../utils/token_storage.dart';
 import '../../widgets/spoon_loader.dart';
-import 'group_payment_screen.dart';
 import 'group_menu_picker_screen.dart';
+import 'group_payment_screen.dart';
 
 class GroupLobbyScreen extends StatefulWidget {
   final String groupCode;
@@ -40,6 +41,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
   bool _isLoading = true;
   bool _showQR = false;
   bool _isExiting = false;
+  String? _myUserId;
   String _status = 'open';
   String _creatorId = '';
 
@@ -58,8 +60,14 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
   @override
   void initState() {
     super.initState();
+    _fetchUserId();
     _loadState();
     _connectSocket();
+  }
+
+  Future<void> _fetchUserId() async {
+    _myUserId = await TokenStorage.getUserId();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -596,12 +604,21 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
                 style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w800, color: _darkText),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(color: _maroon, borderRadius: BorderRadius.circular(10)),
-                child: Text(
-                  '${_items.length} items',
-                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+              GestureDetector(
+                onTap: _showMyItemsBottomSheet,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(color: _maroon, borderRadius: BorderRadius.circular(10)),
+                  child: Row(
+                    children: [
+                      Text(
+                        '${_items.length} items',
+                        style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_drop_down_rounded, color: Colors.white, size: 16),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -806,7 +823,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
       curve: Curves.easeInOutCubic,
       builder: (context, t, child) {
         final x = startX + (endX - startX) * t;
-        final y = startY + (endY - startY) * t - 60 * sin(t * 3.14159);
+        final y = startY + (endY - startY) * t - 60 * math.sin(t * 3.14159);
         final scale = 1.0 - t * 0.4;
         return Positioned(
           left: x,
@@ -878,6 +895,116 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
         ),
       ),
     ).animate().fadeIn(duration: 300.ms);
+  }
+
+  Future<void> _removeItem(String menuItemId) async {
+    try {
+      await _groupService.removeItem(widget.groupCode, menuItemId);
+      if (mounted) {
+        CustomToast.showSuccessToast(context, 'Item removed');
+        _loadState();
+      }
+    } catch (e) {
+      if (mounted) CustomToast.showErrorToast(context, 'Failed to remove item');
+    }
+  }
+
+  void _showMyItemsBottomSheet() {
+    if (_myUserId == null) return;
+    final myItemsList = _items.where((i) => i['added_by'] == _myUserId).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.only(top: 24, left: 24, right: 24, bottom: 40),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'My Cart Items',
+              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: _darkText),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Remove items you\'ve added to the group',
+              style: GoogleFonts.poppins(fontSize: 14, color: _darkText.withValues(alpha: 0.5)),
+            ),
+            const SizedBox(height: 20),
+            if (myItemsList.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Text('You haven\'t added any items yet.', style: GoogleFonts.poppins(color: _darkText.withValues(alpha: 0.5))),
+                ),
+              )
+            else
+              ...myItemsList.map((item) {
+                final qty = item['quantity'] ?? 1;
+                final price = double.tryParse(item['price_at_time']?.toString() ?? '0') ?? 0;
+                final mId = item['menu_item_id']?.toString() ?? '';
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _bg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _maroon.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _maroon.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(child: Text('${qty}x', style: GoogleFonts.poppins(color: _maroon, fontWeight: FontWeight.w800, fontSize: 13))),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item['item_name'] ?? 'Item', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: _darkText)),
+                            Text('₹${(price * qty).toStringAsFixed(0)}', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _maroon)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _removeItem(mId);
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
   }
 }
 

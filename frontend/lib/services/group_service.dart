@@ -46,6 +46,15 @@ class GroupService {
     return response.data;
   }
 
+  /// Remove a menu item from the group (decrements qty or deletes)
+  Future<Map<String, dynamic>> removeItem(String code, String menuItemId) async {
+    final response = await _dio.post('/lobby/remove-item', data: {
+      'code': code,
+      'menu_item_id': menuItemId,
+    });
+    return response.data;
+  }
+
   /// Lock the group (leader only) with split mode
   Future<Map<String, dynamic>> lockGroup(String code, {String splitMode = 'individual'}) async {
     final response = await _dio.post('/lobby/lock', data: {

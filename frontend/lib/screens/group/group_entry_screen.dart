@@ -187,8 +187,8 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
                     indicatorSize: TabBarIndicatorSize.tab,
                     padding: const EdgeInsets.all(4),
                     tabs: const [
-                      Tab(text: '🚀 Create Group'),
-                      Tab(text: '🔗 Join Group'),
+                      Tab(text: 'Create Group'),
+                      Tab(text: 'Join Group'),
                     ],
                   ),
                 ).animate().fadeIn(delay: 200.ms, duration: 400.ms),

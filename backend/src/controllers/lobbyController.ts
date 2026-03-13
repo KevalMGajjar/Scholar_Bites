@@ -307,6 +307,84 @@ export const addItemToLobby = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// ─── Remove Item from Group ───
+export const removeItemFromLobby = async (req: AuthRequest, res: Response) => {
+    const { code, menu_item_id } = req.body;
+    const userId = req.user.id;
+
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const groupRes = await client.query('SELECT id, status FROM group_orders WHERE code = $1', [code]);
+            if (groupRes.rows.length === 0) throw new Error('Group not found');
+            const groupOrder = groupRes.rows[0];
+
+            if (groupOrder.status !== 'open') throw new Error('Group is locked');
+
+            // Find user's temp order
+            const orderRes = await client.query(
+                "SELECT id FROM orders WHERE group_order_id = $1 AND user_id = $2 AND status = 'pending'",
+                [groupOrder.id, userId]
+            );
+            if (orderRes.rows.length === 0) throw new Error('No items found for this user');
+            const orderId = orderRes.rows[0].id;
+
+            // Find the item
+            const itemRes = await client.query(
+                'SELECT id, quantity, price_at_time FROM order_items WHERE order_id = $1 AND menu_item_id = $2 LIMIT 1',
+                [orderId, menu_item_id]
+            );
+            if (itemRes.rows.length === 0) throw new Error('Item not found in your cart');
+            const orderItem = itemRes.rows[0];
+            const price = parseFloat(orderItem.price_at_time);
+
+            if (orderItem.quantity > 1) {
+                await client.query(
+                    'UPDATE order_items SET quantity = quantity - 1 WHERE id = $1',
+                    [orderItem.id]
+                );
+            } else {
+                await client.query(
+                    'DELETE FROM order_items WHERE id = $1',
+                    [orderItem.id]
+                );
+            }
+
+            // Update order total
+            await client.query(
+                'UPDATE orders SET total_amount = total_amount - $1 WHERE id = $2',
+                [price, orderId]
+            );
+
+            // Get member nickname for the event
+            const nickRes = await client.query(
+                'SELECT nickname FROM group_order_members WHERE group_order_id = $1 AND user_id = $2',
+                [groupOrder.id, userId]
+            );
+
+            await client.query('COMMIT');
+
+            emitGroupUpdate(code, 'item_removed', {
+                userId,
+                nickname: nickRes.rows[0]?.nickname || 'Member',
+                menu_item_id,
+            });
+
+            res.json({ message: 'Item removed successfully' });
+        } catch (err: any) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ message: err.message });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 // ─── Lock Group (Leader Only) ───
 export const lockLobby = async (req: AuthRequest, res: Response) => {
     const { code, split_mode } = req.body; // split_mode: 'individual' | 'equal'
