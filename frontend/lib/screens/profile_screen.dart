@@ -6,7 +6,6 @@ import '../services/order_service.dart';
 import '../services/auth_service.dart';
 import '../utils/token_storage.dart';
 import 'welcome_screen.dart';
-import 'preferences_screen.dart';
 import 'feedback_screen.dart';
 import 'notifications_screen.dart';
 import 'order_qr_screen.dart';
@@ -844,13 +843,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _sectionTitle('Settings'),
                   const SizedBox(height: 12),
                   _menuGroup([
-                    _MenuItem(
-                      icon: Icons.tune_rounded,
-                      label: 'Preferences',
-                      subtitle: 'Dietary, allergies',
-                      emoji: '\u{2699}\u{FE0F}',
-                      onTap: () => _navigate(const PreferencesScreen()),
-                    ),
                     _MenuItem(
                       icon: Icons.notifications_active_rounded,
                       label: 'Notifications',

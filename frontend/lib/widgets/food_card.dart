@@ -70,10 +70,10 @@ class _FoodCardState extends State<FoodCard> {
             children: [
               Expanded(
                 child: GestureDetector(
-                  onDoubleTap: () {
+                  onDoubleTap: actuallyAvailable ? () {
                     final favorites = Provider.of<FavoritesProvider>(context, listen: false);
                     _handleDoubleTap(favorites);
-                  },
+                  } : null,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [

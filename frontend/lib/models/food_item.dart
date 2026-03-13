@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class FoodItem {
   final String id;
   final String name;
@@ -8,6 +10,9 @@ class FoodItem {
   final String description;
   final String category;
   final bool isAvailable;
+  final bool restaurantIsOpen;
+  final String? restaurantOpeningTime;
+  final String? restaurantClosingTime;
 
   const FoodItem({
     required this.id,
@@ -19,7 +24,36 @@ class FoodItem {
     required this.description,
     this.category = 'Dinner',
     this.isAvailable = true,
+    this.restaurantIsOpen = true,
+    this.restaurantOpeningTime,
+    this.restaurantClosingTime,
   });
+
+  bool get actuallyAvailable {
+    if (!isAvailable) return false;
+    if (!restaurantIsOpen) return false;
+
+    if (restaurantOpeningTime == null || restaurantClosingTime == null) return true;
+
+    try {
+      final now = TimeOfDay.now();
+      final currentMinutes = now.hour * 60 + now.minute;
+
+      final openParts = restaurantOpeningTime!.split(':');
+      final closeParts = restaurantClosingTime!.split(':');
+
+      final openMinutes = int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
+      final closeMinutes = int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+
+      if (closeMinutes < openMinutes) {
+        return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
+      }
+
+      return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    } catch (_) {
+      return true;
+    }
+  }
 
   factory FoodItem.fromJson(Map<String, dynamic> json) {
     // Expected Prisma format
@@ -37,6 +71,9 @@ class FoodItem {
       description: json['description'] ?? '',
       category: json['category'] ?? 'Dinner',
       isAvailable: json['is_available'] ?? true,
+      restaurantIsOpen: json['restaurant_is_open'] ?? true,
+      restaurantOpeningTime: json['restaurant_opening_time'],
+      restaurantClosingTime: json['restaurant_closing_time'],
     );
   }
 

@@ -92,18 +92,6 @@ const _knowledgeBase = <_FAQEntry>[
     keywords: ['quality', 'bad', 'stale', 'cold', 'taste', 'hygiene', 'dirty', 'hair'],
   ),
   _FAQEntry(
-    question: 'How do dietary preferences work?',
-    answer:
-        'Set your dietary preferences in Profile > Preferences. '
-        'You can specify:\n'
-        '\u{2022} Veg / Non-Veg / Eggetarian\n'
-        '\u{2022} Nutritional goals (high protein, low calorie, etc.)\n'
-        '\u{2022} Allergies (gluten-free, nut-free, etc.)\n'
-        '\u{2022} Spice level preference\n\n'
-        'The app will highlight items matching your preferences.',
-    keywords: ['veg', 'non-veg', 'diet', 'allergy', 'preference', 'gluten', 'protein'],
-  ),
-  _FAQEntry(
     question: 'Canteen operating hours',
     answer:
         'Operating hours vary by canteen. Generally:\n'
@@ -233,7 +221,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         '\u{2022} Order tracking & delivery\n'
         '\u{2022} Payments & refunds\n'
         '\u{2022} Food quality issues\n'
-        '\u{2022} Dietary preferences\n'
         '\u{2022} Canteen hours\n\n'
         'Or you can use the contact options below to reach our team directly!';
   }

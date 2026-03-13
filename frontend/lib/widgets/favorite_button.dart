@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'heart_overlay.dart';
 
 class FavoriteButton extends StatefulWidget {
   final bool isFavorite;
@@ -59,48 +58,11 @@ class _FavoriteButtonState extends State<FavoriteButton>
         if (widget.isFavorite) {
           _controller.forward(from: 0.0);
           _particleController.forward(from: 0.0);
-          _showOverlay(true);
         } else {
-          // No animation on the button itself when unliking usually, just state change
-          // But maybe a small shrink for feedback
-          // _controller.reverse(from: 1.0);
-          _showOverlay(false);
+          // just state change
         }
       }
     }
-  }
-
-  void _showOverlay(bool isLike) {
-    // Schedule the overlay insertion for after the current build cycle
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final OverlayState overlayState = Overlay.of(context);
-
-      final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-      if (renderBox == null) return;
-
-      final Offset position = renderBox.localToGlobal(Offset.zero);
-      final Size size = renderBox.size;
-
-      late OverlayEntry overlayEntry;
-
-      overlayEntry = OverlayEntry(
-        builder: (context) {
-          // Position centered horizontally on the button, and slightly above
-          return Positioned(
-            top: position.dy - 30,
-            left: position.dx + (size.width - 40) / 2,
-            child: HeartOverlay(
-              emoji: isLike ? '❤️' : '💔',
-              onComplete: () {
-                overlayEntry.remove();
-              },
-            ),
-          );
-        },
-      );
-
-      overlayState.insert(overlayEntry);
-    });
   }
 
   @override
