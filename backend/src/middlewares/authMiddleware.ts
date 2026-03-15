@@ -11,6 +11,7 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
+        console.error(`[Auth] 401: No authorization header for ${req.path}`);
         return res.sendStatus(401);
     }
 
@@ -18,6 +19,7 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
     const decoded = verifyToken(token) as any;
 
     if (!decoded) {
+        console.error(`[Auth] 403: Failed to decode token for ${req.path}`);
         return res.sendStatus(403);
     }
 
@@ -36,6 +38,7 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
             const storedHash = result.rows[0].active_token;
             // If a stored hash exists and doesn't match, this token was superseded
             if (storedHash && storedHash !== tokenHash) {
+                console.error(`[Auth] 401: Device conflict for user ${decoded.id} on ${req.path}`);
                 return res.status(401).json({
                     message: 'Session expired. You have been logged in on another device.',
                     code: 'DEVICE_CONFLICT',
