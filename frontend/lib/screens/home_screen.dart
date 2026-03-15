@@ -76,7 +76,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchHomeData();
+    // Allow time for TokenStorage/Hive to load before firing API requests
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _fetchHomeData();
+    });
     _startAutoScroll();
     _checkActiveGroup();
   }
