@@ -137,6 +137,22 @@ const createTablesQuery = `
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     price_at_time DECIMAL(10, 2) NOT NULL
   );
+
+  -- 9. Notifications Table
+  CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    data JSONB DEFAULT '{}',
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
+
+  -- Migrations for existing DBs
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
 `;
 
 const initDb = async () => {

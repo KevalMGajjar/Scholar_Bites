@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'food_item.dart';
+import '../services/notification_service.dart';
 
 // Adapter for FoodItem
 class FoodItemAdapter extends TypeAdapter<FoodItem> {
@@ -133,6 +134,11 @@ class CartProvider with ChangeNotifier {
     }
     _markDirty();
     notifyListeners();
+    
+    // Schedule a cart abandonment reminder for 2 hours later
+    try {
+      NotificationService().scheduleCartReminder(food.name);
+    } catch (_) {}
   }
 
   void removeSingleItem(String foodId) {
@@ -152,6 +158,12 @@ class CartProvider with ChangeNotifier {
     }
     _markDirty();
     notifyListeners();
+    
+    if (isEmpty) {
+      try {
+        NotificationService().cancelCartReminder();
+      } catch (_) {}
+    }
   }
 
   void removeItem(String foodId) {
@@ -165,11 +177,21 @@ class CartProvider with ChangeNotifier {
     }
     _markDirty();
     notifyListeners();
+
+    if (isEmpty) {
+      try {
+        NotificationService().cancelCartReminder();
+      } catch (_) {}
+    }
   }
 
   Future<void> clear() async {
     await _box.clear();
     _markDirty();
     notifyListeners();
+    
+    try {
+      await NotificationService().cancelCartReminder();
+    } catch (_) {}
   }
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "232521904662",
+    "project_id": "scholar-bites-b1ec3",
+    "storage_bucket": "scholar-bites-b1ec3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:232521904662:android:243c25b16c7fc982207b37",
+        "android_client_info": {
+          "package_name": "com.software.scholar_bites"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkfpkyE0d7J6x4cmnlUv8ctJdcZag3478"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

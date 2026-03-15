@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
+import { triggerItemAvailable } from './notificationController';
 
 // ─── Get Trending Items (most ordered) ───────────────
 export const getTrendingItems = async (req: Request, res: Response) => {
@@ -138,7 +139,14 @@ export const updateStock = async (req: Request, res: Response) => {
 
         if (result.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
 
-        res.json(result.rows[0]);
+        // Trigger notification if item just became available
+        const updatedItem = result.rows[0];
+        if (is_available === true) {
+            // Check if it was previously unavailable — fire async, don't block response
+            triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
+        }
+
+        res.json(updatedItem);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

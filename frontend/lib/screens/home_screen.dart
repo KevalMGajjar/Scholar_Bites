@@ -31,6 +31,8 @@ import '../utils/custom_toast.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
 import 'favorites_screen.dart';
+import 'notifications_screen.dart';
+import '../services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -57,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _universityName;
   String? _universityLogoUrl;
   String? _universityAddress;
+  int _unreadNotifsCount = 0;
 
   // Mock Categories for Story UI
   final List<Map<String, String>> _categories = [
@@ -181,8 +184,14 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         } catch (_) {}
         
-        // Fetch real trending items (most ordered), fallback to first 5 menu items
-        List<FoodItem> trending = await menuService.getTrendingItems(uniId);
+        // Fetch trending items and unread notifications count concurrently
+        final responses = await Future.wait([
+          menuService.getTrendingItems(uniId),
+          NotificationService().getUnreadCount(),
+        ]);
+        List<FoodItem> trending = responses[0] as List<FoodItem>;
+        final int unreadCount = responses[1] as int;
+
         if (trending.isEmpty) {
           final allItems = await menuService.getMenuItems(uniId);
           trending = allItems.take(5).toList();
@@ -192,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _restaurants = rests;
             _trendingItems = trending;
+            _unreadNotifsCount = unreadCount;
             _isLoading = false;
           });
         }
@@ -414,20 +424,62 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ],
                                     ),
                                   ),
-                                  // Live indicator dot
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                                          blurRadius: 6,
-                                          spreadRadius: 1,
+                                  // Notification Bell Icon with Badge
+                                  GestureDetector(
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const NotificationsScreen(),
                                         ),
-                                      ],
+                                      );
+                                      // Refresh unread count when returning
+                                      if (mounted) {
+                                        final count = await NotificationService().getUnreadCount();
+                                        setState(() => _unreadNotifsCount = count);
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF8B1C28).withValues(alpha: 0.08),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.notifications_none_rounded,
+                                            color: const Color(0xFF1E1E1E).withValues(alpha: 0.8),
+                                            size: 24,
+                                          ),
+                                          if (_unreadNotifsCount > 0)
+                                            Positioned(
+                                              top: 10,
+                                              right: 10,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(3),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFE53935),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(color: Colors.white, width: 1.5),
+                                                ),
+                                                constraints: const BoxConstraints(
+                                                  minWidth: 10,
+                                                  minHeight: 10,
+                                                ),
+                                              ).animate().scale(duration: 300.ms, curve: Curves.easeOutBack),
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],

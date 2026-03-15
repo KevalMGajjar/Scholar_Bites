@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
+import { triggerRestaurantOpen } from './notificationController';
 
 export const getRestaurantsByUniversity = async (req: Request, res: Response) => {
     const { university_id } = req.params;
@@ -81,6 +82,12 @@ export const updateRestaurant = async (req: Request, res: Response) => {
         );
 
         if (result.rows.length === 0) return res.status(404).json({ message: 'Restaurant not found' });
+
+        // Trigger notification if restaurant just opened
+        if (is_open === true) {
+            triggerRestaurantOpen(id as string).catch(() => {});
+        }
+
         res.json(result.rows[0]);
     } catch (error) {
         console.error(error);
