@@ -77,6 +77,7 @@ const createTablesQuery = `
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code VARCHAR(6) UNIQUE NOT NULL,
     creator_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    university_id UUID REFERENCES universities(id) ON DELETE SET NULL,
     status group_order_status_enum NOT NULL DEFAULT 'open',
     total_amount DECIMAL(10, 2) DEFAULT 0.00,
     discount_applied DECIMAL(10, 2) DEFAULT 0.00,
@@ -125,6 +126,8 @@ const createTablesQuery = `
   -- Migrations for existing DBs
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL;
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_token VARCHAR(6);
+  ALTER TABLE group_orders ADD COLUMN IF NOT EXISTS university_id UUID REFERENCES universities(id) ON DELETE SET NULL;
+  ALTER TABLE group_order_members ADD COLUMN IF NOT EXISTS nickname VARCHAR(100);
 
   -- 8. Order Items Table
   CREATE TABLE IF NOT EXISTS order_items (

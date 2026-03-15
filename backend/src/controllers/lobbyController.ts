@@ -17,10 +17,14 @@ export const createLobby = async (req: AuthRequest, res: Response) => {
     const { nickname } = req.body;
 
     try {
+        // Look up the creator's university
+        const userRes = await pool.query('SELECT university_id FROM users WHERE id = $1', [userId]);
+        const universityId = userRes.rows[0]?.university_id || null;
+
         const code = generateCode();
         const result = await pool.query(
-            "INSERT INTO group_orders (code, creator_id, status, split_mode) VALUES ($1, $2, 'open', 'individual') RETURNING *",
-            [code, userId]
+            "INSERT INTO group_orders (code, creator_id, university_id, status, split_mode) VALUES ($1, $2, $3, 'open', 'individual') RETURNING *",
+            [code, userId, universityId]
         );
         const groupOrder = result.rows[0];
 
@@ -46,6 +50,16 @@ export const joinLobby = async (req: AuthRequest, res: Response) => {
         const groupRes = await pool.query("SELECT * FROM group_orders WHERE code = $1 AND status = 'open'", [code]);
         if (groupRes.rows.length === 0) return res.status(404).json({ message: 'Group not found or locked' });
         const groupOrder = groupRes.rows[0];
+
+        // ─── Same-University Validation ───
+        const userRes = await pool.query('SELECT university_id FROM users WHERE id = $1', [userId]);
+        const joinerUniversityId = userRes.rows[0]?.university_id || null;
+
+        if (groupOrder.university_id && joinerUniversityId !== groupOrder.university_id) {
+            return res.status(403).json({ 
+                message: 'You can only join group orders from your own university' 
+            });
+        }
 
         // Check if already joined
         const memberCheck = await pool.query(

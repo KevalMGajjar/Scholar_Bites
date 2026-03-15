@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -94,6 +95,13 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
           ),
         ),
       );
+    } on DioException catch (e) {
+      if (mounted) {
+        final msg = e.response?.data?['message']?.toString() 
+            ?? 'Group not found or already locked';
+        CustomToast.showErrorToast(context, msg);
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
       if (mounted) {
         CustomToast.showErrorToast(context, 'Group not found or already locked');
