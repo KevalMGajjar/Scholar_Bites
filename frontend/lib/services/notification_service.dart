@@ -64,11 +64,8 @@ class NotificationService {
     // Listen for foreground messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-    // Get and register token
-    final token = await _fcm.getToken();
-    if (token != null) {
-      await registerToken(token);
-    }
+    // Get and register token (fails silently if unauthenticated)
+    await registerCurrentToken();
 
     // Listen for token refresh
     _fcm.onTokenRefresh.listen((newToken) {
@@ -142,6 +139,16 @@ class NotificationService {
   Future<void> registerToken(String token) async {
     try {
       await _dio.post('/notifications/register-token', data: {'fcm_token': token});
+    } catch (_) {}
+  }
+
+  /// Manually trigger token registration (e.g., after successful login)
+  Future<void> registerCurrentToken() async {
+    try {
+      final token = await _fcm.getToken();
+      if (token != null) {
+        await registerToken(token);
+      }
     } catch (_) {}
   }
 

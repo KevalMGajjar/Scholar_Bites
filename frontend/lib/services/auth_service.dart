@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/user_model.dart';
 import 'api_client.dart';
+import 'notification_service.dart';
 import '../utils/token_storage.dart';
 
 class AuthService {
@@ -27,6 +28,9 @@ class AuthService {
           
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
+
+          // Register FCM token now that user is logged in
+          NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -68,6 +72,9 @@ class AuthService {
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
+
+          // Register FCM token now that user is logged in
+          NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -109,6 +116,9 @@ class AuthService {
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
+
+          // Register FCM token now that user is logged in
+          NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -148,6 +158,9 @@ class AuthService {
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
+
+          // Register FCM token now that user is logged in
+          NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -185,6 +198,9 @@ class AuthService {
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
+
+          // Register FCM token now that user is logged in
+          NotificationService().registerCurrentToken();
         }
         return userModel;
       }
