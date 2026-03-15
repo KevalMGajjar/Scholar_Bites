@@ -47,7 +47,7 @@ class _FoodCardState extends State<FoodCard> {
 
   @override
   Widget build(BuildContext context) {
-    final bool actuallyAvailable = widget.isAvailable ?? widget.food.isAvailable;
+    final bool actuallyAvailable = widget.isAvailable ?? widget.food.actuallyAvailable;
 
     return GestureDetector(
       onTap: actuallyAvailable ? widget.onTap : null,

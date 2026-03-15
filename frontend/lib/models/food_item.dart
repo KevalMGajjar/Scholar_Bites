@@ -9,6 +9,7 @@ class FoodItem {
   final String category;
   final bool isAvailable;
   final bool restaurantIsOpen;
+  final String? restaurantId;
 
   const FoodItem({
     required this.id,
@@ -21,6 +22,7 @@ class FoodItem {
     this.category = 'Dinner',
     this.isAvailable = true,
     this.restaurantIsOpen = true,
+    this.restaurantId,
   });
 
   bool get actuallyAvailable {
@@ -46,6 +48,7 @@ class FoodItem {
       category: json['category'] ?? 'Dinner',
       isAvailable: json['is_available'] ?? true,
       restaurantIsOpen: json['restaurant_is_open'] ?? true,
+      restaurantId: json['restaurant_id']?.toString(),
     );
   }
 

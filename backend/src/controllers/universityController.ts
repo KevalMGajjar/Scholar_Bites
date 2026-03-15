@@ -26,6 +26,20 @@ export const getUniversities = async (req: Request, res: Response) => {
     }
 };
 
+export const getUniversityById = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('SELECT * FROM universities WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'University not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 export const searchUniversities = async (req: Request, res: Response) => {
     const q = (req.query.q as string || '').trim();
     const page = parseInt(req.query.page as string) || 1;

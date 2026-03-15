@@ -3,9 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:math';
 import '../models/favorites_model.dart';
+import '../models/food_item.dart';
 import '../models/cart_model.dart';
 import '../widgets/food_card.dart';
 import '../utils/animation_utils.dart';
+import '../models/restaurant_model.dart';
+import '../services/restaurant_service.dart';
+import '../utils/token_storage.dart';
 import 'detail_screen.dart';
 import 'cart_screen.dart';
 
@@ -37,6 +41,31 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
+    _fetchRestaurants();
+  }
+
+  List<Restaurant> _restaurants = [];
+
+  Future<void> _fetchRestaurants() async {
+    try {
+      final uniId = await TokenStorage.getUniversityId();
+      if (uniId != null) {
+        final rests = await RestaurantService().getRestaurantsByUniversity(uniId);
+        if (mounted) setState(() => _restaurants = rests);
+      }
+    } catch (_) {}
+  }
+
+  bool _isItemAvailable(FoodItem food) {
+    if (!food.isAvailable) return false;
+    if (food.restaurantId != null) {
+      final restaurant = _restaurants.cast<Restaurant?>().firstWhere(
+        (r) => r?.id == food.restaurantId,
+        orElse: () => null,
+      );
+      if (restaurant != null && !restaurant.isCurrentlyOpen) return false;
+    }
+    return food.actuallyAvailable;
   }
 
   @override
@@ -234,6 +263,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         final food = favoriteItems[index];
                         return FoodCard(
                           food: food,
+                          isAvailable: _isItemAvailable(food),
+                          unavailableText: 'Closed',
                           onTap: () {
                             Navigator.push(
                               context,

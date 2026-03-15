@@ -10,6 +10,8 @@ import '../services/menu_service.dart';
 import '../services/speech_service.dart';
 import '../widgets/spoon_loader.dart';
 import '../utils/token_storage.dart';
+import '../models/restaurant_model.dart';
+import '../services/restaurant_service.dart';
 import 'cart_screen.dart';
 import 'detail_screen.dart';
 
@@ -52,6 +54,7 @@ class _SearchScreenState extends State<SearchScreen> {
   // Loaded from API
   List<FoodItem> _allMeals = [];
   bool _isLoadingMeals = true;
+  List<Restaurant> _restaurants = [];
 
   // Pagination
   static const int _pageSize = 8;
@@ -77,10 +80,15 @@ class _SearchScreenState extends State<SearchScreen> {
       final uniId = await TokenStorage.getUniversityId();
       if (uniId != null) {
         final menuService = MenuService();
-        final items = await menuService.getMenuItems(uniId);
+        final restService = RestaurantService();
+        final results = await Future.wait([
+          menuService.getMenuItems(uniId),
+          restService.getRestaurantsByUniversity(uniId),
+        ]);
         if (mounted) {
           setState(() {
-            _allMeals = items;
+            _allMeals = results[0] as List<FoodItem>;
+            _restaurants = results[1] as List<Restaurant>;
             _isLoadingMeals = false;
           });
           _filterResults();
@@ -186,6 +194,18 @@ class _SearchScreenState extends State<SearchScreen> {
       });
       _filterResults();
     }
+  }
+
+  bool _isItemAvailable(FoodItem food) {
+    if (!food.isAvailable) return false;
+    if (food.restaurantId != null) {
+      final restaurant = _restaurants.cast<Restaurant?>().firstWhere(
+        (r) => r?.id == food.restaurantId,
+        orElse: () => null,
+      );
+      if (restaurant != null && !restaurant.isCurrentlyOpen) return false;
+    }
+    return food.actuallyAvailable;
   }
 
   void _runAddToCartAnimation(GlobalKey widgetKey, String imageUrl) {
@@ -634,6 +654,8 @@ class _SearchScreenState extends State<SearchScreen> {
                         }
                         return FoodCard(
                           food: _displayedMeals[index],
+                          isAvailable: _isItemAvailable(_displayedMeals[index]),
+                          unavailableText: 'Closed',
                           onTap: () {
                             FocusScope.of(context).unfocus();
                             Navigator.push(

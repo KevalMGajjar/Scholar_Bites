@@ -17,6 +17,7 @@ import 'group/group_payment_screen.dart';
 import '../services/group_service.dart';
 import '../services/menu_service.dart';
 import '../services/restaurant_service.dart';
+import '../services/university_service.dart';
 import '../services/speech_service.dart';
 import '../utils/token_storage.dart';
 import '../utils/animation_utils.dart';
@@ -52,6 +53,11 @@ class _HomeScreenState extends State<HomeScreen> {
   SearchFilters _homeFilters = const SearchFilters();
   DateTime? _currentBackPressTime;
 
+  // University header data
+  String? _universityName;
+  String? _universityLogoUrl;
+  String? _universityAddress;
+
   // Mock Categories for Story UI
   final List<Map<String, String>> _categories = [
     {'name': 'Burgers', 'emoji': '\u{1F354}'},
@@ -62,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   final TextEditingController _homeSearchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -149,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _trendingTimer?.cancel();
     _trendingController.dispose();
     _homeSearchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -160,6 +168,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final uniId = await TokenStorage.getUniversityId();
       if (uniId != null) {
         final rests = await restService.getRestaurantsByUniversity(uniId);
+
+        // Fetch university details for header
+        try {
+          final uniData = await UniversityService().getUniversityById(uniId);
+          if (uniData != null && mounted) {
+            setState(() {
+              _universityName = uniData['name'];
+              _universityLogoUrl = uniData['logo_url'];
+              _universityAddress = uniData['address'];
+            });
+          }
+        } catch (_) {}
         
         // Fetch real trending items (most ordered), fallback to first 5 menu items
         List<FoodItem> trending = await menuService.getTrendingItems(uniId);
@@ -194,6 +214,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (index == 3) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileScreen()));
     }
+  }
+
+  bool _isItemAvailable(FoodItem food) {
+    if (!food.isAvailable) return false;
+    if (food.restaurantId != null) {
+      final restaurant = _restaurants.cast<Restaurant?>().firstWhere(
+        (r) => r?.id == food.restaurantId,
+        orElse: () => null,
+      );
+      if (restaurant != null && !restaurant.isCurrentlyOpen) return false;
+    }
+    return food.actuallyAvailable;
   }
 
   void _runAddToCartAnimation(GlobalKey widgetKey, String imageUrl) {
@@ -252,7 +284,10 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFFAFAFA),
-        body: Stack(
+        body: GestureDetector(
+          onTap: () => _searchFocusNode.unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: Stack(
         children: [
           SafeArea(
             bottom: false,
@@ -267,7 +302,141 @@ class _HomeScreenState extends State<HomeScreen> {
                       physics: const BouncingScrollPhysics(
                           parent: AlwaysScrollableScrollPhysics()),
                       slivers: [
-                      // 1. Dynamic Contextual Header
+                      // 1. University Header
+                      if (_universityName != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 16, left: 24, right: 24, bottom: 4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF8B1C28).withValues(alpha: 0.06),
+                                    const Color(0xFF8B1C28).withValues(alpha: 0.02),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xFF8B1C28).withValues(alpha: 0.08),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  // University Logo with glow ring
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF8B1C28).withValues(alpha: 0.15),
+                                          blurRadius: 12,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xFF8B1C28).withValues(alpha: 0.2),
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: _universityLogoUrl != null && _universityLogoUrl!.isNotEmpty
+                                            ? CachedNetworkImage(
+                                                imageUrl: _universityLogoUrl!,
+                                                width: 44,
+                                                height: 44,
+                                                fit: BoxFit.cover,
+                                                placeholder: (context, url) => Container(
+                                                  color: const Color(0xFFFDF0F0),
+                                                  child: const Icon(Icons.school_rounded, color: Color(0xFF8B1C28), size: 20),
+                                                ),
+                                                errorWidget: (context, url, error) => Container(
+                                                  color: const Color(0xFFFDF0F0),
+                                                  child: const Icon(Icons.school_rounded, color: Color(0xFF8B1C28), size: 20),
+                                                ),
+                                              )
+                                            : Container(
+                                                width: 44,
+                                                height: 44,
+                                                color: const Color(0xFFFDF0F0),
+                                                child: const Icon(Icons.school_rounded, color: Color(0xFF8B1C28), size: 20),
+                                              ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  // University Name & Address
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _universityName!,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF1E1E1E),
+                                            letterSpacing: -0.3,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (_universityAddress != null && _universityAddress!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.location_on_rounded, size: 12, color: const Color(0xFF8B1C28).withValues(alpha: 0.5)),
+                                                const SizedBox(width: 3),
+                                                Expanded(
+                                                  child: Text(
+                                                    _universityAddress!,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: const Color(0xFF1E1E1E).withValues(alpha: 0.45),
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Live indicator dot
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                                          blurRadius: 6,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ).animate().fadeIn(duration: 500.ms).slideY(begin: -0.15, end: 0, curve: Curves.easeOutCubic),
+                          ),
+                        ),
+
+                      // 2. Dynamic Contextual Header
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.only(
@@ -315,6 +484,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Expanded(
                                   child: TextField(
                                     controller: _homeSearchController,
+                                    focusNode: _searchFocusNode,
                                     autofocus: false,
                                     onSubmitted: (value) {
                                       if (value.trim().isNotEmpty) {
@@ -323,7 +493,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                           MaterialPageRoute(
                                             builder: (context) => SearchScreen(initialQuery: value.trim()),
                                           ),
-                                        ).then((_) => _homeSearchController.clear());
+                                        ).then((_) {
+                                        _homeSearchController.clear();
+                                        _searchFocusNode.unfocus();
+                                      });
                                       }
                                     },
                                     decoration: InputDecoration(
@@ -395,6 +568,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                           ).then((_) {
                                             _homeSearchController.clear();
+                                            _searchFocusNode.unfocus();
                                             setState(() => _homeFilters = const SearchFilters());
                                           });
                                         } else {
@@ -557,6 +731,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       padding: const EdgeInsets.symmetric(horizontal: 8),
                                       child: FoodCard(
                                         food: _trendingItems[index],
+                                        isAvailable: _isItemAvailable(_trendingItems[index]),
+                                        unavailableText: 'Closed',
                                         onTap: () {
                                           Navigator.push(
                                             context,
@@ -751,6 +927,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
       ),
     ));
   }

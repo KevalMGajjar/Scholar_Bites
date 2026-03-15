@@ -22,6 +22,19 @@ class UniversityService {
     return [];
   }
 
+  /// Fetch a single university by ID
+  Future<Map<String, dynamic>?> getUniversityById(String id) async {
+    try {
+      final response = await _dio.get('/university/$id');
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      }
+    } on DioException catch (_) {
+      return null;
+    }
+    return null;
+  }
+
   Future<List<Restaurant>> searchUniversities({
     String? q,
     double? lat,

@@ -177,139 +177,235 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
 
           // Restaurant Info
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!widget.restaurant.isCurrentlyOpen)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Lottie.asset(
-                          'assets/lottie/Closed tag.json',
-                          height: 120,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  Row(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Main content
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.star_rounded,
-                        color: Colors.orangeAccent,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.restaurant.rating} Rating',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1E1E1E),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      const Icon(
-                        Icons.schedule_rounded,
-                        color: Color(0xFF8B1C28),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        widget.restaurant.deliveryTime,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E1E1E),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Operating Hours
-                  if (widget.restaurant.hoursDisplay.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      // Push content down if closed to make room for Lottie
+                      if (!widget.restaurant.isCurrentlyOpen)
+                        const SizedBox(height: 80),
+
+                      // Rating & Delivery Info Row
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
-                          color: widget.restaurant.isCurrentlyOpen
-                              ? const Color(0xFF10B981).withValues(alpha: 0.08)
-                              : const Color(0xFFEF4444).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: widget.restaurant.isCurrentlyOpen
-                                ? const Color(0xFF10B981).withValues(alpha: 0.2)
-                                : const Color(0xFFEF4444).withValues(alpha: 0.2),
-                          ),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              widget.restaurant.isCurrentlyOpen
-                                  ? Icons.check_circle_rounded
-                                  : Icons.cancel_rounded,
-                              color: widget.restaurant.isCurrentlyOpen
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFFEF4444),
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              widget.restaurant.isCurrentlyOpen ? 'Open Now' : 'Currently Closed',
-                              style: TextStyle(
-                                color: widget.restaurant.isCurrentlyOpen
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFFEF4444),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                            // Rating chip
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF8E1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.star_rounded, color: Color(0xFFFFA726), size: 18),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${widget.restaurant.rating}',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1E1E1E),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Text(
-                              widget.restaurant.hoursDisplay,
-                              style: TextStyle(
-                                color: const Color(0xFF1E1E1E).withValues(alpha: 0.5),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                            const SizedBox(width: 16),
+                            // Prep time
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.schedule_rounded, color: Color(0xFF8B1C28), size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  widget.restaurant.deliveryTime,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF555555),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            // Status indicator
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: widget.restaurant.isCurrentlyOpen
+                                    ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                                    : const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: widget.restaurant.isCurrentlyOpen
+                                          ? const Color(0xFF10B981)
+                                          : const Color(0xFFEF4444),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    widget.restaurant.isCurrentlyOpen ? 'Open' : 'Closed',
+                                    style: TextStyle(
+                                      color: widget.restaurant.isCurrentlyOpen
+                                          ? const Color(0xFF10B981)
+                                          : const Color(0xFFEF4444),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  Wrap(
-                    spacing: 8,
-                    children: widget.restaurant.tags.map((tag) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B1C28).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          tag,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF8B1C28),
+
+                      // Operating Hours
+                      if (widget.restaurant.hoursDisplay.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Row(
+                            children: [
+                              Icon(Icons.access_time_rounded, size: 15, color: const Color(0xFF1E1E1E).withValues(alpha: 0.4)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Hours: ${widget.restaurant.hoursDisplay}',
+                                style: TextStyle(
+                                  color: const Color(0xFF1E1E1E).withValues(alpha: 0.5),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    }).toList(),
+
+                      // Tags
+                      if (widget.restaurant.tags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: widget.restaurant.tags.map((tag) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8B1C28).withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: const Color(0xFF8B1C28).withValues(alpha: 0.1),
+                                  ),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF8B1C28),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                      const SizedBox(height: 28),
+
+                      // Menu Section Header
+                      Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B1C28),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Full Menu',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1E1E1E),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (!_isLoading)
+                            Text(
+                              '${_menuItems.length} items',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF1E1E1E).withValues(alpha: 0.35),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Full Menu \u{1F9FE}',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF1E1E1E),
+                ),
+
+                // Overlapping Lottie Closed Banner
+                if (!widget.restaurant.isCurrentlyOpen)
+                  Positioned(
+                    top: -20,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 140,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              const Color(0xFFEF4444).withValues(alpha: 0.08),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Center(
+                          child: Lottie.asset(
+                            'assets/lottie/Closed tag.json',
+                            height: 120,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
 
