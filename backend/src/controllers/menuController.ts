@@ -12,14 +12,14 @@ export const getTrendingItems = async (req: Request, res: Response) => {
 
     try {
         const result = await pool.query(
-            `SELECT m.*, COUNT(oi.id)::int as order_count, r.is_open as restaurant_is_open, r.opening_time as restaurant_opening_time, r.closing_time as restaurant_closing_time
+            `SELECT m.*, COUNT(oi.id)::int as order_count, r.is_open as restaurant_is_open
              FROM menu_items m
              JOIN order_items oi ON m.id = oi.menu_item_id
              JOIN orders o ON oi.order_id = o.id
              JOIN restaurants r ON m.restaurant_id = r.id
              WHERE o.university_id = $1
                AND o.status IN ('preparing', 'ready', 'completed')
-             GROUP BY m.id, r.is_open, r.opening_time, r.closing_time
+             GROUP BY m.id, r.is_open
              ORDER BY order_count DESC
              LIMIT 5`,
             [university_id]
@@ -47,7 +47,7 @@ export const getMenu = async (req: Request, res: Response) => {
 
         if (restaurant_id) {
             query = `
-                SELECT m.*, r.is_open as restaurant_is_open, r.opening_time as restaurant_opening_time, r.closing_time as restaurant_closing_time 
+                SELECT m.*, r.is_open as restaurant_is_open 
                 FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
                 WHERE m.restaurant_id = $${pIndex++}${availFilter}
@@ -55,7 +55,7 @@ export const getMenu = async (req: Request, res: Response) => {
             params.push(restaurant_id);
         } else if (university_id) {
             query = `
-                SELECT DISTINCT ON (m.name) m.*, r.is_open as restaurant_is_open, r.opening_time as restaurant_opening_time, r.closing_time as restaurant_closing_time 
+                SELECT DISTINCT ON (m.name) m.*, r.is_open as restaurant_is_open 
                 FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
                 WHERE r.university_id = $${pIndex++}${availFilter}

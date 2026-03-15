@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'heart_overlay.dart';
 
 class FavoriteButton extends StatefulWidget {
   final bool isFavorite;
@@ -21,6 +22,7 @@ class _FavoriteButtonState extends State<FavoriteButton>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late AnimationController _particleController;
+  bool _localInteraction = false;
 
   @override
   void initState() {
@@ -58,11 +60,49 @@ class _FavoriteButtonState extends State<FavoriteButton>
         if (widget.isFavorite) {
           _controller.forward(from: 0.0);
           _particleController.forward(from: 0.0);
+          if (_localInteraction) {
+            _showOverlay(true);
+            _localInteraction = false;
+          }
         } else {
-          // just state change
+          if (_localInteraction) {
+            _showOverlay(false);
+            _localInteraction = false;
+          }
         }
       }
     }
+  }
+
+  void _showOverlay(bool isLike) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final OverlayState overlayState = Overlay.of(context);
+      final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+      if (renderBox == null) return;
+
+      final Offset position = renderBox.localToGlobal(Offset.zero);
+      final Size size = renderBox.size;
+
+      late OverlayEntry overlayEntry;
+      overlayEntry = OverlayEntry(
+        builder: (context) {
+          return Positioned(
+            top: position.dy - 30,
+            left: position.dx + (size.width - 40) / 2,
+            child: HeartOverlay(
+              emoji: isLike ? '❤️' : '💔',
+              onComplete: () {
+                if (overlayEntry.mounted) {
+                  overlayEntry.remove();
+                }
+              },
+            ),
+          );
+        },
+      );
+      overlayState.insert(overlayEntry);
+    });
   }
 
   @override
@@ -75,7 +115,10 @@ class _FavoriteButtonState extends State<FavoriteButton>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: () {
+        _localInteraction = true;
+        widget.onTap();
+      },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: widget.size * 1.5,
