@@ -2,9 +2,11 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'api_client.dart';
+import '../utils/token_storage.dart';
 
 /// Handles FCM token registration, push notifications (foreground/background),
 /// local notification display, and REST API calls for in-app notifications.
@@ -20,7 +22,9 @@ class NotificationService {
 
   bool _initialized = false;
 
-  /// Initialize notifications — call once after Firebase.initializeApp()
+  /// Initialize notifications — call once after Firebase.initializeApp().
+  /// This only sets up local notification channels, permissions, and listeners.
+  /// It does NOT attempt any authenticated API calls.
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -42,7 +46,7 @@ class NotificationService {
     );
     await _localNotifs.initialize(
       settings: const InitializationSettings(
-        android: androidSettings, 
+        android: androidSettings,
         iOS: iosSettings,
       ),
     );
@@ -64,12 +68,12 @@ class NotificationService {
     // Listen for foreground messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-    // Get and register token (fails silently if unauthenticated)
-    await registerCurrentToken();
-
-    // Listen for token refresh
-    _fcm.onTokenRefresh.listen((newToken) {
-      registerToken(newToken);
+    // Listen for token refresh — only register if user is logged in
+    _fcm.onTokenRefresh.listen((newToken) async {
+      final jwt = await TokenStorage.getToken();
+      if (jwt != null) {
+        registerToken(newToken);
+      }
     });
   }
 
@@ -101,7 +105,7 @@ class NotificationService {
   }
 
   // ─── Local Notifications (Cart Reminder) ───
-  
+
   /// Schedule a local notification if cart is abandoned (2 hours from now)
   Future<void> scheduleCartReminder(String itemName) async {
     // Cancel any existing reminder
@@ -133,27 +137,43 @@ class NotificationService {
     await _localNotifs.cancel(id: 999);
   }
 
-  // ─── API Methods ───
+  // ─── API Methods (all guarded: skip if no JWT) ───
+
+  /// Returns true if the user has a stored JWT token.
+  Future<bool> _isAuthenticated() async {
+    final token = await TokenStorage.getToken();
+    return token != null;
+  }
 
   /// Register FCM token with backend
   Future<void> registerToken(String token) async {
+    if (!await _isAuthenticated()) return;
     try {
       await _dio.post('/notifications/register-token', data: {'fcm_token': token});
-    } catch (_) {}
+      if (kDebugMode) print('[NotificationService] FCM token registered successfully');
+    } catch (e) {
+      if (kDebugMode) print('[NotificationService] Failed to register token: $e');
+    }
   }
 
-  /// Manually trigger token registration (e.g., after successful login)
+  /// Manually trigger token registration (call after successful login/register)
   Future<void> registerCurrentToken() async {
+    if (!await _isAuthenticated()) return;
     try {
       final token = await _fcm.getToken();
       if (token != null) {
         await registerToken(token);
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) print('[NotificationService] registerCurrentToken failed: $e');
+    }
   }
 
   /// Fetch notifications list
   Future<Map<String, dynamic>> getNotifications({int page = 1, int limit = 30}) async {
+    if (!await _isAuthenticated()) {
+      return {'notifications': [], 'total': 0, 'page': page, 'limit': limit};
+    }
     try {
       final response = await _dio.get('/notifications', queryParameters: {
         'page': page,
@@ -167,6 +187,7 @@ class NotificationService {
 
   /// Get unread count for badge
   Future<int> getUnreadCount() async {
+    if (!await _isAuthenticated()) return 0;
     try {
       final response = await _dio.get('/notifications/unread-count');
       return response.data['count'] ?? 0;
@@ -177,6 +198,7 @@ class NotificationService {
 
   /// Mark single notification as read
   Future<void> markAsRead(String id) async {
+    if (!await _isAuthenticated()) return;
     try {
       await _dio.post('/notifications/$id/read');
     } catch (_) {}
@@ -184,6 +206,7 @@ class NotificationService {
 
   /// Mark all notifications as read
   Future<void> markAllAsRead() async {
+    if (!await _isAuthenticated()) return;
     try {
       await _dio.post('/notifications/read-all');
     } catch (_) {}

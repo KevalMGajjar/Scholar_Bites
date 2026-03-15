@@ -29,8 +29,8 @@ class AuthService {
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
 
-          // Register FCM token now that user is logged in
-          NotificationService().registerCurrentToken();
+          // Register FCM token now that user is authenticated
+          await NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -73,8 +73,8 @@ class AuthService {
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
 
-          // Register FCM token now that user is logged in
-          NotificationService().registerCurrentToken();
+          // Register FCM token now that user is authenticated
+          await NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -117,8 +117,8 @@ class AuthService {
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
 
-          // Register FCM token now that user is logged in
-          NotificationService().registerCurrentToken();
+          // Register FCM token now that user is authenticated
+          await NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -159,8 +159,8 @@ class AuthService {
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
 
-          // Register FCM token now that user is logged in
-          NotificationService().registerCurrentToken();
+          // Register FCM token now that user is authenticated
+          await NotificationService().registerCurrentToken();
         }
         return userModel;
       }
@@ -199,8 +199,8 @@ class AuthService {
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
 
-          // Register FCM token now that user is logged in
-          NotificationService().registerCurrentToken();
+          // Register FCM token now that user is authenticated
+          await NotificationService().registerCurrentToken();
         }
         return userModel;
       }

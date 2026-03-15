@@ -54,13 +54,16 @@ class ApiClient {
           }
 
           // ─── Device Conflict: logged in on another device ───
+          // ONLY delete the token and force logout on explicit DEVICE_CONFLICT.
+          // Do NOT delete the token on normal 401s (e.g. expired token, missing
+          // header on a non-critical request) — that causes a cascade where every
+          // subsequent request also fails.
           if (e.response?.statusCode == 401) {
             final data = e.response?.data;
             final code = data is Map ? data['code'] : null;
 
-            await TokenStorage.deleteToken();
-
             if (code == 'DEVICE_CONFLICT') {
+              await TokenStorage.deleteToken();
               _forceLogout('You have been logged in on another device.');
             }
           }
