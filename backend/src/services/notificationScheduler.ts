@@ -10,23 +10,31 @@ import { notifyUniversityUsers } from '../controllers/notificationController';
 const IST_TIMEZONE = 'Asia/Kolkata';
 
 export const startNotificationScheduler = () => {
-    // Run every 15 minutes to check for restaurants closing soon
-    cron.schedule('*/15 * * * *', async () => {
+    // Run every 5 minutes to ensure we don't skip any times if a user edits a closing time mid-window
+    cron.schedule('*/5 * * * *', async () => {
         try {
             // Current IST time for logging
             const nowIST = new Date().toLocaleString('en-IN', { timeZone: IST_TIMEZONE });
             console.log(`[Scheduler] Running at IST: ${nowIST} — checking for restaurants closing soon...`);
 
-            // We convert the current UTC timestamp to IST, cast it to a raw 'time',
-            // and then add intervals. This safely strips postgres timezone info
-            // so it compares fruitfully with 'time without time zone'.
+            // We look for restaurants closing exactly 25 to 35 minutes from now.
+            // A 10-minute window running every 5 minutes guarantees total coverage (no gaps).
+            // The query uses a CTE to elegantly handle "midnight wraparound" where lower_bound > upper_bound.
             const query = `
+                WITH bounds AS (
+                    SELECT 
+                        (timezone('${IST_TIMEZONE}', now())::time + INTERVAL '25 minutes')::time as lower_bound,
+                        (timezone('${IST_TIMEZONE}', now())::time + INTERVAL '35 minutes')::time as upper_bound
+                )
                 SELECT id, name, university_id, closing_time
-                FROM restaurants
+                FROM restaurants, bounds
                 WHERE is_open = true
                   AND closing_time IS NOT NULL
-                  AND closing_time > (timezone('${IST_TIMEZONE}', now())::time + INTERVAL '15 minutes')::time
-                  AND closing_time <= (timezone('${IST_TIMEZONE}', now())::time + INTERVAL '45 minutes')::time
+                  AND (
+                      (lower_bound <= upper_bound AND closing_time >= lower_bound AND closing_time <= upper_bound)
+                      OR
+                      (lower_bound > upper_bound AND (closing_time >= lower_bound OR closing_time <= upper_bound))
+                  )
             `;
 
             const { rows: restaurants } = await pool.query(query);
