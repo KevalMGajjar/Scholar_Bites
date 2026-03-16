@@ -429,8 +429,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         color: _darkText.withValues(alpha: 0.5),
                         fontWeight: FontWeight.w500,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

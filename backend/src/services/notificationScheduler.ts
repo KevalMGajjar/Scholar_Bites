@@ -17,16 +17,16 @@ export const startNotificationScheduler = () => {
             const nowIST = new Date().toLocaleString('en-IN', { timeZone: IST_TIMEZONE });
             console.log(`[Scheduler] Running at IST: ${nowIST} — checking for restaurants closing soon...`);
 
-            // Query restaurants closing within the next 15–45 minutes (IST).
-            // closing_time is stored as a raw TIME in IST, so we compare against
-            // CURRENT_TIME converted to IST.
+            // We convert the current UTC timestamp to IST, cast it to a raw 'time',
+            // and then add intervals. This safely strips postgres timezone info
+            // so it compares fruitfully with 'time without time zone'.
             const query = `
                 SELECT id, name, university_id, closing_time
                 FROM restaurants
                 WHERE is_open = true
                   AND closing_time IS NOT NULL
-                  AND closing_time::time > (CURRENT_TIME AT TIME ZONE '${IST_TIMEZONE}' + INTERVAL '15 minutes')::time
-                  AND closing_time::time <= (CURRENT_TIME AT TIME ZONE '${IST_TIMEZONE}' + INTERVAL '45 minutes')::time
+                  AND closing_time > (timezone('${IST_TIMEZONE}', now())::time + INTERVAL '15 minutes')::time
+                  AND closing_time <= (timezone('${IST_TIMEZONE}', now())::time + INTERVAL '45 minutes')::time
             `;
 
             const { rows: restaurants } = await pool.query(query);
