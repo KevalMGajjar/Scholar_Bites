@@ -180,7 +180,15 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         );
 
         if (result.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
-        res.json(result.rows[0]);
+        
+        const updatedItem = result.rows[0];
+
+        // Trigger notification if item just became available
+        if (is_available === true || is_available === 'true') {
+            triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
+        }
+
+        res.json(updatedItem);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
