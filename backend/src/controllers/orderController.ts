@@ -44,18 +44,29 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         let restaurantId: string | null = null;
         const orderItemsData = [];
 
-        for (const item of items) {
-            const result = await client.query('SELECT price, is_available, restaurant_id FROM menu_items WHERE id = $1', [item.menu_item_id]);
+        // Sort items by menu_item_id to prevent deadlocks during concurrent orders
+        const sortedItems = [...items].sort((a, b) => a.menu_item_id.localeCompare(b.menu_item_id));
+
+        for (const item of sortedItems) {
+            // Lock the menu item row for update to ensure accurate stock reading and updating
+            const result = await client.query('SELECT price, is_available, restaurant_id, stock_quantity, name FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
             const menuItem = result.rows[0];
 
             if (!menuItem || !menuItem.is_available) {
                 throw new Error(`Item ${item.menu_item_id} not available`);
             }
 
+            if (menuItem.stock_quantity < item.quantity) {
+                throw new Error(`Insufficient stock for item: ${menuItem.name}. Only ${menuItem.stock_quantity} left.`);
+            }
+
             const price = parseFloat(menuItem.price);
             totalAmount += price * item.quantity;
             if (!restaurantId) restaurantId = menuItem.restaurant_id;
             orderItemsData.push({ ...item, price });
+
+            // Decrement the stock quantity immediately
+            await client.query('UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
         }
 
         if (!restaurantId) {
@@ -299,21 +310,50 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { status } = req.body;
 
+    const client = await pool.connect();
+
     try {
-        const result = await pool.query(
+        await client.query('BEGIN');
+
+        // First lock the order to prevent race conditions
+        const orderRes = await client.query('SELECT status, user_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
+        const currentOrder = orderRes.rows[0];
+        
+        if (!currentOrder) {
+            throw new Error('Order not found');
+        }
+
+        // If the order is being cancelled, restore the stock
+        if (currentOrder.status !== 'cancelled' && status === 'cancelled') {
+            const itemsRes = await client.query('SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1', [id]);
+            
+            // Sort items to prevent deadlocks when restoring stock
+            const sortedItems = itemsRes.rows.sort((a, b) => a.menu_item_id.localeCompare(b.menu_item_id));
+            
+            for (const item of sortedItems) {
+                // We use FOR UPDATE to acquire locks in consistent order
+                await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
+                await client.query('UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
+            }
+        }
+
+        const result = await client.query(
             'UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
             [status, id]
         );
 
         const order = result.rows[0];
-        if (!order) return res.status(404).json({ message: 'Order not found' });
+        await client.query('COMMIT');
 
         // Emit to user
-        emitStatusUpdate(order.user_id, order);
+        emitStatusUpdate(currentOrder.user_id, order);
 
         res.json(order);
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ message: error.message || 'Server error' });
+    } finally {
+        client.release();
     }
 };
 
@@ -424,21 +464,47 @@ export const refundOrder = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { reason } = req.body;
 
+    const client = await pool.connect();
+
     try {
-        const result = await pool.query(
+        await client.query('BEGIN');
+
+        const orderRes = await client.query('SELECT status, user_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
+        const currentOrder = orderRes.rows[0];
+        
+        if (!currentOrder) {
+            throw new Error('Order not found');
+        }
+
+        // If not already cancelled, cancel it and restore stock
+        if (currentOrder.status !== 'cancelled') {
+            const itemsRes = await client.query('SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1', [id]);
+            
+            const sortedItems = itemsRes.rows.sort((a, b) => a.menu_item_id.localeCompare(b.menu_item_id));
+            
+            for (const item of sortedItems) {
+                await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
+                await client.query('UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
+            }
+        }
+
+        const result = await client.query(
             `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *`,
             [id]
         );
 
         const order = result.rows[0];
-        if (!order) return res.status(404).json({ message: 'Order not found' });
+        await client.query('COMMIT');
 
         // Notify user about refund
-        emitStatusUpdate(order.user_id, { ...order, refund_reason: reason || 'Refund processed by admin' });
+        emitStatusUpdate(currentOrder.user_id, { ...order, refund_reason: reason || 'Refund processed by admin' });
 
         res.json({ message: 'Order refunded successfully', order });
-    } catch (error) {
+    } catch (error: any) {
+        await client.query('ROLLBACK');
         console.error(error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: error.message || 'Server error' });
+    } finally {
+        client.release();
     }
 };
