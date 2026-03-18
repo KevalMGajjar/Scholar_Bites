@@ -46,10 +46,9 @@ export const loginOtp = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Block if already logged in elsewhere
-        if (user.active_token) {
-            return res.status(409).json({ message: 'Phone number already used on another device' });
-        }
+        // Industry-standard approach: allow re-login and invalidate old session.
+        // If the user logs in again, we overwrite the old token. The old device
+        // will be kicked out via the DEVICE_CONFLICT check in authMiddleware.
 
         const token = generateToken({ id: user.id, phone: user.phone, role });
 
@@ -152,10 +151,9 @@ export const staffLogin = async (req: Request, res: Response) => {
             return res.status(401).json({ message: 'Invalid password' });
         }
 
-        // Block if already logged in elsewhere
-        if (staff.active_token) {
-            return res.status(409).json({ message: 'Accound already logged in on another device' });
-        }
+        // Industry-standard approach: allow re-login and invalidate old session.
+        // If the staff logs in again, we overwrite the old token. The old device
+        // will be kicked out via the DEVICE_CONFLICT check in authMiddleware.
 
         const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
 

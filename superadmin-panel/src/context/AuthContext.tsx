@@ -54,7 +54,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Backend logout failed, clearing local session anyway.', error);
+    }
     localStorage.removeItem('superadmin_token');
     localStorage.removeItem('superadmin_user');
     setToken(null);

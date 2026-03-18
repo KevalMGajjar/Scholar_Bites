@@ -52,7 +52,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Backend logout failed, clearing local session anyway.', error);
+    }
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
     setToken(null);
