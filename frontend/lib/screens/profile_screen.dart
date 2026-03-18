@@ -468,8 +468,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               color: _maroon.withValues(alpha: 0.06),
               shape: BoxShape.circle,
             ),
-            child: const Center(
-                child: Text('\u{1F4E6}', style: TextStyle(fontSize: 48))),
+            child: Center(
+                child: Icon(Icons.inventory_2_rounded, size: 48, color: _maroon.withValues(alpha: 0.4))),
           ),
           const SizedBox(height: 20),
           const Text('No orders yet',
@@ -827,14 +827,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.account_balance_wallet_rounded,
                       label: 'Wallet',
                       subtitle: 'Balance: \u{20B9}${_walletBalance.toStringAsFixed(2)}',
-                      emoji: '\u{1F4B0}',
                       onTap: () => _navigate(const WalletScreen()),
                     ),
                     _MenuItem(
                       icon: Icons.receipt_long_rounded,
                       label: 'Order History',
                       subtitle: 'View past orders',
-                      emoji: '\u{1F4CB}',
                       onTap: () => _navigate(const OrderHistoryScreen()),
                     ),
                   ]),
@@ -847,14 +845,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.notifications_active_rounded,
                       label: 'Notifications',
                       subtitle: 'Push, email alerts',
-                      emoji: '\u{1F514}',
                       onTap: () => _navigate(const NotificationsScreen()),
                     ),
                     _MenuItem(
                       icon: Icons.chat_bubble_outline_rounded,
                       label: 'Feedback',
                       subtitle: 'Help us improve',
-                      emoji: '\u{1F4AC}',
                       onTap: () => _navigate(const FeedbackScreen()),
                     ),
                   ]),
@@ -1056,17 +1052,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         horizontal: 18, vertical: 16),
                     child: Row(
                       children: [
-                        // Emoji circle
+                        // Icon container
                         Container(
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: _maroon.withValues(alpha: 0.06),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                _maroon.withValues(alpha: 0.08),
+                                _maroon.withValues(alpha: 0.04),
+                              ],
+                            ),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Center(
-                            child: Text(item.emoji,
-                                style: const TextStyle(fontSize: 20)),
+                            child: Icon(item.icon, size: 20, color: _maroon),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -1172,14 +1174,12 @@ class _MenuItem {
   final IconData icon;
   final String label;
   final String? subtitle;
-  final String emoji;
   final VoidCallback onTap;
 
   _MenuItem({
     required this.icon,
     required this.label,
     this.subtitle,
-    required this.emoji,
     required this.onTap,
   });
 }

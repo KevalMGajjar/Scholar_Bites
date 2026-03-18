@@ -61,13 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _universityAddress;
   int _unreadNotifsCount = 0;
 
-  // Mock Categories for Story UI
-  final List<Map<String, String>> _categories = [
-    {'name': 'Burgers', 'emoji': '\u{1F354}'},
-    {'name': 'Healthy', 'emoji': '\u{1F957}'},
-    {'name': 'Coffee', 'emoji': '\u{2615}'},
-    {'name': 'Snacks', 'emoji': '\u{1F35F}'},
-    {'name': 'Drinks', 'emoji': '\u{1F964}'},
+  // Categories with Material icons for Story UI
+  final List<Map<String, dynamic>> _categories = [
+    {'name': 'Burgers', 'icon': Icons.lunch_dining_rounded},
+    {'name': 'Healthy', 'icon': Icons.eco_rounded},
+    {'name': 'Coffee', 'icon': Icons.coffee_rounded},
+    {'name': 'Snacks', 'icon': Icons.bakery_dining_rounded},
+    {'name': 'Drinks', 'icon': Icons.local_cafe_rounded},
   ];
 
   final TextEditingController _homeSearchController = TextEditingController();
@@ -248,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showFilterPopup() async {
-    final categories = ['All', ..._categories.map((c) => c['name']!), 'Pizza', 'Desserts', 'Chicken'];
+    final categories = ['All', ..._categories.map((c) => c['name'] as String), 'Pizza', 'Desserts', 'Chicken'];
     final result = await showModalBottomSheet<SearchFilters>(
       context: context,
       isScrollControlled: true,
@@ -671,7 +671,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             const Padding(
                               padding: EdgeInsets.only(left: 24, top: 24, bottom: 16),
                               child: Text(
-                                'Cravings \u{1F924}',
+                                'Cravings',
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
@@ -716,9 +716,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ],
                                         ),
                                         child: Center(
-                                          child: Text(
-                                            cat['emoji']!,
-                                            style: const TextStyle(fontSize: 32),
+                                          child: Icon(
+                                            cat['icon'] as IconData,
+                                            size: 30,
+                                            color: const Color(0xFF8B1C28),
                                           ),
                                         ),
                                       ),
@@ -742,13 +743,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
-                                      'Trending \u{1F525}',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF1E1E1E),
-                                      ),
+                                    const Row(
+                                      children: [
+                                        Text(
+                                          'Trending',
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF1E1E1E),
+                                          ),
+                                        ),
+                                        SizedBox(width: 6),
+                                        Icon(Icons.local_fire_department_rounded, size: 20, color: Color(0xFFE65100)),
+                                      ],
                                     ),
                                     GestureDetector(
                                       onTap: () {

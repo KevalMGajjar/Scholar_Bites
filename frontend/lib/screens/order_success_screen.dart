@@ -181,11 +181,11 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                   return Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      _buildFallbackIcon('🍳', 0),
+                                      _buildFallbackIcon(Icons.egg_alt_rounded, 0),
                                       const SizedBox(width: 20),
-                                      _buildFallbackIcon('👨‍🍳', 200),
+                                      _buildFallbackIcon(Icons.restaurant_rounded, 200),
                                       const SizedBox(width: 20),
-                                      _buildFallbackIcon('🍽️', 400),
+                                      _buildFallbackIcon(Icons.dinner_dining_rounded, 400),
                                     ],
                                   );
                                 },
@@ -403,8 +403,23 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
     );
   }
 
-  Widget _buildFallbackIcon(String emoji, int delayMs) {
-    return Text(emoji, style: const TextStyle(fontSize: 40))
+  Widget _buildFallbackIcon(IconData iconData, int delayMs) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _maroon.withValues(alpha: 0.12),
+            _maroon.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Icon(iconData, size: 28, color: _maroon),
+    )
         .animate(onPlay: (c) => c.repeat(reverse: true))
         .scaleXY(
           begin: 1.0,
