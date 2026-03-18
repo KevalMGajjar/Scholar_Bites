@@ -21,7 +21,11 @@ export default function Restaurants() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Restaurant | null>(null);
-  const [form, setForm] = useState({ name: '', logo_url: '', cover_url: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
+  const [form, setForm] = useState({ name: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
 
   const fetchRestaurants = useCallback(async () => {
     try {
@@ -35,7 +39,8 @@ export default function Restaurants() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', logo_url: '', cover_url: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
+    setForm({ name: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
+    setLogoFile(null); setCoverFile(null); setLogoPreview(null); setCoverPreview(null);
     setShowForm(true);
   };
 
@@ -43,29 +48,37 @@ export default function Restaurants() {
     setEditing(r);
     setForm({
       name: r.name,
-      logo_url: r.logo_url || '',
-      cover_url: r.cover_url || '',
       rating: r.rating,
       tags: (r.tags || []).join(', '),
       prep_time_minutes: r.prep_time_minutes || 15,
       opening_time: r.opening_time ? r.opening_time.substring(0, 5) : '09:00',
       closing_time: r.closing_time ? r.closing_time.substring(0, 5) : '22:00',
     });
+    setLogoFile(null); setCoverFile(null);
+    setLogoPreview(r.logo_url || null);
+    setCoverPreview(r.cover_url || null);
     setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = {
-      ...form,
-      university_id: user?.university_id,
-      tags: `{${form.tags}}`,
-    };
+    const fd = new FormData();
+    fd.append('name', form.name);
+    if (!editing) fd.append('university_id', user?.university_id || '');
+    fd.append('rating', form.rating.toString());
+    fd.append('tags', `{${form.tags}}`);
+    fd.append('prep_time_minutes', form.prep_time_minutes.toString());
+    fd.append('opening_time', form.opening_time);
+    fd.append('closing_time', form.closing_time);
+    
+    if (logoFile) fd.append('logo', logoFile);
+    if (coverFile) fd.append('cover', coverFile);
+
     try {
       if (editing) {
-        await api.patch(`/admin/restaurants/${editing.id}`, payload);
+        await api.patch(`/admin/restaurants/${editing.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       } else {
-        await api.post('/admin/restaurants', payload);
+        await api.post('/admin/restaurants', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       }
       setShowForm(false);
       fetchRestaurants();
@@ -113,35 +126,27 @@ export default function Restaurants() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">Logo</label>
-                  {form.logo_url && (
-                    <img src={form.logo_url.startsWith('/') ? (import.meta.env.VITE_API_URL || '').replace('/api','') + form.logo_url : form.logo_url} alt="logo" className="w-16 h-16 rounded-lg object-cover mb-2" />
+                  {logoPreview && (
+                    <img src={logoPreview} alt="logo" className="w-16 h-16 rounded-lg object-cover mb-2" />
                   )}
-                  <input type="file" accept="image/*" onChange={async (e) => {
+                  <input type="file" accept="image/*" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const fd = new FormData();
-                    fd.append('image', file);
-                    try {
-                      const res = await api.post('/admin/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                      setForm({ ...form, logo_url: res.data.image_url });
-                    } catch (err) { console.error('Upload failed:', err); }
+                    setLogoFile(file);
+                    setLogoPreview(URL.createObjectURL(file));
                   }}
                     className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">Cover</label>
-                  {form.cover_url && (
-                    <img src={form.cover_url.startsWith('/') ? (import.meta.env.VITE_API_URL || '').replace('/api','') + form.cover_url : form.cover_url} alt="cover" className="w-full h-16 rounded-lg object-cover mb-2" />
+                  {coverPreview && (
+                    <img src={coverPreview} alt="cover" className="w-full h-16 rounded-lg object-cover mb-2" />
                   )}
-                  <input type="file" accept="image/*" onChange={async (e) => {
+                  <input type="file" accept="image/*" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const fd = new FormData();
-                    fd.append('image', file);
-                    try {
-                      const res = await api.post('/admin/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                      setForm({ ...form, cover_url: res.data.image_url });
-                    } catch (err) { console.error('Upload failed:', err); }
+                    setCoverFile(file);
+                    setCoverPreview(URL.createObjectURL(file));
                   }}
                     className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
                 </div>

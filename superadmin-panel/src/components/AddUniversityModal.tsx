@@ -10,7 +10,8 @@ interface Props {
 export default function AddUniversityModal({ onClose, onSuccess }: Props) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,7 +21,12 @@ export default function AddUniversityModal({ onClose, onSuccess }: Props) {
     setError('');
     
     try {
-      await api.post('/university', { name, address, logo_url: logoUrl });
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('address', address);
+      if (logoFile) fd.append('logo', logoFile);
+
+      await api.post('/university', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to add university');
@@ -71,13 +77,20 @@ export default function AddUniversityModal({ onClose, onSuccess }: Props) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Logo URL</label>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Logo</label>
+              {logoPreview && (
+                <img src={logoPreview} alt="preview" className="w-16 h-16 rounded-xl object-cover mb-3" />
+              )}
               <input
-                type="url"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="https://example.com/logo.png"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setLogoFile(file);
+                  setLogoPreview(URL.createObjectURL(file));
+                }}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-500/10 file:text-indigo-400 hover:file:bg-indigo-500/20"
               />
             </div>
 

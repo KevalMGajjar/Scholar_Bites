@@ -28,8 +28,10 @@ export default function MenuItems() {
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState('');
   const [form, setForm] = useState({
-    name: '', description: '', price: '', category: '', image_url: '', stock_quantity: 50, restaurant_id: '',
+    name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '',
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -56,7 +58,9 @@ export default function MenuItems() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', price: '', category: '', image_url: '', stock_quantity: 50, restaurant_id: selectedRestaurant });
+    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant });
+    setImageFile(null);
+    setImagePreview(null);
     setShowForm(true);
   };
 
@@ -67,20 +71,30 @@ export default function MenuItems() {
       description: item.description || '',
       price: item.price,
       category: item.category,
-      image_url: item.image_url || '',
       stock_quantity: item.stock_quantity,
       restaurant_id: item.restaurant_id,
     });
+    setImageFile(null);
+    setImagePreview(item.image_url || null);
     setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const fd = new FormData();
+      fd.append('name', form.name);
+      fd.append('description', form.description);
+      fd.append('price', form.price);
+      fd.append('category', form.category);
+      if (!editing) fd.append('restaurant_id', form.restaurant_id);
+      fd.append('stock_quantity', form.stock_quantity.toString());
+      if (imageFile) fd.append('image', imageFile);
+
       if (editing) {
-        await api.patch(`/admin/menu/${editing.id}`, { ...form, price: parseFloat(form.price) });
+        await api.patch(`/admin/menu/${editing.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       } else {
-        await api.post('/admin/menu', { ...form, price: parseFloat(form.price) });
+        await api.post('/admin/menu', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       }
       setShowForm(false);
       fetchItems();
@@ -152,18 +166,14 @@ export default function MenuItems() {
               </div>
               <div>
                 <label className="block text-sm text-slate-300 mb-1">Image</label>
-                {form.image_url && (
-                  <img src={form.image_url.startsWith('/') ? (import.meta.env.VITE_API_URL || '').replace('/api','') + form.image_url : form.image_url} alt="preview" className="w-20 h-20 rounded-lg object-cover mb-2" />
+                {imagePreview && (
+                  <img src={imagePreview} alt="preview" className="w-20 h-20 rounded-lg object-cover mb-2" />
                 )}
-                <input type="file" accept="image/*" onChange={async (e) => {
+                <input type="file" accept="image/*" onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  const fd = new FormData();
-                  fd.append('image', file);
-                  try {
-                    const res = await api.post('/admin/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                    setForm({ ...form, image_url: res.data.image_url });
-                  } catch (err) { console.error('Upload failed:', err); }
+                  setImageFile(file);
+                  setImagePreview(URL.createObjectURL(file));
                 }}
                   className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
               </div>

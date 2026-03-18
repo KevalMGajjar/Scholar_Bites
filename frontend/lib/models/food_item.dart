@@ -37,17 +37,12 @@ class FoodItem {
     final priceParsed =
         double.tryParse(json['price']?.toString() ?? '0') ?? 0.0;
 
-    // Cache buster for images so Admin updates reflect immediately
-    String? _addCacheBuster(String? url) {
-      if (url == null || url.isEmpty) return url;
-      final separator = url.contains('?') ? '&' : '?';
-      return '$url${separator}v=${DateTime.now().millisecondsSinceEpoch}';
-    }
+
 
     return FoodItem(
       id: json['id'] ?? '',
       name: json['name'] ?? 'Unknown Item',
-      imageUrl: _addCacheBuster(json['image_url']) ?? 'https://via.placeholder.com/150',
+      imageUrl: json['image_url']?.toString() ?? 'https://via.placeholder.com/150',
       price: priceParsed,
       calories: nutrition['calories'] as int? ?? 0,
       weight: nutrition['weight'] as int? ?? 0,

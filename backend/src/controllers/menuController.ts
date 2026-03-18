@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { triggerItemAvailable } from './notificationController';
+import { uploadToS3 } from './uploadController';
 
 // ─── Get Trending Items (most ordered) ───────────────
 export const getTrendingItems = async (req: Request, res: Response) => {
@@ -101,7 +102,21 @@ export const addMenuItem = async (req: AuthRequest, res: Response) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
             [restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity || 0]
         );
-        res.status(201).json(result.rows[0]);
+        
+        let item = result.rows[0];
+
+        if (req.file) {
+            const ext = req.file.mimetype.split('/')[1] || 'jpg';
+            const s3Url = await uploadToS3(req.file.buffer, req.file.mimetype, `food_items/${item.id}.${ext}`);
+            const finalUrl = `${s3Url}?v=${Date.now()}`;
+            const updated = await pool.query(
+                `UPDATE menu_items SET image_url=$1 WHERE id=$2 RETURNING *`,
+                [finalUrl, item.id]
+            );
+            item = updated.rows[0];
+        }
+
+        res.status(201).json(item);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -156,9 +171,16 @@ export const updateStock = async (req: Request, res: Response) => {
 // ─── Admin: Update Menu Item (full edit) ───
 export const updateMenuItem = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, description, price, category, image_url, nutritional_info, stock_quantity, is_available } = req.body;
+    const { name, description, price, category, nutritional_info, stock_quantity, is_available } = req.body;
+    let { image_url } = req.body;
 
     try {
+        if (req.file) {
+            const ext = req.file.mimetype.split('/')[1] || 'jpg';
+            const s3Url = await uploadToS3(req.file.buffer, req.file.mimetype, `food_items/${id}.${ext}`);
+            image_url = `${s3Url}?v=${Date.now()}`;
+        }
+
         const updates: string[] = [];
         const params: any[] = [];
         let idx = 1;

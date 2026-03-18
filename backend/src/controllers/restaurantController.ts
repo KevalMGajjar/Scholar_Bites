@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 import { triggerRestaurantOpen } from './notificationController';
+import { uploadToS3 } from './uploadController';
 
 export const getRestaurantsByUniversity = async (req: Request, res: Response) => {
     const { university_id } = req.params;
@@ -21,7 +22,8 @@ export const getRestaurantsByUniversity = async (req: Request, res: Response) =>
 };
 
 export const createRestaurant = async (req: Request, res: Response) => {
-    const { university_id, name, logo_url, cover_url, rating, tags, is_open, opening_time, closing_time } = req.body;
+    const { university_id, name, rating, tags, is_open, opening_time, closing_time } = req.body;
+    let { logo_url, cover_url } = req.body;
 
     if (!university_id || !name) {
         return res.status(400).json({ message: 'University ID and name are required' });
@@ -33,7 +35,33 @@ export const createRestaurant = async (req: Request, res: Response) => {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
             [university_id, name, logo_url, cover_url, rating || 0.0, tags || [], is_open ?? true, opening_time || null, closing_time || null]
         );
-        res.status(201).json(result.rows[0]);
+        let r = result.rows[0];
+
+        const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+        let needsUpdate = false;
+
+        if (files?.logo && files.logo[0]) {
+            const f = files.logo[0];
+            const ext = f.mimetype.split('/')[1] || 'jpg';
+            const s3Url = await uploadToS3(f.buffer, f.mimetype, `restaurants/${r.id}_logo.${ext}`);
+            logo_url = `${s3Url}?v=${Date.now()}`;
+            needsUpdate = true;
+        }
+
+        if (files?.cover && files.cover[0]) {
+            const f = files.cover[0];
+            const ext = f.mimetype.split('/')[1] || 'jpg';
+            const s3Url = await uploadToS3(f.buffer, f.mimetype, `restaurants/${r.id}_cover.${ext}`);
+            cover_url = `${s3Url}?v=${Date.now()}`;
+            needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+            const up = await pool.query('UPDATE restaurants SET logo_url=$1, cover_url=$2 WHERE id=$3 RETURNING *', [logo_url || r.logo_url, cover_url || r.cover_url, r.id]);
+            r = up.rows[0];
+        }
+
+        res.status(201).json(r);
     } catch (error) {
         console.error('Error creating restaurant:', error);
         res.status(500).json({ message: 'Server error' });
@@ -57,9 +85,24 @@ export const getAllRestaurants = async (req: Request, res: Response) => {
 // ─── Update Restaurant ───
 export const updateRestaurant = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, logo_url, cover_url, rating, tags, is_open, prep_time_minutes, opening_time, closing_time } = req.body;
+    const { name, rating, tags, is_open, prep_time_minutes, opening_time, closing_time } = req.body;
+    let { logo_url, cover_url } = req.body;
 
     try {
+        const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+        if (files?.logo && files.logo[0]) {
+            const f = files.logo[0];
+            const ext = f.mimetype.split('/')[1] || 'jpg';
+            const s3Url = await uploadToS3(f.buffer, f.mimetype, `restaurants/${id}_logo.${ext}`);
+            logo_url = `${s3Url}?v=${Date.now()}`;
+        }
+        if (files?.cover && files.cover[0]) {
+            const f = files.cover[0];
+            const ext = f.mimetype.split('/')[1] || 'jpg';
+            const s3Url = await uploadToS3(f.buffer, f.mimetype, `restaurants/${id}_cover.${ext}`);
+            cover_url = `${s3Url}?v=${Date.now()}`;
+        }
+
         const updates: string[] = [];
         const params: any[] = [];
         let idx = 1;

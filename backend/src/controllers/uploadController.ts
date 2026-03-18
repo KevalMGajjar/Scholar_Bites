@@ -1,46 +1,54 @@
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// ─── Storage Config ─────────────────────────────────
-const uploadsDir = path.resolve(__dirname, '../../uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
+const region = process.env.AWS_REGION || 'ap-south-1';
+const bucketName = process.env.AWS_S3_BUCKET_NAME || '';
 
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
-    filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-        cb(null, name);
+const s3 = new S3Client({
+    region,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
     },
 });
 
+const storage = multer.memoryStorage();
+
 const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
     if (allowed.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed'));
+        cb(new Error('Only JPEG, PNG, WebP, SVG, and GIF images are allowed'));
     }
 };
 
 export const upload = multer({
     storage,
     fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-// ─── Upload Handler ─────────────────────────────────
-export const uploadImage = (req: Request, res: Response) => {
-    if (!req.file) {
-        return res.status(400).json({ message: 'No image file provided' });
+/**
+ * Uploads a buffer to S3 and returns the public URL
+ */
+export const uploadToS3 = async (fileBuffer: Buffer, mimetype: string, key: string): Promise<string> => {
+    if (!bucketName) {
+        throw new Error('AWS_S3_BUCKET_NAME is not properly configured');
     }
+    
+    const command = new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: mimetype,
+    });
 
-    // Build public URL: /uploads/<filename>
-    const imageUrl = `/uploads/${req.file.filename}`;
+    await s3.send(command);
 
-    res.json({ image_url: imageUrl });
+    // Return the stable public URL
+    return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 };

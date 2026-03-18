@@ -67,20 +67,15 @@ class Restaurant {
       return s.length >= 5 ? s.substring(0, 5) : s;
     }
 
-    // Cache buster for images so Admin updates reflect immediately
-    String? _addCacheBuster(String? url) {
-      if (url == null || url.isEmpty) return null;
-      final separator = url.contains('?') ? '&' : '?';
-      return '$url${separator}v=${DateTime.now().millisecondsSinceEpoch}';
-    }
+
 
     return Restaurant(
       id: json['id']?.toString() ?? '',
       universityId: json['university_id']?.toString(),
       name: json['name']?.toString() ?? 'Unknown Restaurant',
-      imageUrl: _addCacheBuster(json['logo_url']?.toString()) ??
+      imageUrl: json['logo_url']?.toString() ??
           'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80',
-      coverUrl: _addCacheBuster(json['cover_url']?.toString()),
+      coverUrl: json['cover_url']?.toString(),
       rating: double.tryParse(json['rating']?.toString() ?? '0') ?? 4.5,
       tags: json['tags'] != null ? List<String>.from(json['tags']) : ['Canteen'],
       isOpen: json['is_open'] ?? true,

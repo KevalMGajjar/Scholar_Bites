@@ -1,14 +1,27 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
+import { uploadToS3 } from './uploadController';
 
 export const createUniversity = async (req: Request, res: Response) => {
-    const { name, address, logo_url } = req.body;
+    const { name, address } = req.body;
+    let { logo_url } = req.body;
+
     try {
         const result = await pool.query(
             'INSERT INTO universities (name, address, logo_url) VALUES ($1, $2, $3) RETURNING *',
             [name, address, logo_url]
         );
-        res.status(201).json(result.rows[0]);
+        let uni = result.rows[0];
+
+        if (req.file) {
+            const ext = req.file.mimetype.split('/')[1] || 'png';
+            const s3Url = await uploadToS3(req.file.buffer, req.file.mimetype, `universities/${uni.id}_logo.${ext}`);
+            logo_url = `${s3Url}?v=${Date.now()}`;
+            const up = await pool.query('UPDATE universities SET logo_url=$1 WHERE id=$2 RETURNING *', [logo_url, uni.id]);
+            uni = up.rows[0];
+        }
+
+        res.status(201).json(uni);
     } catch (error: any) {
         if (error.code === '23505') {
             return res.status(409).json({ message: 'University already exists' });
@@ -99,6 +112,41 @@ export const searchUniversities = async (req: Request, res: Response) => {
                 totalPages: Math.ceil(total / limit),
             }
         });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const updateUniversity = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { name, address } = req.body;
+    let { logo_url } = req.body;
+
+    try {
+        if (req.file) {
+            const ext = req.file.mimetype.split('/')[1] || 'png';
+            const s3Url = await uploadToS3(req.file.buffer, req.file.mimetype, `universities/${id}_logo.${ext}`);
+            logo_url = `${s3Url}?v=${Date.now()}`;
+        }
+
+        const updates: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name); }
+        if (address !== undefined) { updates.push(`address = $${idx++}`); params.push(address); }
+        if (logo_url !== undefined) { updates.push(`logo_url = $${idx++}`); params.push(logo_url); }
+
+        if (updates.length > 0) {
+            params.push(id);
+            const result = await pool.query(
+                `UPDATE universities SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`, params
+            );
+            if (result.rows.length === 0) return res.status(404).json({ message: 'University not found' });
+            return res.json(result.rows[0]);
+        }
+        res.status(400).json({ message: 'No fields to update' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
