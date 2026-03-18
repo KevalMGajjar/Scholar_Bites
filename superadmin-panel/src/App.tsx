@@ -30,7 +30,7 @@ function ProtectedLayout() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/superadmin">
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />

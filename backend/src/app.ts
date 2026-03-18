@@ -66,4 +66,31 @@ app.use((req, res, next) => {
     }
 });
 
+// ─── Serve Super Admin Panel (built static files) ───
+const superAdminDist = path.resolve(__dirname, '../../superadmin-panel/dist');
+const superAdminIndex = path.join(superAdminDist, 'index.html');
+
+app.use((req, res, next) => {
+    // Only handle /superadmin routes. Ignore /api/superadmin which is the REST API namespace.
+    if (!req.path.startsWith('/superadmin') || req.path.startsWith('/api/superadmin')) {
+        return next();
+    }
+
+    if (!fs.existsSync(superAdminIndex)) {
+        res.status(503).send('Super Admin panel not built. Run: cd superadmin-panel && npm run build');
+        return;
+    }
+
+    let filePath = req.path.replace('/superadmin', '');
+    if (filePath === '') filePath = '/';
+    
+    const fullPath = path.join(superAdminDist, filePath);
+
+    if (filePath !== '/' && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        res.sendFile(fullPath);
+    } else {
+        res.sendFile(superAdminIndex);
+    }
+});
+
 export default app;
