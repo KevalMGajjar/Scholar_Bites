@@ -178,10 +178,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             ),
                           ],
                         ),
-                        child: const Center(
-                          child: Text(
-                            '\u{1F494}',
-                            style: TextStyle(fontSize: 48),
+                        child: Center(
+                          child: Icon(
+                            Icons.heart_broken_rounded,
+                            size: 48,
+                            color: const Color(0xFF8B1C28).withValues(alpha: 0.5),
                           ),
                         ),
                       )
@@ -229,9 +230,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ),
                       child: Row(
                         children: [
-                          const Text(
-                            '\u{2764}\u{FE0F}',
-                            style: TextStyle(fontSize: 18),
+                          const Icon(
+                            Icons.favorite_rounded,
+                            color: Color(0xFFE74C3C),
+                            size: 20,
                           ),
                           const SizedBox(width: 10),
                           Text(
@@ -301,13 +303,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final size = MediaQuery.of(context).size;
     final random = Random(42); // Fixed seed for consistent positions
 
-    final heartEmojis = ['\u{2764}\u{FE0F}', '\u{1F497}', '\u{1F496}', '\u{1F495}', '\u{1F49B}', '\u{1F49C}'];
+    final heartColors = [
+      const Color(0xFFE74C3C),
+      const Color(0xFFE91E63),
+      const Color(0xFF9B59B6),
+      const Color(0xFFF06292),
+      const Color(0xFFBA68C8),
+      const Color(0xFF8B1C28),
+    ];
 
     return List.generate(12, (i) {
       final left = random.nextDouble() * size.width;
       final top = random.nextDouble() * size.height;
       final fontSize = random.nextDouble() * 14 + 10;
-      final emoji = heartEmojis[i % heartEmojis.length];
+      final color = heartColors[i % heartColors.length];
       final durationMs = (random.nextDouble() * 4000 + 3000).toInt();
       final delayMs = (random.nextDouble() * 2000).toInt();
 
@@ -316,12 +325,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         top: top,
         child: Opacity(
           opacity: random.nextDouble() * 0.08 + 0.04,
-          child: Text(
-            emoji,
-            style: TextStyle(
-              fontSize: fontSize,
-              decoration: TextDecoration.none,
-            ),
+          child: Icon(
+            Icons.favorite_rounded,
+            color: color,
+            size: fontSize,
           ),
         )
             .animate(onPlay: (c) => c.repeat(reverse: true))

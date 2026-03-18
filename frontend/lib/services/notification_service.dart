@@ -115,7 +115,7 @@ class NotificationService {
 
     await _localNotifs.zonedSchedule(
       id: 999, // Fixed ID for cart reminder
-      title: 'your cart misses you 😭',
+      title: 'Your cart misses you!',
       body: '$itemName and the squad have been waiting — they might sell out ngl',
       scheduledDate: scheduledTime,
       notificationDetails: const NotificationDetails(

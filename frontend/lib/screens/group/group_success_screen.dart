@@ -95,7 +95,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
               const SizedBox(height: 30),
 
               // Success header
-              const Text('🎉', style: TextStyle(fontSize: 56))
+              const Icon(Icons.celebration_rounded, size: 56, color: _maroon)
                   .animate().scaleXY(begin: 0, end: 1, curve: Curves.elasticOut, duration: 800.ms),
 
               const SizedBox(height: 12),
@@ -259,7 +259,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
                   ),
                   child: Column(
                     children: [
-                      const Text('🏃', style: TextStyle(fontSize: 40)),
+                      const Icon(Icons.directions_run_rounded, size: 40, color: _maroon),
                       const SizedBox(height: 8),
                       Text(
                         '$_selectedMember will pick up!',
@@ -268,7 +268,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Time to go grab those goodies! 🎉',
+                        'Time to go grab those goodies!',
                         style: GoogleFonts.poppins(fontSize: 14, color: _darkText.withValues(alpha: 0.5)),
                       ),
                     ],
@@ -293,7 +293,7 @@ class _GroupSuccessScreenState extends State<GroupSuccessScreen> {
                         Icon(_isSpinning ? Icons.hourglass_empty_rounded : Icons.casino_rounded, color: Colors.white, size: 22),
                         const SizedBox(width: 10),
                         Text(
-                          _isSpinning ? 'Spinning...' : '🎰 Spin the Wheel!',
+                          _isSpinning ? 'Spinning...' : 'Spin the Wheel!',
                           style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
                         ),
                       ],

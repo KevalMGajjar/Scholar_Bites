@@ -168,7 +168,7 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: const Color(0xFFFDF0F0),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Payment Successful! 🎉', textAlign: TextAlign.center),
+          title: const Text('Payment Successful!', textAlign: TextAlign.center),
           content: const Text('You paid successfully. Please wait for your order to be prepared.', textAlign: TextAlign.center),
           actions: [
             Center(
@@ -230,7 +230,7 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
                 const SizedBox(height: 40),
 
                 // Animated hourglass
-                const Text('⏳', style: TextStyle(fontSize: 56))
+                const Icon(Icons.hourglass_empty_rounded, size: 56, color: _maroon)
                     .animate(onPlay: (c) => c.repeat(reverse: true))
                     .rotate(begin: -0.05, end: 0.05, duration: 1.seconds),
 
@@ -329,7 +329,7 @@ class _GroupWaitingScreenState extends State<GroupWaitingScreen> {
                                       if (isCreator)
                                         const Padding(
                                           padding: EdgeInsets.only(left: 6),
-                                          child: Text('👑', style: TextStyle(fontSize: 14)),
+                                          child: Icon(Icons.workspace_premium_rounded, size: 16, color: Colors.amber),
                                         ),
                                     ],
                                   ),

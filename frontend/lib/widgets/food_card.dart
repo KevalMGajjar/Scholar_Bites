@@ -185,7 +185,8 @@ class _FoodCardState extends State<FoodCard> {
                         ),
                       if (_showHeart)
                         HeartOverlay(
-                          emoji: '\u{2764}\u{FE0F}',
+                          iconData: Icons.favorite_rounded,
+                          color: const Color(0xFFED4956),
                           onComplete: () {
                             if (mounted) setState(() => _showHeart = false);
                           },

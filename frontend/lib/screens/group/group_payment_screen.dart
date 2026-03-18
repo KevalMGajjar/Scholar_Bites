@@ -353,7 +353,7 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
                 const SizedBox(height: 16),
 
                 // Header
-                Text('💳', style: const TextStyle(fontSize: 64))
+                const Icon(Icons.payment_rounded, size: 64, color: _maroon)
                     .animate().scaleXY(begin: 0, end: 1, curve: Curves.elasticOut, duration: 800.ms),
 
                 const SizedBox(height: 20),
@@ -377,9 +377,20 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
                     color: _maroon.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    _splitMode == 'equal' ? '📊 Split Equally' : '🧾 Pay Own Share',
-                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _maroon),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _splitMode == 'equal' ? Icons.bar_chart_rounded : Icons.receipt_long_rounded,
+                        size: 14,
+                        color: _maroon,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _splitMode == 'equal' ? 'Split Equally' : 'Pay Own Share',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _maroon),
+                      ),
+                    ],
                   ),
                 ).animate().fadeIn(delay: 350.ms),
 
@@ -408,7 +419,7 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Text('🍽️', style: TextStyle(fontSize: 16)),
+                                const Icon(Icons.restaurant_menu_rounded, size: 16, color: _maroon),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -434,7 +445,7 @@ class _GroupPaymentScreenState extends State<GroupPaymentScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('🎉', style: TextStyle(fontSize: 48)),
+                          const Icon(Icons.celebration_rounded, size: 48, color: _maroon),
                           const SizedBox(height: 12),
                           Text('Nothing to pay!', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _darkText)),
                           Text("You didn't add any items", style: GoogleFonts.poppins(fontSize: 14, color: _darkText.withValues(alpha: 0.5))),

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 class HeartOverlay extends StatefulWidget {
-  final String emoji;
+  final IconData iconData;
+  final Color color;
   final VoidCallback onComplete;
 
   const HeartOverlay({
     super.key,
-    required this.emoji,
+    required this.iconData,
+    required this.color,
     required this.onComplete,
   });
 
@@ -69,19 +71,17 @@ class _HeartOverlayState extends State<HeartOverlay>
                 opacity: t < 0.6 ? 1.0 : 1.0 - ((t - 0.6) / 0.2),
                 child: Transform.scale(
                   scale: _springScale(t * 1.25),
-                  child: Text(
-                    widget.emoji,
-                    style: const TextStyle(
-                      fontSize: 50,
-                      decoration: TextDecoration.none,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black26,
-                          blurRadius: 20,
-                          offset: Offset(0, 5),
-                        )
-                      ]
-                    ),
+                  child: Icon(
+                    widget.iconData,
+                    size: 50,
+                    color: widget.color,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black26,
+                        blurRadius: 20,
+                        offset: Offset(0, 5),
+                      )
+                    ],
                   ),
                 ),
               ),
@@ -106,12 +106,10 @@ class _HeartOverlayState extends State<HeartOverlay>
                     scale: scale,
                     child: Transform.rotate(
                       angle: p.angle + (pt * pi),
-                      child: Text(
-                        widget.emoji,
-                        style: TextStyle(
-                          fontSize: p.size,
-                          decoration: TextDecoration.none,
-                        ),
+                      child: Icon(
+                        widget.iconData,
+                        size: p.size,
+                        color: widget.color.withValues(alpha: 0.8),
                       ),
                     ),
                   ),

@@ -312,7 +312,7 @@ class _UniversitySelectionScreenState extends State<UniversitySelectionScreen> {
             const SizedBox(height: 12),
             _buildCampusCard(
               _nearestUniversity!,
-              subtitle: "📍 Closest to you",
+              subtitle: "Closest to you",
               isSelected: _selectedUniversity?.id == _nearestUniversity!.id,
               onTap: () => _selectUniversity(_nearestUniversity!),
             ),

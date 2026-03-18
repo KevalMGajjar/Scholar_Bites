@@ -49,8 +49,11 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
   List<Map<String, dynamic>> _items = [];
   final List<_FlyingItem> _flyingItems = [];
 
-  // Character colors/emojis for each member
-  static const _characterEmojis = ['🧑‍🍳', '🦸', '🧙', '🥷', '🧑‍🚀', '🦹', '🧝', '🧞'];
+  // Character colors/icons for each member
+  static const _characterIcons = [
+    Icons.face_rounded, Icons.face_2_rounded, Icons.face_3_rounded, Icons.face_4_rounded,
+    Icons.face_5_rounded, Icons.face_6_rounded, Icons.emoji_emotions_rounded, Icons.sentiment_satisfied_rounded
+  ];
   static const _characterColors = [
     Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFF9800),
     Color(0xFF9C27B0), Color(0xFFE91E63), Color(0xFF00BCD4),
@@ -498,7 +501,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     final isLeft = index % 2 == 0;
     final yOffset = 20.0 + (index ~/ 2) * (constraints.maxHeight * 0.22);
     final isCreator = member['user_id'] == _creatorId;
-    final emoji = _characterEmojis[index % _characterEmojis.length];
+    final iconData = _characterIcons[index % _characterIcons.length];
     final color = _characterColors[index % _characterColors.length];
 
     return Positioned(
@@ -509,7 +512,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
         children: [
           // Crown for leader
           if (isCreator)
-            const Text('👑', style: TextStyle(fontSize: 20))
+            const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 24)
                 .animate(onPlay: (c) => c.repeat(reverse: true))
                 .moveY(begin: 0, end: -4, duration: 800.ms),
 
@@ -529,7 +532,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
                 BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4)),
               ],
             ),
-            child: Center(child: Text(emoji, style: const TextStyle(fontSize: 32))),
+            child: Center(child: Icon(iconData, size: 32, color: color)),
           ).animate()
             .fadeIn(delay: Duration(milliseconds: 200 * index), duration: 500.ms)
             .scaleXY(begin: 0, end: 1, curve: Curves.elasticOut, duration: 800.ms),
@@ -573,9 +576,16 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
           border: Border.all(color: _maroon.withValues(alpha: 0.1)),
         ),
         child: Center(
-          child: Text(
-            '🍽️ Add items to start the pile!',
-            style: GoogleFonts.poppins(color: _darkText.withValues(alpha: 0.35), fontWeight: FontWeight.w600),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.restaurant_rounded, size: 18, color: _darkText.withValues(alpha: 0.35)),
+              const SizedBox(width: 8),
+              Text(
+                'Add items to start the pile!',
+                style: GoogleFonts.poppins(color: _darkText.withValues(alpha: 0.35), fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
         ),
       );
@@ -597,7 +607,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
         children: [
           Row(
             children: [
-              const Text('🍔', style: TextStyle(fontSize: 16)),
+              const Icon(Icons.lunch_dining_rounded, size: 18, color: _maroon),
               const SizedBox(width: 6),
               Text(
                 'Food Pile',
@@ -714,7 +724,7 @@ class _GroupLobbyScreenState extends State<GroupLobbyScreen> with TickerProvider
     final imageUrl = item['item_image']?.toString() ?? '';
     final firstLetter = item['item_name']?.toString().isNotEmpty == true
         ? item['item_name'].toString().substring(0, 1).toUpperCase()
-        : '🍽';
+        : '?';
 
     return Container(
       width: size,

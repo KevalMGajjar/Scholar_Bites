@@ -91,7 +91,8 @@ class _FavoriteButtonState extends State<FavoriteButton>
             top: position.dy - 30,
             left: position.dx + (size.width - 40) / 2,
             child: HeartOverlay(
-              emoji: isLike ? '❤️' : '💔',
+              iconData: isLike ? Icons.favorite_rounded : Icons.heart_broken_rounded,
+              color: isLike ? const Color(0xFFED4956) : Colors.grey[600]!,
               onComplete: () {
                 if (overlayEntry.mounted) {
                   overlayEntry.remove();

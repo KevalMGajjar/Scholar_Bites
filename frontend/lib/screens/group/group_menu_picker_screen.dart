@@ -158,7 +158,7 @@ class _GroupMenuPickerScreenState extends State<GroupMenuPickerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   children: [
-                    const Text('🔥', style: TextStyle(fontSize: 18)),
+                    const Icon(Icons.local_fire_department_rounded, size: 18, color: Colors.orange),
                     const SizedBox(width: 6),
                     Text(
                       'Trending Items',
@@ -179,7 +179,7 @@ class _GroupMenuPickerScreenState extends State<GroupMenuPickerScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('🍽️', style: TextStyle(fontSize: 48)),
+                              const Icon(Icons.restaurant_menu_rounded, size: 48, color: _maroon),
                               const SizedBox(height: 8),
                               Text('No items found', style: GoogleFonts.poppins(color: _darkText.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
                             ],

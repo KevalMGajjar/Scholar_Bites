@@ -281,7 +281,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         icon = Icons.store_rounded;
         break;
       default:
-        title = 'all caught up! 🎉';
+        title = 'all caught up!';
         subtitle = 'no notifications rn\nwe\'ll hit you up when something drops';
         icon = Icons.notifications_none_rounded;
     }

@@ -261,7 +261,7 @@ class _GroupEntryScreenState extends State<GroupEntryScreen> with SingleTickerPr
             ),
             child: Column(
               children: [
-                const Text('👥', style: TextStyle(fontSize: 64)),
+                const Icon(Icons.groups_rounded, size: 64, color: Color(0xFF8B1C28)),
                 const SizedBox(height: 16),
                 Text(
                   'Start a Group Order',
