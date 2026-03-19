@@ -259,10 +259,20 @@ export const requestPasswordOtp = async (req: Request, res: Response) => {
         const otp = generateOtp();
         const expiresAt = Date.now() + OTP_EXPIRY_MS;
 
+        // Store OTP first, but set cooldown ONLY after successful send
         otpStore.set(user.id, { otp, expiresAt });
-        cooldownStore.set(user.id, Date.now());
 
-        await sendOtpEmail(email, otp);
+        try {
+            await sendOtpEmail(email, otp);
+        } catch (emailError) {
+            // Email failed — clean up OTP so user can retry immediately
+            otpStore.delete(user.id);
+            console.error('SMTP send failed:', emailError);
+            return res.status(500).json({ message: 'Failed to send OTP email. Please check SMTP configuration on the server.' });
+        }
+
+        // Only set cooldown AFTER successful email delivery
+        cooldownStore.set(user.id, Date.now());
 
         // Mask email for privacy: j***n@example.com
         const [local, domain] = email.split('@');
@@ -273,7 +283,7 @@ export const requestPasswordOtp = async (req: Request, res: Response) => {
         res.json({ message: 'OTP sent successfully', email: masked });
     } catch (error) {
         console.error('Request OTP error:', error);
-        res.status(500).json({ message: 'Failed to send OTP. Check SMTP configuration.' });
+        res.status(500).json({ message: 'Failed to send OTP. Please try again.' });
     }
 };
 
