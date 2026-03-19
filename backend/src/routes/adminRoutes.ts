@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
-import { staffLogin, registerStaff } from '../controllers/authController';
+import { staffLogin, registerStaff, requestPasswordOtp, verifyOtpAndChangePassword, getStaffByUniversity, deleteStaff } from '../controllers/authController';
 import { getAllOrders, getOrderDetails, refundOrder, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
 import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant } from '../controllers/restaurantController';
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
@@ -39,7 +39,13 @@ router.delete('/menu/:id', authorizeRole(['admin', 'super_admin']), deleteMenuIt
 // ─── Statistics (Admin only) ───
 router.get('/statistics', authorizeRole(['admin', 'super_admin']), getStatistics);
 
-// ─── Staff Management (Super Admin only) ───
-router.post('/staff', authorizeRole(['super_admin']), registerStaff);
+// ─── Staff Management (Admin + Super Admin) ───
+router.get('/staff/:university_id', authorizeRole(['admin', 'super_admin']), getStaffByUniversity);
+router.post('/staff', authorizeRole(['admin', 'super_admin']), registerStaff);
+router.delete('/staff/:id', authorizeRole(['admin', 'super_admin']), deleteStaff);
+
+// ─── Password Change via OTP (Self-service for any authenticated staff) ───
+router.post('/password/request-otp', requestPasswordOtp);
+router.post('/password/verify-and-change', verifyOtpAndChangePassword);
 
 export default router;

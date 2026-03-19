@@ -217,3 +217,153 @@ export const logout = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// OTP-Based Password Change (Industry-grade two-step flow)
+// ═══════════════════════════════════════════════════════════════
+
+import { sendOtpEmail } from '../services/emailService';
+
+// In-memory OTP store: staffId → { otp, expiresAt }
+// In production at scale, use Redis. For a single-server deployment this is ideal.
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
+
+const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_COOLDOWN_MS = 60 * 1000;     // 1-minute cooldown between requests
+const cooldownStore = new Map<string, number>();
+
+function generateOtp(): string {
+    return crypto.randomInt(100000, 999999).toString();
+}
+
+// Step 1: Request OTP → sends a 6-digit code to the staff member's email
+export const requestPasswordOtp = async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    try {
+        // Rate limit: 1 OTP per minute
+        const lastSent = cooldownStore.get(user.id);
+        if (lastSent && Date.now() - lastSent < OTP_COOLDOWN_MS) {
+            const waitSecs = Math.ceil((OTP_COOLDOWN_MS - (Date.now() - lastSent)) / 1000);
+            return res.status(429).json({ message: `Please wait ${waitSecs}s before requesting another OTP` });
+        }
+
+        // Fetch email
+        const result = await pool.query('SELECT email FROM staff WHERE id = $1', [user.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Staff not found' });
+        }
+
+        const email = result.rows[0].email;
+        const otp = generateOtp();
+        const expiresAt = Date.now() + OTP_EXPIRY_MS;
+
+        otpStore.set(user.id, { otp, expiresAt });
+        cooldownStore.set(user.id, Date.now());
+
+        await sendOtpEmail(email, otp);
+
+        // Mask email for privacy: j***n@example.com
+        const [local, domain] = email.split('@');
+        const masked = local.length > 2
+            ? `${local[0]}${'•'.repeat(local.length - 2)}${local[local.length - 1]}@${domain}`
+            : `${local[0]}•@${domain}`;
+
+        res.json({ message: 'OTP sent successfully', email: masked });
+    } catch (error) {
+        console.error('Request OTP error:', error);
+        res.status(500).json({ message: 'Failed to send OTP. Check SMTP configuration.' });
+    }
+};
+
+// Step 2: Verify OTP + current password → set new password
+export const verifyOtpAndChangePassword = async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { otp, current_password, new_password } = req.body;
+
+    if (!otp || !current_password || !new_password) {
+        return res.status(400).json({ message: 'OTP, current password, and new password are all required' });
+    }
+
+    if (new_password.length < 8) {
+        return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    try {
+        // Validate OTP
+        const stored = otpStore.get(user.id);
+        if (!stored) {
+            return res.status(400).json({ message: 'No OTP requested. Please request one first.' });
+        }
+        if (Date.now() > stored.expiresAt) {
+            otpStore.delete(user.id);
+            return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+        }
+        if (stored.otp !== otp) {
+            return res.status(400).json({ message: 'Invalid OTP. Please check and try again.' });
+        }
+
+        // OTP is valid — consume it (single-use)
+        otpStore.delete(user.id);
+
+        // Validate current password
+        const result = await pool.query('SELECT password_hash FROM staff WHERE id = $1', [user.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Staff not found' });
+        }
+
+        const isValid = await bcrypt.compare(current_password, result.rows[0].password_hash);
+        if (!isValid) {
+            return res.status(401).json({ message: 'Current password is incorrect' });
+        }
+
+        // Set new password
+        const newHash = await bcrypt.hash(new_password, 10);
+        await pool.query('UPDATE staff SET password_hash = $1 WHERE id = $2', [newHash, user.id]);
+
+        res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+        console.error('Verify OTP + change password error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Get Staff by University ───
+export const getStaffByUniversity = async (req: Request, res: Response) => {
+    const { university_id } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT id, name, email, role, created_at FROM staff WHERE university_id = $1 ORDER BY created_at DESC`,
+            [university_id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Delete Staff ───
+export const deleteStaff = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    // Prevent self-deletion
+    if (user.id === id) {
+        return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+
+    try {
+        const result = await pool.query('DELETE FROM staff WHERE id = $1 RETURNING id', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Staff not found' });
+        }
+        res.json({ message: 'Staff member removed' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
