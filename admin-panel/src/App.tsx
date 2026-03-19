@@ -24,9 +24,12 @@ function ProtectedLayout() {
 
   return (
     <SocketProvider>
-      <div className="flex min-h-screen bg-slate-900">
+      <div className="flex min-h-screen bg-slate-950 text-slate-200 selection:bg-indigo-500/30 overflow-hidden relative">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
+
         <Sidebar />
-        <main className="flex-1 ml-64 min-h-screen">
+        <main className="flex-1 ml-64 min-h-screen relative z-10 overflow-y-auto w-full">
           <Outlet />
         </main>
       </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -14,11 +15,11 @@ interface Order {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-amber-500/15 text-amber-400',
-  preparing: 'bg-blue-500/15 text-blue-400',
-  ready: 'bg-emerald-500/15 text-emerald-400',
-  completed: 'bg-slate-500/15 text-slate-400',
-  cancelled: 'bg-red-500/15 text-red-400',
+  pending: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  preparing: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20',
+  ready: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+  completed: 'bg-slate-500/10 text-slate-400 border border-slate-500/20',
+  cancelled: 'bg-red-500/10 text-red-400 border border-red-500/20',
 };
 
 export default function OrderHistory() {
@@ -76,13 +77,13 @@ export default function OrderHistory() {
             <button
               key={s}
               onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all shadow-sm ${
                 statusFilter === s
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  ? 'bg-indigo-500 text-white shadow-indigo-500/20'
+                  : 'bg-slate-900/50 border border-slate-700/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200 backdrop-blur-sm'
               }`}
             >
-              {s || 'All'}
+              {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All Orders'}
             </button>
           ))}
         </div>
@@ -94,49 +95,62 @@ export default function OrderHistory() {
         </div>
       ) : (
         <>
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+          <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-xl">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-700/50">
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Order ID</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Customer</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Restaurant</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Items</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Total</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Status</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Date</th>
-                  <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Actions</th>
+                <tr className="border-b border-slate-700/50 bg-slate-800/20">
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Order ID</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Customer</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Restaurant</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Items</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Total</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Status</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Date</th>
+                  <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-700/30">
                 {orders.map((order) => (
-                  <tr key={order.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition">
-                    <td className="px-4 py-3 text-white text-sm font-mono">
-                      #{order.id.slice(-6).toUpperCase()}
+                  <tr key={order.id} className="hover:bg-slate-800/40 transition-colors group">
+                    <td className="px-6 py-4">
+                      <span className="text-indigo-400 font-mono text-xs font-bold bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20">
+                        #{order.id.slice(-6).toUpperCase()}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="text-white text-sm">{order.user_name}</p>
-                      <p className="text-slate-500 text-xs">{order.user_phone}</p>
+                    <td className="px-6 py-4">
+                      <p className="text-slate-200 text-sm font-semibold">{order.user_name}</p>
+                      <p className="text-slate-500 text-[10px] font-medium tracking-wide">{order.user_phone}</p>
                     </td>
-                    <td className="px-4 py-3 text-slate-300 text-sm">{order.restaurant_name}</td>
-                    <td className="px-4 py-3 text-slate-300 text-xs max-w-[200px]">
-                      {order.items?.filter(i => i.item_name).map((i) => `${i.quantity}x ${i.item_name}`).join(', ')}
+                    <td className="px-6 py-4">
+                      <span className="text-slate-300 text-sm font-medium">{order.restaurant_name}</span>
                     </td>
-                    <td className="px-4 py-3 text-white text-sm font-semibold">
-                      ₹{parseFloat(order.total_amount).toFixed(0)}
+                    <td className="px-6 py-4 text-slate-400 text-xs max-w-[200px] leading-relaxed">
+                      {order.items?.filter(i => i.item_name).map((i) => (
+                        <span key={i.item_name} className="block mb-0.5">
+                          <span className="text-indigo-400 font-bold">{i.quantity}x</span> {i.item_name}
+                        </span>
+                      ))}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium capitalize ${STATUS_COLORS[order.status] || ''}`}>
+                    <td className="px-6 py-4">
+                      <span className="text-white text-sm font-bold tracking-tight">
+                        ₹{parseFloat(order.total_amount).toFixed(0)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[order.status] || ''}`}>
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-400 text-xs">{formatDate(order.created_at)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4 text-slate-400 text-xs font-medium">
+                      {formatDate(order.created_at)}
+                    </td>
+                    <td className="px-6 py-4">
                       {order.status !== 'cancelled' && order.status !== 'completed' && (
                         <button
                           onClick={() => refundOrder(order.id)}
-                          className="px-2 py-1 rounded-md bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100"
                         >
+                          <RotateCcw size={12} />
                           Refund
                         </button>
                       )}
@@ -153,19 +167,21 @@ export default function OrderHistory() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-sm disabled:opacity-30 hover:bg-slate-700 transition"
+                className="flex items-center gap-1 px-4 py-2 rounded-xl bg-slate-900/50 border border-slate-700/50 text-slate-300 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800 hover:text-white transition-all backdrop-blur-sm shadow-sm"
               >
+                <ChevronLeft size={16} />
                 Previous
               </button>
-              <span className="text-slate-400 text-sm">
+              <span className="text-slate-400 text-sm font-medium px-2">
                 Page {page} of {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-sm disabled:opacity-30 hover:bg-slate-700 transition"
+                className="flex items-center gap-1 px-4 py-2 rounded-xl bg-slate-900/50 border border-slate-700/50 text-slate-300 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800 hover:text-white transition-all backdrop-blur-sm shadow-sm"
               >
                 Next
+                <ChevronRight size={16} />
               </button>
             </div>
           )}

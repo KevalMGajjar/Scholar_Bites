@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import QrScannerModal from '../components/QrScannerModal';
+import { Bell, ChefHat, CheckCircle2, Search, QrCode, RefreshCcw, X, Clock } from 'lucide-react';
 
 interface OrderItem {
   id: string;
@@ -25,9 +26,9 @@ interface Order {
 }
 
 const STATUS_COLUMNS = [
-  { key: 'pending', label: 'New Orders', color: 'amber', icon: '🔔' },
-  { key: 'preparing', label: 'Preparing', color: 'blue', icon: '👨‍🍳' },
-  { key: 'ready', label: 'Ready', color: 'emerald', icon: '✅' },
+  { key: 'pending', label: 'New Orders', color: 'amber', icon: <Bell size={18} /> },
+  { key: 'preparing', label: 'Preparing', color: 'indigo', icon: <ChefHat size={18} /> },
+  { key: 'ready', label: 'Ready', color: 'emerald', icon: <CheckCircle2 size={18} /> },
 ];
 
 const STATUS_FLOW: Record<string, string> = {
@@ -134,7 +135,7 @@ export default function LiveOrders() {
         </div>
         <div className="flex items-center gap-3">
           {/* Token Search */}
-          <div className="relative">
+          <div className="relative group">
             <input
               type="text"
               placeholder="Search token (e.g. A7F3)"
@@ -155,31 +156,25 @@ export default function LiveOrders() {
                   }
                 }
               }}
-              className="w-48 px-3 py-2 pl-9 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition"
+              className="w-56 px-4 py-2 pl-10 rounded-xl bg-slate-900/50 border border-slate-700/50 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all backdrop-blur-sm"
             />
-            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
             {searchError && (
-              <span className="absolute -bottom-5 left-0 text-red-400 text-xs">{searchError}</span>
+              <span className="absolute -bottom-5 left-0 text-red-400 text-xs font-medium">{searchError}</span>
             )}
           </div>
           <button
             onClick={() => setShowScanner(true)}
-            className="px-4 py-2 rounded-lg bg-amber-500/15 text-amber-400 text-sm hover:bg-amber-500/25 transition flex items-center gap-2 font-semibold"
+            className="px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm hover:bg-indigo-500/20 hover:border-indigo-500/30 transition-all flex items-center gap-2 font-semibold shadow-lg shadow-indigo-500/5"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-            </svg>
+            <QrCode size={16} />
             Scan QR
           </button>
           <button
             onClick={fetchOrders}
-            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm hover:bg-slate-700 transition flex items-center gap-2"
+            className="px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700 hover:text-white transition-all flex items-center gap-2 shadow-sm"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <RefreshCcw size={16} />
             Refresh
           </button>
         </div>
@@ -191,15 +186,15 @@ export default function LiveOrders() {
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center">
-                  <span className="text-amber-400 font-black text-lg">#{scannedOrder.order_token}</span>
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center">
+                  <span className="text-indigo-400 font-black text-lg">#{scannedOrder.order_token}</span>
                 </div>
                 <div>
-                  <p className="text-white font-bold">Order Found</p>
-                  <p className="text-slate-400 text-xs">{scannedOrder.restaurant_name}</p>
+                  <p className="text-white font-bold text-lg">Order Found</p>
+                  <p className="text-slate-400 text-sm">{scannedOrder.restaurant_name}</p>
                 </div>
               </div>
-              <button onClick={() => setScannedOrder(null)} className="text-slate-500 hover:text-white">✕</button>
+              <button onClick={() => setScannedOrder(null)} className="text-slate-500 hover:text-white transition-colors bg-slate-800/50 p-2 rounded-full"><X size={20} /></button>
             </div>
 
             <div className="bg-slate-800/50 rounded-xl p-4 mb-4">
@@ -272,12 +267,14 @@ export default function LiveOrders() {
           return (
             <div key={col.key} className="flex flex-col min-h-0">
               {/* Column Header */}
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">{col.icon}</span>
-                <h2 className="text-white font-semibold">{col.label}</h2>
-                <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-bold bg-${col.color}-500/15 text-${col.color}-400`}>
+              <div className="flex items-center gap-2.5 mb-5 px-1">
+                <div className={`w-8 h-8 rounded-lg bg-${col.color}-500/10 border border-${col.color}-500/20 flex items-center justify-center text-${col.color}-400 shadow-lg shadow-${col.color}-500/5`}>
+                  {col.icon}
+                </div>
+                <h2 className="text-slate-200 font-semibold">{col.label}</h2>
+                <div className={`ml-auto px-2.5 py-0.5 rounded-md text-xs font-bold bg-${col.color}-500/15 text-${col.color}-400 border border-${col.color}-500/20`}>
                   {colOrders.length}
-                </span>
+                </div>
               </div>
 
               {/* Orders List */}
@@ -290,50 +287,55 @@ export default function LiveOrders() {
                   colOrders.map((order) => (
                     <div
                       key={order.id}
-                      className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur-sm hover:border-slate-600/50 transition-all"
+                      className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-md hover:border-slate-600/80 hover:bg-slate-800/80 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-0.5 group"
                     >
                       {/* Order Header */}
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start justify-between mb-4">
                         <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-white font-semibold text-sm">
-                              #{order.id.slice(-6).toUpperCase()}
-                            </p>
+                          <div className="flex items-center gap-2.5 mb-1">
                             {order.order_token && (
-                              <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 text-xs font-bold tracking-wider">
+                              <span className="px-2.5 py-1 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 text-xs font-bold tracking-widest shadow-sm">
                                 {order.order_token}
                               </span>
                             )}
+                            <p className="text-slate-300 font-mono text-xs opacity-70">
+                              #{order.id.slice(-6).toUpperCase()}
+                            </p>
                           </div>
-                          <p className="text-slate-400 text-xs mt-0.5">{order.restaurant_name}</p>
+                          <p className="text-slate-400 text-xs font-medium">{order.restaurant_name}</p>
                         </div>
-                        <span className="text-amber-400 text-xs font-medium">
-                          {getTimeAgo(order.created_at)}
-                        </span>
+                        <div className="flex items-center gap-1.5 text-slate-500 bg-slate-950/50 px-2.5 py-1 rounded-full border border-white/5">
+                          <Clock size={12} className="text-amber-400/80" />
+                          <span className="text-xs font-medium">
+                            {getTimeAgo(order.created_at)}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Customer */}
-                      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-700/50">
-                        <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center">
-                          <span className="text-white text-xs font-medium">
+                      <div className="flex items-center gap-3 mb-4 p-3 bg-slate-950/40 rounded-xl border border-white/5">
+                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shadow-inner">
+                          <span className="text-slate-300 text-xs font-bold">
                             {order.user_name?.charAt(0)?.toUpperCase() || '?'}
                           </span>
                         </div>
                         <div>
-                          <p className="text-white text-xs font-medium">{order.user_name}</p>
-                          <p className="text-slate-500 text-xs">{order.user_phone}</p>
+                          <p className="text-slate-200 text-xs font-semibold">{order.user_name}</p>
+                          <p className="text-slate-500 text-[10px] font-medium tracking-wide">{order.user_phone}</p>
                         </div>
                       </div>
 
                       {/* Items */}
-                      <div className="space-y-2 mb-3">
+                      <div className="space-y-2.5 mb-4">
                         {order.items?.filter(i => i.item_name).map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-amber-400 text-xs font-bold">{item.quantity}x</span>
-                              <span className="text-slate-300 text-xs">{item.item_name}</span>
+                          <div key={idx} className="flex items-center justify-between group-hover:bg-white/[0.02] p-1.5 -mx-1.5 rounded-lg transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="text-indigo-400 text-xs font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md min-w-[28px] text-center">
+                                {item.quantity}x
+                              </span>
+                              <span className="text-slate-300 text-sm font-medium">{item.item_name}</span>
                             </div>
-                            <span className="text-slate-500 text-xs">
+                            <span className="text-slate-500 text-sm font-semibold">
                               ₹{(parseFloat(item.price_at_time) * item.quantity).toFixed(0)}
                             </span>
                           </div>
@@ -341,9 +343,9 @@ export default function LiveOrders() {
                       </div>
 
                       {/* Total */}
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-700/50 mb-3">
-                        <span className="text-slate-400 text-xs font-medium">Total</span>
-                        <span className="text-white font-bold text-sm">
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-700/50 mb-4">
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total</span>
+                        <span className="text-white font-bold text-lg tracking-tight">
                           ₹{parseFloat(order.total_amount).toFixed(0)}
                         </span>
                       </div>
@@ -352,12 +354,12 @@ export default function LiveOrders() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => updateStatus(order.id, order.status)}
-                          className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all shadow-lg ${
                             col.key === 'pending'
-                              ? 'bg-amber-500 text-white hover:bg-amber-600'
+                              ? 'bg-amber-500 text-slate-900 hover:bg-amber-400 shadow-amber-500/20'
                               : col.key === 'preparing'
-                              ? 'bg-blue-500 text-white hover:bg-blue-600'
-                              : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                              ? 'bg-indigo-500 text-white hover:bg-indigo-400 shadow-indigo-500/20'
+                              : 'bg-emerald-500 text-slate-900 hover:bg-emerald-400 shadow-emerald-500/20'
                           }`}
                         >
                           {ACTION_LABELS[order.status]}
@@ -365,7 +367,7 @@ export default function LiveOrders() {
                         {col.key === 'pending' && (
                           <button
                             onClick={() => cancelOrder(order.id)}
-                            className="px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition"
+                            className="px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold tracking-wide hover:bg-red-500/20 hover:text-red-300 transition-all"
                           >
                             Cancel
                           </button>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { Edit2, Image as ImageIcon, Plus, Power, PowerOff } from 'lucide-react';
 
 interface MenuItem {
   id: string;
@@ -119,55 +120,58 @@ export default function MenuItems() {
           <select
             value={selectedRestaurant}
             onChange={(e) => setSelectedRestaurant(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="px-4 py-2 rounded-xl bg-slate-900/50 border border-slate-700/50 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-sm transition-all shadow-sm"
           >
             {restaurants.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
+              <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>
             ))}
           </select>
-          <button onClick={openCreate} className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition">
-            + Add Item
+          <button onClick={openCreate} className="px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-bold hover:bg-indigo-500/20 hover:border-indigo-500/30 transition-all shadow-sm flex items-center gap-2">
+            <Plus size={16} />
+            Add Item
           </button>
         </div>
       </div>
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-lg">
-            <h2 className="text-xl font-bold text-white mb-4">{editing ? 'Edit Item' : 'New Item'}</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700/50 rounded-3xl p-8 w-full max-w-lg shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-6 tracking-tight">{editing ? 'Edit Menu Item' : 'New Menu Item'}</h2>
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Name *</label>
+                <label className="block text-sm font-semibold text-slate-400 mb-1.5">Item Name <span className="text-red-400">*</span></label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required
-                  className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder-slate-600 shadow-inner" placeholder="e.g. Classic Burger" />
               </div>
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-semibold text-slate-400 mb-1.5">Description</label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder-slate-600 shadow-inner resize-none" placeholder="Brief details about the item..." />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-5">
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Price (₹) *</label>
+                  <label className="block text-sm font-semibold text-slate-400 mb-1.5">Price (₹) <span className="text-red-400">*</span></label>
                   <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-inner" />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Category *</label>
+                  <label className="block text-sm font-semibold text-slate-400 mb-1.5">Category <span className="text-red-400">*</span></label>
                   <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-inner placeholder-slate-600" placeholder="e.g. Snacks" />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Stock</label>
+                  <label className="block text-sm font-semibold text-slate-400 mb-1.5">Inventory</label>
                   <input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-inner" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Image</label>
+                <label className="block text-sm font-semibold text-slate-400 mb-2">Primary Image</label>
                 {imagePreview && (
-                  <img src={imagePreview} alt="preview" className="w-20 h-20 rounded-lg object-cover mb-2" />
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden border border-slate-700/50 shadow-lg mb-3">
+                    <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                  </div>
                 )}
                 <input type="file" accept="image/*" onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -175,24 +179,24 @@ export default function MenuItems() {
                   setImageFile(file);
                   setImagePreview(URL.createObjectURL(file));
                 }}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-amber-500 file:text-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-amber-600" />
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-slate-300 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-indigo-500/10 file:text-indigo-400 hover:file:bg-indigo-500/20 file:transition-all shadow-inner cursor-pointer" />
               </div>
               {!editing && (
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Restaurant *</label>
+                  <label className="block text-sm font-semibold text-slate-400 mb-1.5">Link to Restaurant <span className="text-red-400">*</span></label>
                   <select value={form.restaurant_id} onChange={(e) => setForm({ ...form, restaurant_id: e.target.value })} required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50">
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-inner">
                     {restaurants.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
+                      <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>
                     ))}
                   </select>
                 </div>
               )}
-              <div className="flex gap-3 pt-2">
-                <button type="submit" className="flex-1 py-2.5 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 transition">
-                  {editing ? 'Save Changes' : 'Add Item'}
+              <div className="flex gap-3 pt-4 border-t border-slate-800/50 mt-6">
+                <button type="submit" className="flex-1 py-3 rounded-xl bg-indigo-500 shadow-lg shadow-indigo-500/20 text-white font-bold tracking-wide hover:bg-indigo-400 transition-all">
+                  {editing ? 'Save Changes' : 'Create Item'}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition">
+                <button type="button" onClick={() => setShowForm(false)} className="px-6 py-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 font-bold tracking-wide hover:bg-slate-700 transition-all">
                   Cancel
                 </button>
               </div>
@@ -207,54 +211,56 @@ export default function MenuItems() {
           <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full" />
         </div>
       ) : (
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-xl">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700/50">
-                <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Item</th>
-                <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Category</th>
-                <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Price</th>
-                <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Stock</th>
-                <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Status</th>
-                <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Actions</th>
+              <tr className="border-b border-slate-700/50 bg-slate-800/20">
+                <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Item Details</th>
+                <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Category</th>
+                <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Price</th>
+                <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Stock</th>
+                <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Status</th>
+                <th className="text-left text-xs text-slate-400 font-semibold px-6 py-4 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-700/30">
               {items.map((item) => (
-                <tr key={item.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
+                <tr key={item.id} className="hover:bg-slate-800/40 transition-colors group">
+                  <td className="px-6 py-4 w-[40%]">
+                    <div className="flex items-center gap-4">
                       {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                        <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-md">
+                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                        </div>
                       ) : (
-                        <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center">
-                          <span className="text-lg">🍽️</span>
+                        <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700/50 flex items-center justify-center shadow-inner">
+                          <ImageIcon size={20} className="text-slate-500" />
                         </div>
                       )}
                       <div>
-                        <p className="text-white text-sm font-medium">{item.name}</p>
-                        <p className="text-slate-500 text-xs truncate max-w-[200px]">{item.description}</p>
+                        <p className="text-slate-200 text-sm font-bold tracking-tight">{item.name}</p>
+                        <p className="text-slate-500 text-xs truncate max-w-[250px] font-medium leading-relaxed">{item.description}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-md bg-slate-700 text-slate-300 text-xs">{item.category}</span>
+                  <td className="px-6 py-4">
+                    <span className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700/50 text-slate-300 text-[10px] font-bold tracking-widest uppercase shadow-sm">{item.category}</span>
                   </td>
-                  <td className="px-4 py-3 text-white text-sm font-medium">₹{parseFloat(item.price).toFixed(0)}</td>
-                  <td className="px-4 py-3 text-slate-300 text-sm">{item.stock_quantity}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${item.is_available ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-                      {item.is_available ? 'Available' : 'Unavailable'}
+                  <td className="px-6 py-4 text-slate-200 text-sm font-bold tracking-tight">₹{parseFloat(item.price).toFixed(0)}</td>
+                  <td className="px-6 py-4 text-slate-400 font-mono text-sm font-medium">{item.stock_quantity}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide uppercase border ${item.is_available ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                      {item.is_available ? 'Available' : 'Disabled'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button onClick={() => openEdit(item)} className="px-2 py-1 rounded-md bg-slate-700 text-slate-300 text-xs hover:bg-slate-600 transition">
-                        Edit
+                  <td className="px-6 py-4 h-full align-middle">
+                    <div className="flex gap-2 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEdit(item)} className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 transition-all flex items-center justify-center">
+                        <Edit2 size={16} />
                       </button>
                       <button onClick={() => toggleAvailability(item)}
-                        className={`px-2 py-1 rounded-md text-xs transition ${item.is_available ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
-                        {item.is_available ? 'Disable' : 'Enable'}
+                        className={`p-2 rounded-xl transition-all border flex items-center justify-center ${item.is_available ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20'}`}>
+                        {item.is_available ? <PowerOff size={16} /> : <Power size={16} />}
                       </button>
                     </div>
                   </td>
