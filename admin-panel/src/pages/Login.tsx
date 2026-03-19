@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Lock, Mail } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
@@ -26,68 +27,87 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo / Brand */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-slate-900 border border-white/5 mb-6 shadow-2xl p-3 overflow-hidden">
-            <img src="/admin/logo.png" alt="Scholar Bites" className="w-full h-full object-contain filter drop-shadow-lg" />
+    <div className="min-h-screen bg-[#060810] flex relative overflow-hidden">
+      {/* ── Ambient layers ── */}
+      <div className="absolute inset-0">
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-indigo-500/[0.06] rounded-full blur-[180px]" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-500/[0.04] rounded-full blur-[150px]" />
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 opacity-[0.015]" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+      </div>
+
+      {/* ── Center Content ── */}
+      <div className="relative z-10 flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-[400px] space-y-10 animate-fade-up">
+          {/* Brand */}
+          <div className="space-y-6">
+            <div className="w-20 h-20 rounded-3xl bg-[#0c0f18] border border-white/[0.06] flex items-center justify-center shadow-2xl p-3.5 overflow-hidden animate-pulse-glow">
+              <img src="/admin/logo.png" alt="Scholar Bites" className="w-full h-full object-contain" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-[32px] font-extrabold text-white tracking-[-0.03em] leading-[1.1]">
+                Welcome back
+              </h1>
+              <p className="text-slate-500 text-[15px] leading-relaxed">
+                Sign in to your Scholar Bites admin account
+              </p>
+            </div>
           </div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Scholar Bites</h1>
-          <p className="text-slate-400 mt-2 font-bold tracking-widest uppercase text-xs">Admin Portal</p>
+
+          {/* Form */}
+          <div className="space-y-6">
+            {error && (
+              <div className="p-4 rounded-2xl bg-red-500/[0.06] border border-red-500/15 text-red-400 text-sm font-medium animate-scale-in">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Mail size={11} className="text-slate-500" /> Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-5 py-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[15px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all duration-300"
+                  placeholder="admin@scholarbites.in"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Lock size={11} className="text-slate-500" /> Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-5 py-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[15px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all duration-300"
+                  placeholder="••••••••"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[15px] font-bold tracking-[-0.01em] hover:shadow-xl hover:shadow-indigo-500/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed btn-press mt-2"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2.5">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in…
+                  </span>
+                ) : 'Sign In'}
+              </button>
+            </form>
+          </div>
+
+          <p className="text-slate-600 text-[12px] text-center">
+            Contact your administrator if you don't have access.
+          </p>
         </div>
-
-        {/* Login Card */}
-        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-xl font-semibold text-white mb-6">Sign in to your account</h2>
-
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition"
-                placeholder="admin@scholarbites.in"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition"
-                placeholder="••••••••"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg shadow-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                  Signing in...
-                </span>
-              ) : 'Sign In'}
-            </button>
-          </form>
-        </div>
-
-        <p className="text-center text-slate-500 text-xs mt-6">
-          Contact your administrator if you don't have access.
-        </p>
       </div>
     </div>
   );
