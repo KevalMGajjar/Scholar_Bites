@@ -225,11 +225,11 @@ export default function Settings() {
 
         {staffLoading ? (
           <div className="flex justify-center py-8"><div className="animate-spin w-5 h-5 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full" /></div>
-        ) : staffList.length === 0 ? (
+        ) : staffList.filter(s => s.role === 'staff').length === 0 ? (
           <div className="text-center py-12"><Users size={36} className="text-slate-800 mx-auto mb-3" /><p className="text-slate-600 text-[13px]">No staff accounts found.</p></div>
         ) : (
           <div className="space-y-2 stagger-children">
-            {staffList.map((s) => (
+            {staffList.filter(s => s.role === 'staff').map((s) => (
               <div key={s.id} className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.04] hover:border-white/[0.08] transition-all duration-200 group">
                 <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
                   <span className="text-white font-bold text-[12px]">{s.name.charAt(0).toUpperCase()}</span>

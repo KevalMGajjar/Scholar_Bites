@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Edit2, Image as ImageIcon, Plus, Power, PowerOff, X } from 'lucide-react';
+import { Edit2, Image as ImageIcon, Plus, Power, PowerOff, X, Flame, Weight } from 'lucide-react';
 
 interface MenuItem {
   id: string;
@@ -13,6 +13,7 @@ interface MenuItem {
   is_available: boolean;
   stock_quantity: number;
   restaurant_id: string;
+  nutritional_info?: { calories?: number; weight_grams?: number };
 }
 
 interface Restaurant {
@@ -28,7 +29,7 @@ export default function MenuItems() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState('');
-  const [form, setForm] = useState({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '' });
+  const [form, setForm] = useState({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '', calories: '', weight_grams: '' });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -55,13 +56,13 @@ export default function MenuItems() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant });
+    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant, calories: '', weight_grams: '' });
     setImageFile(null); setImagePreview(null); setShowForm(true);
   };
 
   const openEdit = (item: MenuItem) => {
     setEditing(item);
-    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id });
+    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight_grams: item.nutritional_info?.weight_grams?.toString() || '' });
     setImageFile(null); setImagePreview(item.image_url || null); setShowForm(true);
   };
 
@@ -73,6 +74,10 @@ export default function MenuItems() {
       fd.append('price', form.price); fd.append('category', form.category);
       if (!editing) fd.append('restaurant_id', form.restaurant_id);
       fd.append('stock_quantity', form.stock_quantity.toString());
+      const nutritionalInfo: Record<string, number> = {};
+      if (form.calories) nutritionalInfo.calories = parseFloat(form.calories);
+      if (form.weight_grams) nutritionalInfo.weight_grams = parseFloat(form.weight_grams);
+      if (Object.keys(nutritionalInfo).length > 0) fd.append('nutritional_info', JSON.stringify(nutritionalInfo));
       if (imageFile) fd.append('image', imageFile);
       if (editing) { await api.patch(`/admin/menu/${editing.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); }
       else { await api.post('/admin/menu', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); }
@@ -132,6 +137,12 @@ export default function MenuItems() {
                 <div><label className={labelClass}>Inventory</label>
                   <input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: parseInt(e.target.value) })} className={inputClass} /></div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={labelClass}><Flame size={10} className="text-orange-400" /> Calories (kcal)</label>
+                  <input type="number" step="1" value={form.calories} onChange={(e) => setForm({ ...form, calories: e.target.value })} className={inputClass} placeholder="e.g. 350" /></div>
+                <div><label className={labelClass}><Weight size={10} className="text-blue-400" /> Serving Weight (g)</label>
+                  <input type="number" step="1" value={form.weight_grams} onChange={(e) => setForm({ ...form, weight_grams: e.target.value })} className={inputClass} placeholder="e.g. 250" /></div>
+              </div>
               <div><label className={labelClass}>Primary Image</label>
                 {imagePreview && <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/[0.06] mb-3"><img src={imagePreview} alt="" className="w-full h-full object-cover" /></div>}
                 <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); } }}
@@ -178,6 +189,13 @@ export default function MenuItems() {
                       <div>
                         <p className="text-white text-[13px] font-bold tracking-[-0.01em]">{item.name}</p>
                         <p className="text-slate-600 text-[12px] truncate max-w-[250px]">{item.description}</p>
+                        {item.nutritional_info && (item.nutritional_info.calories || item.nutritional_info.weight_grams) && (
+                          <div className="flex items-center gap-2 mt-1">
+                            {item.nutritional_info.calories && <span className="text-orange-400/70 text-[10px] font-semibold">{item.nutritional_info.calories} kcal</span>}
+                            {item.nutritional_info.calories && item.nutritional_info.weight_grams && <span className="text-slate-700">·</span>}
+                            {item.nutritional_info.weight_grams && <span className="text-blue-400/70 text-[10px] font-semibold">{item.nutritional_info.weight_grams}g</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
