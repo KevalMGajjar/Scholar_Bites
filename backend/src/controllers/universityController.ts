@@ -120,6 +120,13 @@ export const searchUniversities = async (req: Request, res: Response) => {
 
 export const updateUniversity = async (req: Request, res: Response) => {
     const { id } = req.params;
+
+    // Provide role-based authorization: admins can only update their own university
+    // Assuming req.user is populated by authenticateJWT
+    if ((req as any).user?.role === 'admin' && (req as any).user?.university_id !== id) {
+        return res.status(403).json({ message: 'Forbidden: You can only edit your own university' });
+    }
+
     const { name, address } = req.body;
     let { logo_url } = req.body;
 

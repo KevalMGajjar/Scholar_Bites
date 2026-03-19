@@ -9,6 +9,6 @@ router.get('/', getUniversities);
 router.get('/search', searchUniversities);
 router.get('/:id', getUniversityById);
 router.post('/', authenticateJWT, authorizeRole(['super_admin']), upload.single('logo'), createUniversity);
-router.patch('/:id', authenticateJWT, authorizeRole(['super_admin']), upload.single('logo'), updateUniversity);
+router.patch('/:id', authenticateJWT, authorizeRole(['admin', 'super_admin']), upload.single('logo'), updateUniversity);
 
 export default router;

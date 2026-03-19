@@ -29,14 +29,12 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 mb-4 shadow-lg shadow-amber-500/25">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-slate-900 border border-white/5 mb-6 shadow-2xl p-3 overflow-hidden">
+            <img src="/admin/logo.png" alt="Scholar Bites" className="w-full h-full object-contain filter drop-shadow-lg" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Scholar Bites</h1>
-          <p className="text-slate-400 mt-1">Admin Panel</p>
+          <h1 className="text-3xl font-black text-white tracking-tight">Scholar Bites</h1>
+          <p className="text-slate-400 mt-2 font-bold tracking-widest uppercase text-xs">Admin Portal</p>
         </div>
 
         {/* Login Card */}

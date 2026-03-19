@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+@theme {
+  /* Base Maroon - Replaces Indigo */
+  --color-indigo-400: #b12739;
+  --color-indigo-500: #8B1C28;
+  --color-indigo-600: #5c0f18;
+  
+  /* Dark Maroon - Replaces Purple for deep gradients */
+  --color-purple-400: #a11f2d;
+  --color-purple-500: #7a1520;
+  --color-purple-600: #4a0910;
+
+  /* Vibrant Maroon - Replaces Amber for accents and buttons */
+  --color-amber-400: #d13b50;
+  --color-amber-500: #A82231;
+  --color-amber-600: #8B1C28;
+
+  /* Soft Maroon - Replaces Orange for gradient transitions */
+  --color-orange-400: #c13245;
+  --color-orange-500: #991f2c;
+  --color-orange-600: #6b151c;
+}

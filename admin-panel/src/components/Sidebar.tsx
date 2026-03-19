@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { Radio, ClipboardList, Store, UtensilsCrossed, BarChart3, LogOut } from 'lucide-react';
+import { Radio, ClipboardList, Store, UtensilsCrossed, BarChart3, Settings, LogOut } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Live Orders', icon: <Radio size={20} />, roles: ['staff', 'admin', 'super_admin'] },
@@ -9,6 +9,7 @@ const navItems = [
   { path: '/restaurants', label: 'Restaurants', icon: <Store size={20} />, roles: ['admin', 'super_admin'] },
   { path: '/menu', label: 'Menu Items', icon: <UtensilsCrossed size={20} />, roles: ['admin', 'super_admin'] },
   { path: '/statistics', label: 'Statistics', icon: <BarChart3 size={20} />, roles: ['admin', 'super_admin'] },
+  { path: '/settings', label: 'Settings', icon: <Settings size={20} />, roles: ['admin', 'super_admin'] },
 ];
 
 export default function Sidebar() {
@@ -20,8 +21,8 @@ export default function Sidebar() {
       {/* Brand */}
       <div className="p-6 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-            <span className="text-white font-bold text-lg">S</span>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 p-1.5 overflow-hidden">
+            <img src="/admin/logo.png" alt="Logo" className="w-full h-full object-contain filter drop-shadow-md" />
           </div>
           <div>
             <h1 className="text-white font-bold text-lg leading-tight">Scholar Bites</h1>
