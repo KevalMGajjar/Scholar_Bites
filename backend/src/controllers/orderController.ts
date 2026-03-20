@@ -4,6 +4,7 @@ import razorpay from '../config/razorpay';
 import crypto from 'crypto';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { emitNewOrder, emitStatusUpdate } from '../services/socketService';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ─── Generate a unique 4-char alphanumeric order token ───
 const generateOrderToken = async (client: any): Promise<string> => {
@@ -86,6 +87,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             });
             orderId = razorpayOrder.id;
             console.log(`✅ Razorpay order created: ${orderId}, amount: ${amountInPaise} paise`);
+        } else if (process.env.NODE_ENV === 'production') {
+            throw new Error('Payment gateway is not configured');
         }
 
         // 3. Create Database Order
@@ -150,8 +153,8 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                 .update(body.toString())
                 .digest('hex');
             isValid = (expectedSignature === razorpay_signature);
-        } else {
-            // Mock environment check
+        } else if (process.env.NODE_ENV !== 'production') {
+            // Mock environment check — ONLY allowed in development
             isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
         }
 
@@ -316,11 +319,17 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         await client.query('BEGIN');
 
         // First lock the order to prevent race conditions
-        const orderRes = await client.query('SELECT status, user_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
+        const orderRes = await client.query('SELECT status, user_id, university_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
         const currentOrder = orderRes.rows[0];
         
         if (!currentOrder) {
             throw new Error('Order not found');
+        }
+
+        // ─── IDOR: verify order belongs to staff's university ───
+        if (req.user?.university_id && currentOrder.university_id !== req.user.university_id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ message: 'Forbidden' });
         }
 
         // If the order is being cancelled, restore the stock
@@ -347,6 +356,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
         // Emit to user
         emitStatusUpdate(currentOrder.user_id, order);
+        auditLog({ userId: req.user?.id, action: 'ORDER_STATUS_CHANGED', resource: `order:${id}`, details: `status=${status}`, ip: getRequestIp(req) });
 
         res.json(order);
     } catch (error: any) {

@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import { securityHeaders, generalLimiter, authLimiter, otpLimiter } from './middlewares/security';
+import { globalErrorHandler } from './middlewares/errorHandler';
 import authRoutes from './routes/authRoutes';
 import universityRoutes from './routes/universityRoutes';
 import menuRoutes from './routes/menuRoutes';
@@ -15,8 +17,42 @@ import superAdminRoutes from './routes/superAdminRoutes';
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// ─── Security Headers ───
+app.use(securityHeaders);
+
+// ─── CORS (whitelist, not wide-open) ───
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, server-to-server, curl)
+        if (!origin) return callback(null, true);
+        // In development, allow all origins
+        if (process.env.NODE_ENV !== 'production') return callback(null, true);
+        // In production, check whitelist
+        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+}));
+
+// ─── Body Parsing with size limit ───
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ─── Global Rate Limiter ───
+app.use('/api/', generalLimiter);
+
+// ─── Stricter Rate Limiting on Auth Endpoints ───
+app.use('/api/auth/login-otp', authLimiter);
+app.use('/api/auth/register-otp', authLimiter);
+app.use('/api/admin/login', authLimiter);
+app.use('/api/admin/password/request-otp', otpLimiter);
 
 // Serve uploaded images
 app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
@@ -41,27 +77,22 @@ app.get('/api', (req, res) => {
 const adminDist = path.resolve(__dirname, '../../admin-panel/dist');
 const adminIndex = path.join(adminDist, 'index.html');
 
-// Use raw middleware — no Express route patterns, fully compatible with Express 5
 app.use((req, res, next) => {
-    // Only handle /admin routes
     if (!req.path.startsWith('/admin')) {
         return next();
     }
 
-    // Check if admin panel is built
     if (!fs.existsSync(adminIndex)) {
         res.status(503).send('Admin panel not built. Run: cd admin-panel && npm run build');
         return;
     }
 
-    // Try to serve static file (JS, CSS, images, etc.)
     const filePath = req.path.replace('/admin', '');
     const fullPath = path.join(adminDist, filePath);
 
     if (filePath && filePath !== '/' && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
         res.sendFile(fullPath);
     } else {
-        // SPA fallback — serve index.html for all other /admin routes
         res.sendFile(adminIndex);
     }
 });
@@ -71,7 +102,6 @@ const superAdminDist = path.resolve(__dirname, '../../superadmin-panel/dist');
 const superAdminIndex = path.join(superAdminDist, 'index.html');
 
 app.use((req, res, next) => {
-    // Only handle /superadmin routes. Ignore /api/superadmin which is the REST API namespace.
     if (!req.path.startsWith('/superadmin') || req.path.startsWith('/api/superadmin')) {
         return next();
     }
@@ -83,7 +113,7 @@ app.use((req, res, next) => {
 
     let filePath = req.path.replace('/superadmin', '');
     if (filePath === '') filePath = '/';
-    
+
     const fullPath = path.join(superAdminDist, filePath);
 
     if (filePath !== '/' && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
@@ -92,5 +122,8 @@ app.use((req, res, next) => {
         res.sendFile(superAdminIndex);
     }
 });
+
+// ─── Centralized Error Handler (must be last) ───
+app.use(globalErrorHandler);
 
 export default app;

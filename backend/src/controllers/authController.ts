@@ -3,6 +3,10 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import pool from '../config/db';
 import { generateToken } from '../utils/jwt';
+import { checkBruteForce, recordFailedLogin, clearFailedLogins } from '../middlewares/security';
+import { auditLog, getRequestIp } from '../services/auditLogger';
+
+const BCRYPT_ROUNDS = 12;
 
 /** Hash a JWT token to a short 64-char hex string for storage */
 function hashToken(token: string): string {
@@ -127,9 +131,17 @@ export const updateUniversity = async (req: Request, res: Response) => {
 // ─── Staff Login (Email + Password) for Admin Panel ───
 export const staffLogin = async (req: Request, res: Response) => {
     const { email, password } = req.body;
+    const ip = getRequestIp(req);
 
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // ─── Brute-force check ───
+    const lockSeconds = checkBruteForce(email.toLowerCase());
+    if (lockSeconds > 0) {
+        auditLog({ action: 'LOGIN_LOCKED', details: `Account locked, ${lockSeconds}s remaining`, resource: `email:${email}`, ip });
+        return res.status(423).json({ message: `Account temporarily locked. Try again in ${Math.ceil(lockSeconds / 60)} minutes.` });
     }
 
     try {
@@ -142,23 +154,28 @@ export const staffLogin = async (req: Request, res: Response) => {
         );
 
         const staff = result.rows[0];
+
+        // ─── Generic error to prevent user enumeration ───
         if (!staff) {
-            return res.status(404).json({ message: 'Staff member not found' });
+            recordFailedLogin(email.toLowerCase());
+            auditLog({ action: 'LOGIN_FAILED', details: 'Email not found', resource: `email:${email}`, ip });
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
         const isValidPassword = await bcrypt.compare(password, staff.password_hash);
         if (!isValidPassword) {
-            return res.status(401).json({ message: 'Invalid password' });
+            const locked = recordFailedLogin(email.toLowerCase());
+            auditLog({ userId: staff.id, action: 'LOGIN_FAILED', details: locked ? 'Wrong password → locked' : 'Wrong password', resource: `email:${email}`, ip });
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Industry-standard approach: allow re-login and invalidate old session.
-        // If the staff logs in again, we overwrite the old token. The old device
-        // will be kicked out via the DEVICE_CONFLICT check in authMiddleware.
+        // ─── Success: clear brute-force counter ───
+        clearFailedLogins(email.toLowerCase());
 
         const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
-
-        // Save token hash for single-device enforcement
         await saveActiveToken(staff.id, token, 'staff');
+
+        auditLog({ userId: staff.id, action: 'LOGIN_SUCCESS', resource: `email:${email}`, ip });
 
         res.json({
             token,
@@ -180,18 +197,31 @@ export const staffLogin = async (req: Request, res: Response) => {
 // ─── Register Staff (Admin-only) ───
 export const registerStaff = async (req: Request, res: Response) => {
     const { email, password, name, role, university_id } = req.body;
+    const caller = (req as any).user;
+    const ip = getRequestIp(req);
 
     if (!email || !password || !name || !role || !university_id) {
         return res.status(400).json({ message: 'All fields are required' });
     }
 
+    // ─── Role escalation prevention ───
+    if (role === 'super_admin') {
+        return res.status(403).json({ message: 'Cannot create super_admin accounts via this endpoint' });
+    }
+    // Admin can only create staff, not other admins (unless they're super_admin)
+    if (role === 'admin' && caller?.role !== 'super_admin') {
+        return res.status(403).json({ message: 'Only super admins can create admin accounts' });
+    }
+
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
         const result = await pool.query(
             `INSERT INTO staff (email, password_hash, name, role, university_id)
              VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, university_id`,
             [email, hashedPassword, name, role, university_id]
         );
+
+        auditLog({ userId: caller?.id, action: 'STAFF_CREATED', resource: `staff:${result.rows[0].id}`, details: `role=${role}`, ip });
         res.status(201).json(result.rows[0]);
     } catch (error: any) {
         if (error.code === '23505') {
@@ -331,8 +361,10 @@ export const verifyOtpAndChangePassword = async (req: Request, res: Response) =>
         }
 
         // Set new password
-        const newHash = await bcrypt.hash(new_password, 10);
+        const newHash = await bcrypt.hash(new_password, BCRYPT_ROUNDS);
         await pool.query('UPDATE staff SET password_hash = $1 WHERE id = $2', [newHash, user.id]);
+
+        auditLog({ userId: user.id, action: 'PASSWORD_CHANGE', ip: getRequestIp(req) });
 
         res.json({ message: 'Password changed successfully' });
     } catch (error) {
@@ -360,6 +392,7 @@ export const getStaffByUniversity = async (req: Request, res: Response) => {
 export const deleteStaff = async (req: Request, res: Response) => {
     const { id } = req.params;
     const user = (req as any).user;
+    const ip = getRequestIp(req);
 
     // Prevent self-deletion
     if (user.id === id) {
@@ -367,10 +400,17 @@ export const deleteStaff = async (req: Request, res: Response) => {
     }
 
     try {
-        const result = await pool.query('DELETE FROM staff WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0) {
+        // ─── IDOR: verify target staff belongs to same university ───
+        const staffCheck = await pool.query('SELECT id, university_id FROM staff WHERE id = $1', [id]);
+        if (staffCheck.rows.length === 0) {
             return res.status(404).json({ message: 'Staff not found' });
         }
+        if (staffCheck.rows[0].university_id !== user.university_id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        await pool.query('DELETE FROM staff WHERE id = $1', [id]);
+        auditLog({ userId: user.id, action: 'STAFF_DELETED', resource: `staff:${id}`, ip });
         res.json({ message: 'Staff member removed' });
     } catch (error) {
         console.error(error);

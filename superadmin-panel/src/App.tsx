@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import UniversityAnalysis from './pages/UniversityAnalysis';
+import AuditLogs from './pages/AuditLogs';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/universities" element={<Dashboard />} />
             <Route path="/universities/:id" element={<UniversityAnalysis />} />
+            <Route path="/audit-logs" element={<AuditLogs />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

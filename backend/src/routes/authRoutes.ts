@@ -6,7 +6,7 @@ const router = Router();
 
 router.post('/login-otp', loginOtp);
 router.post('/register-otp', registerOtp);
-router.post('/update-university', updateUniversity);
+router.post('/update-university', authenticateJWT, updateUniversity);
 router.post('/logout', authenticateJWT, logout);
 
 export default router;

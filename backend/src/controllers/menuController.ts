@@ -3,6 +3,7 @@ import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { triggerItemAvailable } from './notificationController';
 import { uploadToS3 } from './uploadController';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ─── Get Trending Items (most ordered) ───────────────
 export const getTrendingItems = async (req: Request, res: Response) => {
@@ -175,6 +176,16 @@ export const updateMenuItem = async (req: Request, res: Response) => {
     let { image_url } = req.body;
 
     try {
+        // ─── IDOR: verify menu item belongs to staff's university ───
+        const user = (req as any).user;
+        const ownerCheck = await pool.query(
+            `SELECT r.university_id FROM menu_items mi JOIN restaurants r ON mi.restaurant_id = r.id WHERE mi.id = $1`, [id]
+        );
+        if (ownerCheck.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
+        if (user?.university_id && ownerCheck.rows[0].university_id !== user.university_id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         if (req.file) {
             const ext = req.file.mimetype.split('/')[1] || 'jpg';
             const s3Url = await uploadToS3(req.file.buffer, req.file.mimetype, `food_items/${id}.${ext}`);
@@ -210,6 +221,7 @@ export const updateMenuItem = async (req: Request, res: Response) => {
             triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
         }
 
+        auditLog({ userId: user?.id, action: 'MENU_UPDATED', resource: `menu:${id}`, ip: getRequestIp(req) });
         res.json(updatedItem);
     } catch (error) {
         console.error(error);
@@ -220,11 +232,21 @@ export const updateMenuItem = async (req: Request, res: Response) => {
 // ─── Admin: Delete (soft) Menu Item ───
 export const deleteMenuItem = async (req: Request, res: Response) => {
     const { id } = req.params;
+    const user = (req as any).user;
     try {
+        // ─── IDOR: verify menu item belongs to staff's university ───
+        const ownerCheck = await pool.query(
+            `SELECT r.university_id FROM menu_items mi JOIN restaurants r ON mi.restaurant_id = r.id WHERE mi.id = $1`, [id]
+        );
+        if (ownerCheck.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
+        if (user?.university_id && ownerCheck.rows[0].university_id !== user.university_id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         const result = await pool.query(
             'UPDATE menu_items SET is_available = false WHERE id = $1 RETURNING *', [id]
         );
-        if (result.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
+        auditLog({ userId: user?.id, action: 'MENU_DELETED', resource: `menu:${id}`, ip: getRequestIp(req) });
         res.json({ message: 'Item deactivated', item: result.rows[0] });
     } catch (error) {
         console.error(error);

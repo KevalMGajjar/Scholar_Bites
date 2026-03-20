@@ -152,8 +152,24 @@ const createTablesQuery = `
   );
   CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
 
+  -- 10. Audit Logs Table (Security)
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    action VARCHAR(50) NOT NULL,
+    resource VARCHAR(255),
+    details TEXT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+
   -- Migrations for existing DBs
   ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS active_token TEXT;
+  ALTER TABLE staff ADD COLUMN IF NOT EXISTS active_token TEXT;
 `;
 
 const initDb = async () => {

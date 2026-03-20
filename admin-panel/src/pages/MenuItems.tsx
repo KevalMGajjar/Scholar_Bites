@@ -77,7 +77,7 @@ export default function MenuItems() {
       const nutritionalInfo: Record<string, number> = {};
       if (form.calories) nutritionalInfo.calories = parseFloat(form.calories);
       if (form.weight_grams) nutritionalInfo.weight_grams = parseFloat(form.weight_grams);
-      if (Object.keys(nutritionalInfo).length > 0) fd.append('nutritional_info', JSON.stringify(nutritionalInfo));
+      fd.append('nutritional_info', JSON.stringify(nutritionalInfo));
       if (imageFile) fd.append('image', imageFile);
       if (editing) { await api.patch(`/admin/menu/${editing.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); }
       else { await api.post('/admin/menu', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); }

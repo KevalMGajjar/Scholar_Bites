@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../config/db';
 import { triggerRestaurantOpen } from './notificationController';
 import { uploadToS3 } from './uploadController';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 export const getRestaurantsByUniversity = async (req: Request, res: Response) => {
     const { university_id } = req.params;
@@ -89,6 +90,14 @@ export const updateRestaurant = async (req: Request, res: Response) => {
     let { logo_url, cover_url } = req.body;
 
     try {
+        // ─── IDOR: verify restaurant belongs to admin's university ───
+        const user = (req as any).user;
+        const restCheck = await pool.query('SELECT university_id FROM restaurants WHERE id = $1', [id]);
+        if (restCheck.rows.length === 0) return res.status(404).json({ message: 'Restaurant not found' });
+        if (user?.university_id && restCheck.rows[0].university_id !== user.university_id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
         if (files?.logo && files.logo[0]) {
             const f = files.logo[0];
@@ -131,6 +140,7 @@ export const updateRestaurant = async (req: Request, res: Response) => {
             triggerRestaurantOpen(id as string).catch(() => {});
         }
 
+        auditLog({ userId: user?.id, action: 'RESTAURANT_UPDATED', resource: `restaurant:${id}`, ip: getRequestIp(req) });
         res.json(result.rows[0]);
     } catch (error) {
         console.error(error);
@@ -141,11 +151,19 @@ export const updateRestaurant = async (req: Request, res: Response) => {
 // ─── Delete (soft) Restaurant ───
 export const deleteRestaurant = async (req: Request, res: Response) => {
     const { id } = req.params;
+    const user = (req as any).user;
     try {
+        // ─── IDOR: verify restaurant belongs to admin's university ───
+        const restCheck = await pool.query('SELECT university_id FROM restaurants WHERE id = $1', [id]);
+        if (restCheck.rows.length === 0) return res.status(404).json({ message: 'Restaurant not found' });
+        if (user?.university_id && restCheck.rows[0].university_id !== user.university_id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         const result = await pool.query(
             'UPDATE restaurants SET is_open = false WHERE id = $1 RETURNING *', [id]
         );
-        if (result.rows.length === 0) return res.status(404).json({ message: 'Restaurant not found' });
+        auditLog({ userId: user?.id, action: 'RESTAURANT_DELETED', resource: `restaurant:${id}`, ip: getRequestIp(req) });
         res.json({ message: 'Restaurant deactivated', restaurant: result.rows[0] });
     } catch (error) {
         console.error(error);

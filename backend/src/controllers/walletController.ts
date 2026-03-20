@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import crypto from 'crypto';
 import razorpay from '../config/razorpay';
 import pool from '../config/db';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // 1. Get Wallet Balance and History
 export const getWalletData = async (req: AuthRequest, res: Response) => {
@@ -46,6 +47,12 @@ export const createTopUpOrder = async (req: AuthRequest, res: Response) => {
         if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
             return res.status(400).json({ message: 'Invalid amount' });
         }
+        if (parsedAmount < 10) {
+            return res.status(400).json({ message: 'Minimum top-up amount is ₹10' });
+        }
+        if (parsedAmount > 10000) {
+            return res.status(400).json({ message: 'Maximum top-up amount is ₹10,000' });
+        }
 
         const userResult = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
         if (userResult.rows.length === 0) {
@@ -66,6 +73,8 @@ export const createTopUpOrder = async (req: AuthRequest, res: Response) => {
             };
             const rzpOrder = await razorpay.orders.create(options);
             razorpayOrderId = rzpOrder.id;
+        } else if (process.env.NODE_ENV === 'production') {
+            return res.status(500).json({ message: 'Payment gateway is not configured' });
         }
 
         res.status(200).json({
@@ -101,7 +110,7 @@ export const verifyTopUp = async (req: AuthRequest, res: Response) => {
                 .update(body.toString())
                 .digest('hex');
             isValid = (expectedSignature === razorpay_signature);
-        } else {
+        } else if (process.env.NODE_ENV !== 'production') {
             isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
         }
 
@@ -140,6 +149,8 @@ export const verifyTopUp = async (req: AuthRequest, res: Response) => {
                 );
 
                 await client.query('COMMIT');
+
+                auditLog({ userId: userId, action: 'WALLET_TOPUP', resource: `amount:${parsedAmount}`, ip: getRequestIp(req) });
 
                 res.json({
                     status: 'success',
