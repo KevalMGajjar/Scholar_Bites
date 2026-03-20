@@ -100,7 +100,7 @@ export const addMenuItem = async (req: AuthRequest, res: Response) => {
         const result = await pool.query(
             `INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity || 0]
+            [restaurant_id, name, description, price, category, image_url, nutritional_info ? (typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info) : null, stock_quantity || 0]
         );
         
         let item = result.rows[0];
@@ -190,7 +190,7 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         if (price !== undefined) { updates.push(`price = $${idx++}`); params.push(price); }
         if (category !== undefined) { updates.push(`category = $${idx++}`); params.push(category); }
         if (image_url !== undefined) { updates.push(`image_url = $${idx++}`); params.push(image_url); }
-        if (nutritional_info !== undefined) { updates.push(`nutritional_info = $${idx++}`); params.push(nutritional_info); }
+        if (nutritional_info !== undefined) { updates.push(`nutritional_info = $${idx++}`); params.push(typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info); }
         if (stock_quantity !== undefined) { updates.push(`stock_quantity = $${idx++}`); params.push(stock_quantity); }
         if (is_available !== undefined) { updates.push(`is_available = $${idx++}`); params.push(is_available); }
 

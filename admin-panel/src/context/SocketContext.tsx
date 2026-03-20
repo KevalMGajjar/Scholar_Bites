@@ -20,7 +20,16 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user || !token) return;
 
-    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+    // In production, derive socket URL from the page origin (remove /admin path)
+    // In dev, use VITE_SOCKET_URL or localhost:3000
+    const getSocketUrl = () => {
+      if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL;
+      if (import.meta.env.DEV) return 'http://localhost:3000';
+      // Production: admin panel is served from the backend, use its origin
+      return window.location.origin.replace(/:\d+$/, ':3000');
+    };
+
+    const SOCKET_URL = getSocketUrl();
     const newSocket = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],

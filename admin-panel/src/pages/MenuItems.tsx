@@ -118,7 +118,7 @@ export default function MenuItems() {
       {/* ── Form Modal ── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in" onClick={() => setShowForm(false)}>
-          <div className="bg-[#0c0f18] border border-white/[0.06] rounded-3xl p-8 w-full max-w-lg shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#0c0f18] border border-white/[0.06] rounded-3xl p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-[22px] font-extrabold text-white tracking-[-0.02em]">{editing ? 'Edit Menu Item' : 'New Menu Item'}</h2>
               <button onClick={() => setShowForm(false)} className="p-2 rounded-xl hover:bg-white/5 text-slate-600 hover:text-white transition-all"><X size={18} /></button>
@@ -126,16 +126,16 @@ export default function MenuItems() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div><label className={labelClass}>Item Name <span className="text-red-400">*</span></label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className={inputClass} placeholder="e.g. Classic Burger" /></div>
-              <div><label className={labelClass}>Description</label>
-                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2}
+              <div><label className={labelClass}>Description <span className="text-red-400">*</span></label>
+                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} required
                   className={`${inputClass} resize-none`} placeholder="Brief details about the item…" /></div>
               <div className="grid grid-cols-3 gap-4">
                 <div><label className={labelClass}>Price (₹) <span className="text-red-400">*</span></label>
                   <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required className={inputClass} /></div>
                 <div><label className={labelClass}>Category <span className="text-red-400">*</span></label>
                   <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required className={inputClass} placeholder="Snacks" /></div>
-                <div><label className={labelClass}>Inventory</label>
-                  <input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: parseInt(e.target.value) })} className={inputClass} /></div>
+                <div><label className={labelClass}>Inventory <span className="text-red-400">*</span></label>
+                  <input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: parseInt(e.target.value) })} required className={inputClass} /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelClass}><Flame size={10} className="text-orange-400" /> Calories (kcal)</label>
