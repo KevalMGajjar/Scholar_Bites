@@ -10,6 +10,7 @@ export const securityHeaders = helmet({
     crossOriginOpenerPolicy: false, // Conflicts on non-HTTPS origins
     crossOriginResourcePolicy: false, // Allows loading S3 images cross-origin
     crossOriginEmbedderPolicy: false, // Allow loading images from S3
+    hsts: false, // MUST be false until HTTPS is configured — otherwise browsers force HTTPS
 });
 
 // ═══════════════════════════════════════════════════════
