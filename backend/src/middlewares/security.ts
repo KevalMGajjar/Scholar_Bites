@@ -6,19 +6,10 @@ import { Request, Response, NextFunction } from 'express';
 // Helmet — Secure HTTP Headers
 // ═══════════════════════════════════════════════════════
 export const securityHeaders = helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"], // needed for admin panel inline styles
-            imgSrc: ["'self'", 'data:', 'https://*.amazonaws.com'],
-            connectSrc: ["'self'"],
-            fontSrc: ["'self'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
-            objectSrc: ["'none'"],
-            upgradeInsecureRequests: [],
-        },
-    },
-    crossOriginEmbedderPolicy: false, // allow loading images from S3
+    contentSecurityPolicy: false, // Admin panels use inline styles + external CDN fonts
+    crossOriginOpenerPolicy: false, // Conflicts on non-HTTPS origins
+    crossOriginResourcePolicy: false, // Allows loading S3 images cross-origin
+    crossOriginEmbedderPolicy: false, // Allow loading images from S3
 });
 
 // ═══════════════════════════════════════════════════════

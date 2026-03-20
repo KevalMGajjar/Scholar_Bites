@@ -115,9 +115,8 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _navigateToNext() {
     final cachedUser = AuthService.getCachedUser();
-    final Widget destination = cachedUser != null
-        ? const HomeScreen()
-        : const WelcomeScreen();
+    final Widget destination =
+        cachedUser != null ? const HomeScreen() : const WelcomeScreen();
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
@@ -224,7 +223,8 @@ class _SplashScreenState extends State<SplashScreen>
                           border: Border.all(
                             color: const Color(
                               0xFF8B1C28,
-                            ).withValues(alpha: 0.3 * (1 - _pulseController.value)),
+                            ).withValues(
+                                alpha: 0.3 * (1 - _pulseController.value)),
                             width: 2,
                           ),
                         ),
@@ -245,7 +245,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Column(
                       children: [
                         Text(
-                          'Food Tech',
+                          'Scholar Bites',
                           style: GoogleFonts.poppins(
                             fontSize: 36,
                             fontWeight: FontWeight.w800,
@@ -292,4 +292,3 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-
