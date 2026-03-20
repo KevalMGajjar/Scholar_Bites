@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
-import { Package, IndianRupee, LineChart, Users, Flame, Trophy, Utensils, Clock, TrendingUp } from 'lucide-react';
+import { Package, IndianRupee, LineChart, Users, Trophy, Utensils, Clock, TrendingUp } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Filler, Legend,
 } from 'chart.js';
@@ -21,9 +21,6 @@ interface Stats {
   peak_hours: { hour: number; orders: number }[];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b', preparing: '#3b82f6', ready: '#10b981', completed: '#6b7280', cancelled: '#ef4444',
-};
 
 export default function Statistics() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -57,49 +54,6 @@ export default function Statistics() {
         <MetricCard icon={<IndianRupee size={20} />} label="Total Revenue" value={`₹${stats.total_revenue.toLocaleString()}`} accent="emerald" />
         <MetricCard icon={<LineChart size={20} />} label="Avg Order" value={`₹${stats.avg_order_value.toFixed(0)}`} accent="violet" />
         <MetricCard icon={<Users size={20} />} label="Customers" value={stats.total_customers.toLocaleString()} accent="amber" />
-      </div>
-
-      {/* ── Today + Status ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Today Card – spans 3 cols */}
-        <div className="lg:col-span-3 bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 relative overflow-hidden hover-lift animate-fade-up" style={{ animationDelay: '100ms' }}>
-          <div className="absolute -top-12 -right-12 text-white/[0.015]"><Flame size={200} /></div>
-          <div className="flex items-center gap-3 mb-6 relative z-10">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400"><Flame size={18} /></div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Today</span>
-          </div>
-          <div className="flex items-end gap-10 relative z-10">
-            <div>
-              <p className="text-[40px] font-extrabold text-white tracking-[-0.04em] leading-none">{stats.orders_today}</p>
-              <p className="text-slate-600 text-[12px] font-medium mt-1.5 uppercase tracking-widest">orders</p>
-            </div>
-            <div className="w-px h-12 bg-white/[0.06]" />
-            <div>
-              <p className="text-[40px] font-extrabold text-amber-400 tracking-[-0.04em] leading-none">₹{stats.revenue_today.toLocaleString()}</p>
-              <p className="text-slate-600 text-[12px] font-medium mt-1.5 uppercase tracking-widest">revenue</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Breakdown – spans 2 cols */}
-        <div className="lg:col-span-2 bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '200ms' }}>
-          <h3 className="text-[14px] font-bold text-white mb-5 tracking-[-0.01em]">Status Breakdown</h3>
-          <div className="space-y-3">
-            {Object.entries(stats.orders_by_status).map(([status, count]) => (
-              <div key={status} className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS[status] || '#666' }} />
-                <span className="text-slate-400 text-[13px] capitalize flex-1 font-medium">{status}</span>
-                <span className="text-white text-[13px] font-bold tabular-nums">{count}</span>
-                <div className="w-20 h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-1000 ease-out" style={{
-                    width: `${totalOrders > 0 ? (count / totalOrders) * 100 : 0}%`,
-                    backgroundColor: STATUS_COLORS[status] || '#666',
-                  }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* ── 7-Day Orders Trend + Peak Hours ── */}
