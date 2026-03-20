@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
-import { Package, IndianRupee, LineChart, Users, Flame, Trophy, Utensils } from 'lucide-react';
+import { Package, IndianRupee, LineChart, Users, Flame, Trophy, Utensils, Clock, TrendingUp } from 'lucide-react';
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Filler, Legend,
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Filler, Legend);
 
 interface Stats {
   orders_by_status: Record<string, number>;
@@ -17,6 +17,8 @@ interface Stats {
   orders_today: number;
   revenue_today: number;
   total_customers: number;
+  daily_orders: { label: string; date: string; orders: number; revenue: number }[];
+  peak_hours: { hour: number; orders: number }[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -96,6 +98,102 @@ export default function Statistics() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── 7-Day Orders Trend + Peak Hours ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* Orders Trend – spans 3 cols */}
+        <div className="lg:col-span-3 bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '250ms' }}>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400"><TrendingUp size={18} /></div>
+              <h3 className="text-[14px] font-bold text-white tracking-[-0.01em]">Orders This Week</h3>
+            </div>
+            <span className="text-indigo-400 text-[10px] font-bold bg-indigo-500/8 px-2.5 py-1 rounded-lg border border-indigo-500/15 uppercase tracking-widest">7 days</span>
+          </div>
+          <div className="h-52">
+            <Line
+              data={{
+                labels: stats.daily_orders.map(d => d.label),
+                datasets: [
+                  {
+                    label: 'Orders', data: stats.daily_orders.map(d => d.orders),
+                    borderColor: '#818cf8', backgroundColor: (ctx) => {
+                      const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 220);
+                      g.addColorStop(0, 'rgba(99,102,241,0.15)'); g.addColorStop(1, 'rgba(99,102,241,0)');
+                      return g;
+                    },
+                    borderWidth: 2.5, pointBackgroundColor: '#060810', pointBorderColor: '#818cf8',
+                    pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8, fill: true, tension: 0.4,
+                    yAxisID: 'y',
+                  },
+                  {
+                    label: 'Revenue (₹)', data: stats.daily_orders.map(d => d.revenue),
+                    borderColor: '#34d399', borderWidth: 1.5, borderDash: [5, 4],
+                    pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: '#060810', pointBorderColor: '#34d399',
+                    fill: false, tension: 0.4,
+                    yAxisID: 'y1',
+                  },
+                ],
+              }}
+              options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: 'circle', color: '#64748b', font: { size: 10, weight: 'bold' }, padding: 16 } },
+                  tooltip: { backgroundColor: 'rgba(6,8,16,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1', padding: 12, cornerRadius: 10, displayColors: true, boxWidth: 8, boxHeight: 8, usePointStyle: true },
+                },
+                scales: {
+                  x: { grid: { display: false }, border: { display: false }, ticks: { color: '#475569', font: { size: 11, weight: 500 } } },
+                  y: { position: 'left', grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false }, ticks: { color: '#818cf8', font: { size: 10, weight: 500 }, stepSize: 1 }, beginAtZero: true },
+                  y1: { position: 'right', grid: { display: false }, border: { display: false }, ticks: { color: '#34d399', font: { size: 10, weight: 500 }, callback: (v) => `₹${Number(v) >= 1000 ? (Number(v)/1000).toFixed(1) + 'k' : v}` }, beginAtZero: true },
+                },
+                interaction: { intersect: false, mode: 'index' },
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Peak Hours – spans 2 cols */}
+        <div className="lg:col-span-2 bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '350ms' }}>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-400"><Clock size={18} /></div>
+            <h3 className="text-[14px] font-bold text-white tracking-[-0.01em]">Peak Hours</h3>
+          </div>
+          <div className="h-52">
+            <Bar
+              data={{
+                labels: stats.peak_hours.filter((_, i) => i >= 7 && i <= 22).map(h => {
+                  const hr = h.hour % 12 || 12;
+                  return `${hr}${h.hour < 12 ? 'a' : 'p'}`;
+                }),
+                datasets: [{
+                  label: 'Orders',
+                  data: stats.peak_hours.filter((_, i) => i >= 7 && i <= 22).map(h => h.orders),
+                  backgroundColor: stats.peak_hours.filter((_, i) => i >= 7 && i <= 22).map(h => {
+                    const maxOrders = Math.max(...stats.peak_hours.map(p => p.orders), 1);
+                    const intensity = h.orders / maxOrders;
+                    return `rgba(139, 92, 246, ${0.15 + intensity * 0.55})`;
+                  }),
+                  borderColor: 'rgba(139, 92, 246, 0.3)',
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  borderSkipped: false,
+                }],
+              }}
+              options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { backgroundColor: 'rgba(6,8,16,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1', padding: 12, cornerRadius: 10, displayColors: false, callbacks: { title: (items) => { const idx = items[0].dataIndex + 7; const hr = idx % 12 || 12; return `${hr}:00 ${idx < 12 ? 'AM' : 'PM'}`; }, label: (ctx) => `${ctx.raw} orders` } },
+                },
+                scales: {
+                  x: { grid: { display: false }, border: { display: false }, ticks: { color: '#475569', font: { size: 9, weight: 500 } } },
+                  y: { grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false }, ticks: { color: '#475569', font: { size: 10, weight: 500 }, stepSize: 1 }, beginAtZero: true },
+                },
+              }}
+            />
           </div>
         </div>
       </div>

@@ -82,6 +82,44 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
             [uniId]
         );
 
+        // 8. Daily orders (last 7 days)
+        const dailyResult = await pool.query(
+            `SELECT TO_CHAR(d.day, 'Dy') as label,
+                    TO_CHAR(d.day, 'YYYY-MM-DD') as date,
+                    COALESCE(COUNT(o.id), 0)::int as orders,
+                    COALESCE(SUM(o.total_amount), 0)::numeric as revenue
+             FROM generate_series(
+                 CURRENT_DATE - INTERVAL '6 days',
+                 CURRENT_DATE,
+                 '1 day'::interval
+             ) AS d(day)
+             LEFT JOIN orders o ON DATE(o.created_at) = d.day
+                 AND o.university_id = $1
+                 AND o.status IN ('preparing', 'ready', 'completed')
+             GROUP BY d.day
+             ORDER BY d.day`,
+            [uniId]
+        );
+
+        // 9. Peak hours (last 30 days)
+        const peakHoursResult = await pool.query(
+            `SELECT EXTRACT(HOUR FROM created_at)::int as hour,
+                    COUNT(*)::int as orders
+             FROM orders
+             WHERE university_id = $1
+               AND status IN ('preparing', 'ready', 'completed')
+               AND created_at >= NOW() - INTERVAL '30 days'
+             GROUP BY hour
+             ORDER BY hour`,
+            [uniId]
+        );
+
+        // Build 24-hour array (fill gaps with 0)
+        const peakHours = Array.from({ length: 24 }, (_, i) => {
+            const found = peakHoursResult.rows.find((r: any) => r.hour === i);
+            return { hour: i, orders: found ? found.orders : 0 };
+        });
+
         res.json({
             orders_by_status: ordersByStatus,
             total_revenue: totalRevenue,
@@ -101,6 +139,13 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
             orders_today: todayResult.rows[0].orders_today,
             revenue_today: parseFloat(todayResult.rows[0].revenue_today),
             total_customers: customersResult.rows[0].total_customers,
+            daily_orders: dailyResult.rows.map((r: any) => ({
+                label: r.label,
+                date: r.date,
+                orders: r.orders,
+                revenue: parseFloat(r.revenue),
+            })),
+            peak_hours: peakHours,
         });
     } catch (error) {
         console.error('Error fetching statistics:', error);
