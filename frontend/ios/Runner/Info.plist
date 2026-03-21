@@ -54,5 +54,9 @@
 	<string>We need speech recognition to easily convert your voice into search queries.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>We need microphone access so you can speak your search queries.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access to scan QR codes and allow you to upload photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires photo library access to allow you to upload profile pictures and reviews.</string>
 </dict>
 </plist>
