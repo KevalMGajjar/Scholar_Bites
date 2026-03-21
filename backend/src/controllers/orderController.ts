@@ -506,8 +506,8 @@ export const requestRefund = async (req: AuthRequest, res: Response) => {
 
         const order = orderRes.rows[0];
 
-        if (order.status === 'cancelled') {
-            return res.status(400).json({ message: 'Order is already cancelled' });
+        if (order.status !== 'completed') {
+            return res.status(400).json({ message: 'Only completed orders can be refunded' });
         }
 
         // Check no pending request already exists for this order

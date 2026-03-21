@@ -156,7 +156,7 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-6 py-4 text-slate-600 text-[12px] font-medium whitespace-nowrap">{formatDate(order.created_at)}</td>
                     <td className="px-6 py-4">
-                      {order.status !== 'cancelled' && (
+                      {order.status === 'completed' && (
                         <button onClick={() => { setRefundModalOrder(order); setRefundReason(''); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[11px] font-bold hover:bg-red-500/15 transition-all opacity-0 group-hover:opacity-100 btn-press">
                           <RotateCcw size={11} /> Request Refund
