@@ -12,6 +12,7 @@ import 'models/user_model.dart';
 import 'screens/splash_screen.dart';
 import 'screens/order_qr_screen.dart';
 import 'services/notification_service.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,8 +21,10 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Initialize Firebase
-  await Firebase.initializeApp();
+  // Initialize Firebase (with explicit platform credentials for iOS bypass)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Initialize timezones for local notifications
   tz.initializeTimeZones();
