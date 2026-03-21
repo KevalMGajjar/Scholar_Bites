@@ -18,6 +18,8 @@ const createTablesQuery = `
     name VARCHAR(255) NOT NULL UNIQUE,
     logo_url TEXT,
     address TEXT,
+    support_phone VARCHAR(50),
+    support_email VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
 

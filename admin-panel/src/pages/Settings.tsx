@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Camera, Building2, MapPin, UserPlus, Shield, Trash2, Lock, Eye, EyeOff, Users, Mail, KeyRound, Send } from 'lucide-react';
+import { Camera, Building2, MapPin, UserPlus, Shield, Trash2, Lock, Eye, EyeOff, Users, Mail, KeyRound, Send, Phone } from 'lucide-react';
 
 interface University {
   id: string;
   name: string;
   address: string;
   logo_url: string;
+  support_phone?: string;
+  support_email?: string;
 }
 
 interface StaffMember {
@@ -26,6 +28,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [supportPhone, setSupportPhone] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -64,7 +68,7 @@ export default function Settings() {
 
   const fetchUniversity = useCallback(async () => {
     if (!user?.university_id) return;
-    try { const res = await api.get(`/university/${user.university_id}`); setUniversity(res.data); setName(res.data.name); setAddress(res.data.address || ''); setLogoPreview(res.data.logo_url || null); }
+    try { const res = await api.get(`/university/${user.university_id}`); setUniversity(res.data); setName(res.data.name); setAddress(res.data.address || ''); setSupportPhone(res.data.support_phone || ''); setSupportEmail(res.data.support_email || ''); setLogoPreview(res.data.logo_url || null); }
     catch (err) { console.error(err); setUniError('Failed to load university'); }
     finally { setLoading(false); }
   }, [user?.university_id]);
@@ -82,7 +86,7 @@ export default function Settings() {
     e.preventDefault();
     if (!user?.university_id) return;
     setSaving(true); setUniError(''); setUniSuccess('');
-    const fd = new FormData(); fd.append('name', name); fd.append('address', address);
+    const fd = new FormData(); fd.append('name', name); fd.append('address', address); fd.append('support_phone', supportPhone); fd.append('support_email', supportEmail);
     if (logoFile) fd.append('logo', logoFile);
     try { await api.patch(`/university/${user.university_id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); setUniSuccess('University updated successfully!'); setLogoFile(null); fetchUniversity(); }
     catch (err: any) { setUniError(err.response?.data?.message || 'Update failed'); }
@@ -172,6 +176,10 @@ export default function Settings() {
                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} /></div>
               <div><label className={labelClass}><MapPin size={11} className="text-indigo-400" /> Address</label>
                 <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}><Phone size={11} className="text-indigo-400" /> Support Phone</label>
+                <input type="text" value={supportPhone} onChange={(e) => setSupportPhone(e.target.value)} placeholder="+91 ..." className={inputClass} /></div>
+              <div><label className={labelClass}><Mail size={11} className="text-indigo-400" /> Support Email</label>
+                <input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="help@university.edu" className={inputClass} /></div>
             </div>
             <div className="flex justify-end">
               <button type="submit" disabled={saving} className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[13px] font-bold hover:shadow-lg hover:shadow-indigo-500/20 transition-all disabled:opacity-50 btn-press flex items-center gap-2">

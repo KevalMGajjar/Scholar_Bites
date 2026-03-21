@@ -37,7 +37,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/universities" element={<Dashboard />} />
+
             <Route path="/universities/:id" element={<UniversityAnalysis />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
           </Route>

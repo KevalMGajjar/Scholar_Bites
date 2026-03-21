@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
+import '../services/university_service.dart';
+import '../utils/token_storage.dart';
 
 // ─── Colors ──────────────────────────────────────────
 const _maroon = Color(0xFF8B1C28);
@@ -137,10 +139,13 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
   bool _showQuickTopics = true;
+  Map<String, dynamic>? _university;
 
   @override
   void initState() {
     super.initState();
+    _loadUniversity();
+    
     // Welcome message
     _messages.add(_ChatMessage(
       text: 'Hey there! \u{1F44B} I\'m your Scholar Bites assistant.\n\n'
@@ -155,6 +160,17 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     _chatController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+  void _loadUniversity() async {
+    final uniId = await TokenStorage.getUniversityId();
+    if (uniId != null) {
+      final uni = await UniversityService().getUniversityById(uniId);
+      if (mounted) {
+        setState(() {
+          _university = uni;
+        });
+      }
+    }
   }
 
   void _handleSend() {
@@ -463,6 +479,72 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   }
 
   Widget _buildContactBar() {
+    final supportEmail = _university?['support_email'] as String?;
+    final supportPhone = _university?['support_phone'] as String?;
+
+    final hasCustomEmail = supportEmail != null && supportEmail.trim().isNotEmpty;
+    final hasCustomPhone = supportPhone != null && supportPhone.trim().isNotEmpty;
+    final hasAnyCustom = hasCustomEmail || hasCustomPhone;
+
+    final showEmail = hasCustomEmail || !hasAnyCustom;
+    final showPhone = hasCustomPhone || !hasAnyCustom;
+
+    final List<Widget> chips = [];
+
+    if (showEmail) {
+      chips.add(Expanded(
+        child: _buildContactChip(
+          icon: Icons.email_rounded,
+          label: 'Email Us',
+          color: const Color(0xFF5C6BC0),
+          onTap: () => _showContactInfo(
+            'Email Support',
+            hasCustomEmail ? supportEmail : 'support@scholarbites.in',
+            'Send us an email for detailed issues, refund requests, or suggestions. We typically respond within 24 hours.',
+            Icons.email_rounded,
+          ),
+        ),
+      ));
+    }
+
+    chips.add(Expanded(
+      child: _buildContactChip(
+        icon: Icons.people_alt_rounded,
+        label: 'Staff',
+        color: const Color(0xFF2E7D32),
+        onTap: () => _showContactInfo(
+          'University Staff',
+          'Canteen Manager',
+          'Visit the canteen counter and ask for the manager. They can help with immediate orders and food quality.',
+          Icons.people_alt_rounded,
+        ),
+      ),
+    ));
+
+    if (showPhone) {
+      chips.add(Expanded(
+        child: _buildContactChip(
+          icon: Icons.phone_rounded,
+          label: 'Call',
+          color: const Color(0xFFE65100),
+          onTap: () => _showContactInfo(
+            'Call Support',
+            hasCustomPhone ? supportPhone : '+91 98765 43210',
+            'Available Monday - Saturday\n9:00 AM - 6:00 PM\n\nFor urgent issues during canteen hours, call the helpline directly.',
+            Icons.phone_rounded,
+          ),
+        ),
+      ));
+    }
+
+    final List<Widget> spacedChips = [];
+    for (int i = 0; i < chips.length; i++) {
+      spacedChips.add(chips[i]);
+      if (i < chips.length - 1) {
+        spacedChips.add(const SizedBox(width: 10));
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -471,58 +553,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           top: BorderSide(color: _darkText.withValues(alpha: 0.06)),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildContactChip(
-              icon: Icons.email_rounded,
-              label: 'Email Us',
-              color: const Color(0xFF5C6BC0),
-              onTap: () => _showContactInfo(
-                'Email Support',
-                'support@scholarbites.in',
-                'Send us an email for detailed issues, refund requests, or suggestions. We typically respond within 24 hours.',
-                Icons.email_rounded,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _buildContactChip(
-              icon: Icons.people_alt_rounded,
-              label: 'Staff',
-              color: const Color(0xFF2E7D32),
-              onTap: () => _showContactInfo(
-                'University Staff',
-                'Canteen Manager',
-                'Visit the canteen counter and ask for the manager. '
-                    'They can help with:\n'
-                    '\u{2022} Wrong orders\n'
-                    '\u{2022} Food quality issues\n'
-                    '\u{2022} Special dietary requests\n'
-                    '\u{2022} Bulk/event orders',
-                Icons.people_alt_rounded,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _buildContactChip(
-              icon: Icons.phone_rounded,
-              label: 'Call',
-              color: const Color(0xFFE65100),
-              onTap: () => _showContactInfo(
-                'Call Support',
-                '+91 98765 43210',
-                'Available Monday - Saturday\n'
-                    '9:00 AM - 6:00 PM\n\n'
-                    'For urgent issues during canteen hours, call the helpline directly.',
-                Icons.phone_rounded,
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: Row(children: spacedChips),
     );
   }
 

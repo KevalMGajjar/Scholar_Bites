@@ -127,7 +127,7 @@ export const updateUniversity = async (req: Request, res: Response) => {
         return res.status(403).json({ message: 'Forbidden: You can only edit your own university' });
     }
 
-    const { name, address } = req.body;
+    const { name, address, support_phone, support_email } = req.body;
     let { logo_url } = req.body;
 
     try {
@@ -144,6 +144,8 @@ export const updateUniversity = async (req: Request, res: Response) => {
         if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name); }
         if (address !== undefined) { updates.push(`address = $${idx++}`); params.push(address); }
         if (logo_url !== undefined) { updates.push(`logo_url = $${idx++}`); params.push(logo_url); }
+        if (support_phone !== undefined) { updates.push(`support_phone = $${idx++}`); params.push(support_phone); }
+        if (support_email !== undefined) { updates.push(`support_email = $${idx++}`); params.push(support_email); }
 
         if (updates.length > 0) {
             params.push(id);
