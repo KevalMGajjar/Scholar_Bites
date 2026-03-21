@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Plus, Store, Clock, Star, Edit2, Power, PowerOff, X } from 'lucide-react';
+import { Plus, Store, Clock, Star, Edit2, X } from 'lucide-react';
 
 interface Restaurant {
   id: string;
@@ -69,10 +69,7 @@ export default function Restaurants() {
     } catch (err) { console.error(err); }
   };
 
-  const toggleOpen = async (r: Restaurant) => {
-    try { await api.patch(`/admin/restaurants/${r.id}`, { is_open: !r.is_open }); fetchRestaurants(); }
-    catch (err) { console.error(err); }
-  };
+
 
   if (loading) {
     return <div className="flex justify-center items-center h-full"><div className="animate-spin w-6 h-6 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full" /></div>;
@@ -175,10 +172,6 @@ export default function Restaurants() {
               {/* Floating Actions */}
               <div className="absolute top-3 right-3 flex gap-1.5 translate-y-[-8px] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                 <button onClick={() => openEdit(r)} className="p-2 rounded-xl bg-black/50 backdrop-blur-md text-white hover:text-indigo-400 border border-white/[0.08] transition-colors btn-press"><Edit2 size={14} /></button>
-                <button onClick={() => toggleOpen(r)}
-                  className={`p-2 rounded-xl backdrop-blur-md border border-white/[0.08] transition-colors btn-press ${r.is_open ? 'bg-black/50 text-amber-400' : 'bg-black/50 text-emerald-400'}`}>
-                  {r.is_open ? <PowerOff size={14} /> : <Power size={14} />}
-                </button>
               </div>
               {/* Status */}
               <div className="absolute bottom-3 right-3">
