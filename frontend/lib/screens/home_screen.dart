@@ -286,7 +286,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (result != null) {
-      setState(() => _homeFilters = result);
+      if (result.hasActiveFilters || result.category != 'All') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SearchScreen(
+              initialCategory: result.category != 'All' ? result.category : null,
+              initialFilters: result,
+            ),
+          ),
+        ).then((_) {
+          _searchFocusNode.unfocus();
+        });
+      } else {
+        setState(() => _homeFilters = result);
+      }
     }
   }
 
@@ -743,15 +757,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                             size: 30,
                                             color: const Color(0xFF8B1C28),
                                           ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        cat['name'] as String,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF1E1E1E),
                                         ),
                                       ),
                                     ],

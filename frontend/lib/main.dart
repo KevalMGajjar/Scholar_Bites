@@ -10,6 +10,7 @@ import 'models/cart_model.dart';
 import 'models/favorites_model.dart';
 import 'models/user_model.dart';
 import 'screens/splash_screen.dart';
+import 'screens/order_qr_screen.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -65,7 +66,68 @@ class _FoodTechAppState extends State<FoodTechApp> {
   void initState() {
     super.initState();
     // Initialize notification service (FCM token, permissions, etc.)
-    NotificationService().init();
+    final notifService = NotificationService();
+    notifService.init();
+    
+    // Listen for 'order_ready' pushes globally
+    notifService.onOrderReady = (data) {
+      if (mounted) {
+        _showOrderReadyPopup(data);
+      }
+    };
+  }
+
+  void _showOrderReadyPopup(Map<String, dynamic> data) {
+    final context = FoodTechApp.navigatorKey.currentContext;
+    if (context == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.fastfood_rounded, color: Color(0xFF8B1C28)),
+              SizedBox(width: 8),
+              Text('Order Ready!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+            ],
+          ),
+          content: const Text(
+            'Your order is freshly prepared and ready for pickup! Have your QR code ready at the counter.',
+            style: TextStyle(fontSize: 14, color: Color(0xFF4A0E13)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B1C28),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => OrderQrScreen(
+                    orderId: data['order_id']?.toString() ?? '',
+                    orderToken: data['order_token']?.toString() ?? '',
+                    status: 'ready',
+                    amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
+                  )),
+                );
+              },
+              child: const Text('View Ticket', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override

@@ -4,6 +4,7 @@ import razorpay from '../config/razorpay';
 import crypto from 'crypto';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { emitNewOrder, emitStatusUpdate } from '../services/socketService';
+import { createAndPush } from './notificationController';
 import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ─── Generate a unique 4-char alphanumeric order token ───
@@ -354,8 +355,25 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         const order = result.rows[0];
         await client.query('COMMIT');
 
-        // Emit to user
+        // Emit to user via WebSocket
         emitStatusUpdate(currentOrder.user_id, order);
+        
+        // If the order just became ready, send an instant Push Notification
+        if (currentOrder.status !== 'ready' && status === 'ready') {
+            await createAndPush(
+                currentOrder.user_id,
+                'order_ready',
+                'Your Order is Ready! 🍔',
+                `Your order #${order.order_token || String(id).split('-')[0]} is freshly prepared and ready for pickup at the counter!`,
+                { 
+                  order_id: String(id), 
+                  type: 'order_ready',
+                  order_token: String(order.order_token || ''),
+                  amount: String(order.total_amount || '0')
+                }
+            );
+        }
+
         auditLog({ userId: req.user?.id, action: 'ORDER_STATUS_CHANGED', resource: `order:${id}`, details: `status=${status}`, ip: getRequestIp(req) });
 
         res.json(order);

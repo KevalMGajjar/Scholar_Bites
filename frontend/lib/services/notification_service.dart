@@ -21,6 +21,9 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  
+  /// Callback fired when an 'order_ready' push is received in foreground or clicked from background.
+  void Function(Map<String, dynamic> data)? onOrderReady;
 
   /// Initialize notifications — call once after Firebase.initializeApp().
   /// This only sets up local notification channels, permissions, and listeners.
@@ -68,6 +71,19 @@ class NotificationService {
     // Listen for foreground messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
+    // Listen for interacting with notification when app is in background
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageInteraction);
+
+    // Listen for interacting with notification when app is fully terminated
+    _fcm.getInitialMessage().then((message) {
+      if (message != null) {
+        // Need a slight delay to ensure UI is ready before showing popup
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _handleMessageInteraction(message);
+        });
+      }
+    });
+
     // Listen for token refresh — only register if user is logged in
     _fcm.onTokenRefresh.listen((newToken) async {
       final jwt = await TokenStorage.getToken();
@@ -79,6 +95,11 @@ class NotificationService {
 
   /// Handle foreground FCM messages — show as local notification
   void _handleForegroundMessage(RemoteMessage message) {
+    // Notify app if it's an order_ready push
+    if (message.data['type'] == 'order_ready') {
+      onOrderReady?.call(message.data);
+    }
+
     final notification = message.notification;
     if (notification == null) return;
 
@@ -102,6 +123,13 @@ class NotificationService {
         ),
       ),
     );
+  }
+
+  /// Handle interaction when a notification is tapped
+  void _handleMessageInteraction(RemoteMessage message) {
+    if (message.data['type'] == 'order_ready') {
+      onOrderReady?.call(message.data);
+    }
   }
 
   // ─── Local Notifications (Cart Reminder) ───
