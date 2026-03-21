@@ -200,19 +200,48 @@ class _FoodCardState extends State<FoodCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.food.name,
-                      style: const TextStyle(
-                        color: Color(0xFF4A0E13),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: widget.food.isVeg ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: widget.food.isVeg ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.food.name,
+                            style: const TextStyle(
+                              color: Color(0xFF4A0E13),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${widget.food.calories} cal \u{2022} ${widget.food.weight}g',
+                      '${widget.food.calories} cal \u{2022} ${widget.food.weight}${widget.food.unit}',
                       style: TextStyle(
                         color: const Color(0xFF8B1C28).withValues(alpha: 0.6),
                         fontSize: 13,

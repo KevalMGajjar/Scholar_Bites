@@ -14,7 +14,7 @@ interface MenuItem {
   stock_quantity: number;
   restaurant_id: string;
   is_veg?: boolean;
-  nutritional_info?: { calories?: number; weight?: number; weight_grams?: number };
+  nutritional_info?: { calories?: number; weight?: number; weight_grams?: number; unit?: string; };
 }
 
 interface Restaurant {
@@ -30,7 +30,7 @@ export default function MenuItems() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState('');
-  const [form, setForm] = useState({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '', calories: '', weight_grams: '', is_veg: true });
+  const [form, setForm] = useState({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '', calories: '', weight: '', unit: 'g', is_veg: true });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -57,13 +57,13 @@ export default function MenuItems() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant, calories: '', weight_grams: '', is_veg: true });
+    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant, calories: '', weight: '', unit: 'g', is_veg: true });
     setImageFile(null); setImagePreview(null); setShowForm(true);
   };
 
   const openEdit = (item: MenuItem) => {
     setEditing(item);
-    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight_grams: item.nutritional_info?.weight?.toString() || item.nutritional_info?.weight_grams?.toString() || '', is_veg: item.is_veg ?? true });
+    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight: item.nutritional_info?.weight?.toString() || item.nutritional_info?.weight_grams?.toString() || '', unit: item.nutritional_info?.unit || 'g', is_veg: item.is_veg ?? true });
     setImageFile(null); setImagePreview(item.image_url || null); setShowForm(true);
   };
 
@@ -76,9 +76,12 @@ export default function MenuItems() {
       if (!editing) fd.append('restaurant_id', form.restaurant_id);
       fd.append('stock_quantity', form.stock_quantity.toString());
       fd.append('is_veg', form.is_veg.toString());
-      const nutritionalInfo: Record<string, number> = {};
+      const nutritionalInfo: Record<string, any> = {};
       if (form.calories) nutritionalInfo.calories = parseFloat(form.calories);
-      if (form.weight_grams) nutritionalInfo.weight = parseFloat(form.weight_grams);
+      if (form.weight) {
+        nutritionalInfo.weight = parseFloat(form.weight);
+        nutritionalInfo.unit = form.unit;
+      }
       fd.append('nutritional_info', JSON.stringify(nutritionalInfo));
       if (imageFile) fd.append('image', imageFile);
       if (editing) { await api.patch(`/admin/menu/${editing.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); }
@@ -168,8 +171,16 @@ export default function MenuItems() {
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelClass}><Flame size={10} className="text-orange-400" /> Calories (kcal)</label>
                   <input type="number" step="1" value={form.calories} onChange={(e) => setForm({ ...form, calories: e.target.value })} className={inputClass} placeholder="e.g. 350" /></div>
-                <div><label className={labelClass}><Weight size={10} className="text-blue-400" /> Serving Weight (g)</label>
-                  <input type="number" step="1" value={form.weight_grams} onChange={(e) => setForm({ ...form, weight_grams: e.target.value })} className={inputClass} placeholder="e.g. 250" /></div>
+                <div>
+                  <label className={labelClass}><Weight size={10} className="text-blue-400" /> Serving Size</label>
+                  <div className="flex relative items-center">
+                    <input type="number" step="1" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} className={`${inputClass} pr-16`} placeholder="e.g. 250" />
+                    <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="absolute right-2 bg-white/10 text-white rounded-md px-2 py-1 text-xs border-none outline-none cursor-pointer">
+                      <option value="g" className="bg-[#0c0f18] text-white">g</option>
+                      <option value="ml" className="bg-[#0c0f18] text-white">ml</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               <div><label className={labelClass}>Primary Image</label>
                 {imagePreview && <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/[0.06] mb-3"><img src={imagePreview} alt="" className="w-full h-full object-cover" /></div>}
@@ -222,11 +233,11 @@ export default function MenuItems() {
                           </div>
                         </div>
                         <p className="text-slate-600 text-[12px] truncate max-w-[250px]">{item.description}</p>
-                        {item.nutritional_info && (item.nutritional_info.calories || item.nutritional_info.weight_grams) && (
+                        {item.nutritional_info && (item.nutritional_info.calories || item.nutritional_info.weight || item.nutritional_info.weight_grams) && (
                           <div className="flex items-center gap-2 mt-1">
                             {item.nutritional_info.calories && <span className="text-orange-400/70 text-[10px] font-semibold">{item.nutritional_info.calories} kcal</span>}
-                            {item.nutritional_info.calories && item.nutritional_info.weight_grams && <span className="text-slate-700">·</span>}
-                            {item.nutritional_info.weight_grams && <span className="text-blue-400/70 text-[10px] font-semibold">{item.nutritional_info.weight_grams}g</span>}
+                            {item.nutritional_info.calories && (item.nutritional_info.weight || item.nutritional_info.weight_grams) && <span className="text-slate-700">·</span>}
+                            {(item.nutritional_info.weight || item.nutritional_info.weight_grams) && <span className="text-blue-400/70 text-[10px] font-semibold">{item.nutritional_info.weight || item.nutritional_info.weight_grams}{item.nutritional_info.unit || 'g'}</span>}
                           </div>
                         )}
                       </div>

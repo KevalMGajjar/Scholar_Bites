@@ -265,14 +265,43 @@ class _DetailScreenState extends State<DetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Title
-                  Text(
-                    widget.food.name,
-                    style: const TextStyle(
-                      color: Color(0xFF4A0E13),
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      height: 1.1,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: widget.food.isVeg ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: widget.food.isVeg ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.food.name,
+                          style: const TextStyle(
+                            color: Color(0xFF4A0E13),
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
 
@@ -286,7 +315,7 @@ class _DetailScreenState extends State<DetailScreen> {
                       const SizedBox(width: 16),
                       _buildMetadataChip(
                         Icons.scale_rounded,
-                        '${widget.food.weight}g',
+                        '${widget.food.weight}${widget.food.unit}',
                       ),
                       const SizedBox(width: 16),
                       _buildMetadataChip(Icons.star_rounded, _avgRating > 0 ? _avgRating.toString() : '—'),
