@@ -32,20 +32,21 @@ class FoodItem {
   }
 
   factory FoodItem.fromJson(Map<String, dynamic> json) {
-    // Expected Prisma format
-    final nutrition = json['nutritional_info'] as Map<String, dynamic>? ?? {};
+    // Parse nutritional_info safely — JSONB values can be String, int, or double
+    final rawNutrition = json['nutritional_info'];
+    final Map<String, dynamic> nutrition = rawNutrition is Map<String, dynamic>
+        ? rawNutrition
+        : (rawNutrition is Map ? Map<String, dynamic>.from(rawNutrition) : {});
     final priceParsed =
         double.tryParse(json['price']?.toString() ?? '0') ?? 0.0;
 
-
-
     return FoodItem(
-      id: json['id'] ?? '',
-      name: json['name'] ?? 'Unknown Item',
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unknown Item',
       imageUrl: json['image_url']?.toString() ?? 'https://via.placeholder.com/150',
       price: priceParsed,
-      calories: nutrition['calories'] as int? ?? 0,
-      weight: nutrition['weight'] as int? ?? 0,
+      calories: int.tryParse(nutrition['calories']?.toString() ?? '0') ?? 0,
+      weight: int.tryParse(nutrition['weight']?.toString() ?? '0') ?? 0,
       description: json['description'] ?? '',
       category: json['category'] ?? 'Dinner',
       isAvailable: json['is_available'] ?? true,

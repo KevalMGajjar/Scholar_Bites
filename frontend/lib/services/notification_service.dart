@@ -108,28 +108,32 @@ class NotificationService {
 
   /// Schedule a local notification if cart is abandoned (2 hours from now)
   Future<void> scheduleCartReminder(String itemName) async {
-    // Cancel any existing reminder
-    await cancelCartReminder();
+    try {
+      // Cancel any existing reminder
+      await cancelCartReminder();
 
-    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(hours: 2));
+      final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(hours: 2));
 
-    await _localNotifs.zonedSchedule(
-      id: 999, // Fixed ID for cart reminder
-      title: 'Your cart misses you!',
-      body: '$itemName and the squad have been waiting — they might sell out ngl',
-      scheduledDate: scheduledTime,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'scholar_bites_notifications',
-          'Scholar Bites',
-          channelDescription: 'Notifications from Scholar Bites',
-          importance: Importance.high,
-          priority: Priority.high,
+      await _localNotifs.zonedSchedule(
+        id: 999, // Fixed ID for cart reminder
+        title: 'Your cart misses you!',
+        body: '$itemName and the squad have been waiting — they might sell out ngl',
+        scheduledDate: scheduledTime,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'scholar_bites_notifications',
+            'Scholar Bites',
+            channelDescription: 'Notifications from Scholar Bites',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
         ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Failed to schedule cart reminder: $e');
+    }
   }
 
   /// Cancel cart reminder (e.g., when checked out or cart cleared)

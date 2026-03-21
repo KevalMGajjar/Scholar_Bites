@@ -9,6 +9,7 @@ import '../services/order_service.dart';
 import '../services/payment_service.dart';
 import '../services/wallet_service.dart';
 import '../utils/token_storage.dart';
+import '../services/menu_service.dart';
 import 'detail_screen.dart';
 import 'order_success_screen.dart';
 
@@ -30,6 +31,8 @@ class _CartScreenState extends State<CartScreen> {
   String _currentRestaurantName = 'the counter';
   double _walletBalance = 0.0;
   bool _isLoadingBalance = true;
+  
+  Map<String, dynamic> _availabilityMap = {};
 
   @override
   void initState() {
@@ -40,6 +43,25 @@ class _CartScreenState extends State<CartScreen> {
       onExternalWallet: _handleExternalWallet,
     );
     _fetchWalletBalance();
+    
+    // Fetch availability after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAvailability();
+    });
+  }
+
+  Future<void> _checkAvailability() async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    if (cart.items.isEmpty) return;
+
+    final itemIds = cart.items.keys.toList();
+    final availMap = await MenuService().checkAvailability(itemIds);
+    
+    if (mounted) {
+      setState(() {
+        _availabilityMap = availMap;
+      });
+    }
   }
 
   Future<void> _fetchWalletBalance() async {
@@ -142,6 +164,19 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _startCheckoutFlow(CartProvider cart) async {
     if (cart.totalAmount <= 0) return;
 
+    // Check if there are any unavailable items
+    final hasUnavailable = cart.items.keys.any((id) {
+      final info = _availabilityMap[id];
+      if (info == null) return false;
+      final stockInfo = info['stock_quantity'] ?? 999;
+      return info['is_available'] == false || stockInfo < cart.items[id]!.quantity;
+    });
+
+    if (hasUnavailable) {
+      _showCustomToast('Please remove unavailable items before checkout.', isError: true, icon: Icons.remove_shopping_cart_rounded);
+      return;
+    }
+
     final universityId = await TokenStorage.getUniversityId();
     if (universityId == null || universityId.isEmpty) {
       if (mounted) {
@@ -194,9 +229,18 @@ class _CartScreenState extends State<CartScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to initiate checkout: $e')),
-        );
+        final errorMsg = e.toString().toLowerCase();
+        String friendlyMsg;
+        if (errorMsg.contains('not available')) {
+          friendlyMsg = 'Some items in your cart are no longer available. Please refresh and try again!';
+        } else if (errorMsg.contains('insufficient stock') || errorMsg.contains('stock')) {
+          friendlyMsg = 'Oops! Some items just sold out. Remove them and try again.';
+        } else if (errorMsg.contains('restaurant') && errorMsg.contains('closed')) {
+          friendlyMsg = 'The restaurant is currently closed. Please try again later!';
+        } else {
+          friendlyMsg = 'Something went wrong. Please check your cart and try again.';
+        }
+        _showCustomToast(friendlyMsg, isError: true, icon: Icons.remove_shopping_cart_rounded);
       }
     }
   }
@@ -348,6 +392,39 @@ class _CartScreenState extends State<CartScreen> {
                 ),
               ),
 
+              // Availability warning banner if needed
+              if (cart.items.keys.any((id) {
+                final info = _availabilityMap[id];
+                if (info == null) return false;
+                final stockInfo = info['stock_quantity'] ?? 999;
+                return info['is_available'] == false || stockInfo < cart.items[id]!.quantity;
+              }))
+                Container(
+                  margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF0F0),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _maroon.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: _maroon, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Your cart contains items that are unavailable or out of stock.',
+                          style: TextStyle(
+                            color: _maroon.withValues(alpha: 0.9),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Bottom checkout section
               _buildCheckoutSection(context, cart),
             ],
@@ -468,44 +545,78 @@ class _CartScreenState extends State<CartScreen> {
               // Food image
               Hero(
                 tag: 'cart-food-${item.food.id}',
-                child: Container(
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _maroon.withValues(alpha: 0.15),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _maroon.withValues(alpha: 0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: CachedNetworkImage(
-                      imageUrl: item.food.imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: const Color(0xFFFDF0F0),
-                        child: const Center(
-                          child: SizedBox(
-                            width: 24, height: 24,
-                            child: SpoonLoader(size: 30),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: CachedNetworkImage(
+                          imageUrl: item.food.imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: const Color(0xFFFDF0F0),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 24, height: 24,
+                                child: SpoonLoader(size: 30),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) {
+                            return Container(
+                              color: const Color(0xFFFDF0F0),
+                              child: const Center(
+                                child: Icon(Icons.fastfood_rounded,
+                                    color: _maroon, size: 32),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    
+                    // Unavailable Overlay
+                    if (_availabilityMap[item.food.id] != null &&
+                        (_availabilityMap[item.food.id]['is_available'] == false ||
+                         (_availabilityMap[item.food.id]['stock_quantity'] ?? 999) < item.quantity))
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _maroon,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Unavailable',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      errorWidget: (context, url, error) {
-                        return Container(
-                          color: const Color(0xFFFDF0F0),
-                          child: const Center(
-                            child: Icon(Icons.fastfood_rounded,
-                                color: _maroon, size: 32),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                  ],
                 ),
               ),
               const SizedBox(width: 16),

@@ -35,6 +35,21 @@ class MenuService {
     }
   }
 
+  // ─── Check Availability ─────────────────────────────
+  Future<Map<String, dynamic>> checkAvailability(List<String> itemIds) async {
+    try {
+      final response = await _dio.post('/menu/check-availability', data: {
+        'item_ids': itemIds,
+      });
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {};
+    } catch (e) {
+      return {}; // Fail silently, default to whatever is in the cart
+    }
+  }
+
   // ─── Reviews ───────────────────────────────────────
   Future<Map<String, dynamic>> getItemRating(String menuItemId) async {
     try {

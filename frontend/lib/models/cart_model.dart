@@ -10,15 +10,23 @@ class FoodItemAdapter extends TypeAdapter<FoodItem> {
 
   @override
   FoodItem read(BinaryReader reader) {
+    final id = reader.read();
+    final name = reader.read();
+    final imageUrl = reader.read();
+    final rawPrice = reader.read();
+    final rawCalories = reader.read();
+    final rawWeight = reader.read();
+    final description = reader.read();
+    final category = reader.read();
     return FoodItem(
-      id: reader.read(),
-      name: reader.read(),
-      imageUrl: reader.read(),
-      price: reader.read(),
-      calories: reader.read(),
-      weight: reader.read(),
-      description: reader.read(),
-      category: reader.read(),
+      id: id?.toString() ?? '',
+      name: name?.toString() ?? '',
+      imageUrl: imageUrl?.toString() ?? '',
+      price: double.tryParse(rawPrice?.toString() ?? '0') ?? 0.0,
+      calories: int.tryParse(rawCalories?.toString() ?? '0') ?? 0,
+      weight: int.tryParse(rawWeight?.toString() ?? '0') ?? 0,
+      description: description?.toString() ?? '',
+      category: category?.toString() ?? 'Dinner',
     );
   }
 

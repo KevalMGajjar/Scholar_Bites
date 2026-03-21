@@ -253,3 +253,34 @@ export const deleteMenuItem = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ─── Check Availability (for Cart) ───
+export const checkAvailability = async (req: Request, res: Response) => {
+    const { item_ids } = req.body;
+    
+    if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+        return res.status(400).json({ message: 'An array of item_ids is required' });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT id, is_available, stock_quantity, price FROM menu_items WHERE id = ANY($1::uuid[])`,
+            [item_ids]
+        );
+        
+        // Create a map of availability keyed by item id
+        const availabilityMap: Record<string, any> = {};
+        for (const row of result.rows) {
+            availabilityMap[row.id] = {
+                is_available: row.is_available,
+                stock_quantity: row.stock_quantity,
+                price: parseFloat(row.price),
+            };
+        }
+        
+        res.json(availabilityMap);
+    } catch (error) {
+        console.error('Error checking availability:', error);
+        res.status(500).json({ message: 'Server error check availability' });
+    }
+};

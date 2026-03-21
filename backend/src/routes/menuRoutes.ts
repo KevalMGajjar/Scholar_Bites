@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getMenu, addMenuItem, updateStock, getTrendingItems } from '../controllers/menuController';
+import { getMenu, addMenuItem, updateStock, getTrendingItems, checkAvailability } from '../controllers/menuController';
 import { submitReview, getItemRating } from '../controllers/reviewController';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 
@@ -7,6 +7,7 @@ const router = Router();
 
 router.get('/', getMenu);
 router.get('/trending/:university_id', getTrendingItems);
+router.post('/check-availability', checkAvailability);
 router.post('/', authenticateJWT, authorizeRole(['admin', 'staff', 'super_admin']), addMenuItem);
 router.patch('/:id/stock', authenticateJWT, authorizeRole(['admin', 'staff', 'super_admin']), updateStock);
 
