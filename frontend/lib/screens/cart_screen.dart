@@ -163,9 +163,12 @@ class _CartScreenState extends State<CartScreen> {
       _currentDbOrderId = orderResponse['id'];
       _currentRestaurantName = orderResponse['restaurant_name'] ?? 'the counter';
       // Use exact paise from backend if available, otherwise calculate from amount
-      final int amountInPaise = orderResponse['amount_in_paise'] != null
-          ? (orderResponse['amount_in_paise'] as num).toInt()
-          : ((orderResponse['amount'] as num).toDouble() * 100).round();
+      final int amountInPaise;
+      if (orderResponse['amount_in_paise'] != null) {
+        amountInPaise = int.parse(orderResponse['amount_in_paise'].toString());
+      } else {
+        amountInPaise = (double.parse(orderResponse['amount'].toString()) * 100).round();
+      }
       debugPrint('✅ Order created: razorpayOrderId=$orderId, token=$_currentOrderToken, paise=$amountInPaise');
 
       // Get user details for Razorpay prefill
