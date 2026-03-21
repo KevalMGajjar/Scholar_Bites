@@ -13,7 +13,7 @@ interface MenuItem {
   is_available: boolean;
   stock_quantity: number;
   restaurant_id: string;
-  nutritional_info?: { calories?: number; weight_grams?: number };
+  nutritional_info?: { calories?: number; weight?: number; weight_grams?: number };
 }
 
 interface Restaurant {
@@ -62,7 +62,7 @@ export default function MenuItems() {
 
   const openEdit = (item: MenuItem) => {
     setEditing(item);
-    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight_grams: item.nutritional_info?.weight_grams?.toString() || '' });
+    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight_grams: item.nutritional_info?.weight?.toString() || item.nutritional_info?.weight_grams?.toString() || '' });
     setImageFile(null); setImagePreview(item.image_url || null); setShowForm(true);
   };
 
@@ -76,7 +76,7 @@ export default function MenuItems() {
       fd.append('stock_quantity', form.stock_quantity.toString());
       const nutritionalInfo: Record<string, number> = {};
       if (form.calories) nutritionalInfo.calories = parseFloat(form.calories);
-      if (form.weight_grams) nutritionalInfo.weight_grams = parseFloat(form.weight_grams);
+      if (form.weight_grams) nutritionalInfo.weight = parseFloat(form.weight_grams);
       fd.append('nutritional_info', JSON.stringify(nutritionalInfo));
       if (imageFile) fd.append('image', imageFile);
       if (editing) { await api.patch(`/admin/menu/${editing.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); }
@@ -133,7 +133,18 @@ export default function MenuItems() {
                 <div><label className={labelClass}>Price (₹) <span className="text-red-400">*</span></label>
                   <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required className={inputClass} /></div>
                 <div><label className={labelClass}>Category <span className="text-red-400">*</span></label>
-                  <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required className={inputClass} placeholder="Snacks" /></div>
+                  <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required className={`${inputClass} appearance-none`}>
+                    <option value="" disabled className="bg-[#0c0f18]">Select Category</option>
+                    <option value="Drinks" className="bg-[#0c0f18]">Drinks</option>
+                    <option value="Healthy" className="bg-[#0c0f18]">Healthy</option>
+                    <option value="Burgers" className="bg-[#0c0f18]">Burgers</option>
+                    <option value="Pizza" className="bg-[#0c0f18]">Pizza</option>
+                    <option value="Indian" className="bg-[#0c0f18]">Indian</option>
+                    <option value="Desserts" className="bg-[#0c0f18]">Desserts</option>
+                    <option value="Chinese" className="bg-[#0c0f18]">Chinese</option>
+                    <option value="Snacks" className="bg-[#0c0f18]">Snacks</option>
+                  </select>
+                </div>
                 <div><label className={labelClass}>Inventory <span className="text-red-400">*</span></label>
                   <input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: parseInt(e.target.value) })} required className={inputClass} /></div>
               </div>

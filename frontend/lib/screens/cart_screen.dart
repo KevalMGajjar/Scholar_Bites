@@ -248,6 +248,19 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _startWalletPayment(CartProvider cart) async {
     if (cart.totalAmount <= 0) return;
 
+    // Check if there are any unavailable items
+    final hasUnavailable = cart.items.keys.any((id) {
+      final info = _availabilityMap[id];
+      if (info == null) return false;
+      final stockInfo = info['stock_quantity'] ?? 999;
+      return info['is_available'] == false || stockInfo < cart.items[id]!.quantity;
+    });
+
+    if (hasUnavailable) {
+      _showCustomToast('Please remove unavailable items before checkout.', isError: true, icon: Icons.remove_shopping_cart_rounded);
+      return;
+    }
+
     final universityId = await TokenStorage.getUniversityId();
     if (universityId == null || universityId.isEmpty) {
       if (mounted) {
@@ -298,7 +311,18 @@ class _CartScreenState extends State<CartScreen> {
       debugPrint('❌ Wallet payment failed: $e');
       if (mounted) {
         setState(() => _isProcessingPayment = false);
-        _showCustomToast('$e', isError: true, icon: Icons.account_balance_wallet_rounded);
+        final errorMsg = e.toString().toLowerCase();
+        String friendlyMsg;
+        if (errorMsg.contains('not available')) {
+          friendlyMsg = 'Some items in your cart are no longer available. Please refresh and try again!';
+        } else if (errorMsg.contains('insufficient stock') || errorMsg.contains('stock')) {
+          friendlyMsg = 'Oops! Some items just sold out. Remove them and try again.';
+        } else if (errorMsg.contains('restaurant') && errorMsg.contains('closed')) {
+          friendlyMsg = 'The restaurant is currently closed. Please try again later!';
+        } else {
+          friendlyMsg = 'Something went wrong. Please check your cart and try again.';
+        }
+        _showCustomToast(friendlyMsg, isError: true, icon: Icons.account_balance_wallet_rounded);
       }
     }
   }

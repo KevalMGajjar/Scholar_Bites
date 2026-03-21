@@ -39,17 +39,7 @@ class _SearchScreenState extends State<SearchScreen> {
   late SearchFilters _filters;
 
   // Categories aligned with Home Screen Cravings
-  final List<String> _categories = [
-    'All',
-    'Burger',
-    'Healthy',
-    'Coffee',
-    'Snacks',
-    'Drinks',
-    'Pizza',
-    'Desserts',
-    'Chicken',
-  ];
+  List<String> _categories = ['All'];
 
   // Loaded from API
   List<FoodItem> _allMeals = [];
@@ -90,6 +80,12 @@ class _SearchScreenState extends State<SearchScreen> {
             _allMeals = results[0] as List<FoodItem>;
             _restaurants = results[1] as List<Restaurant>;
             _isLoadingMeals = false;
+
+            final Set<String> catSet = {};
+            for (var item in _allMeals) {
+              if (item.category.isNotEmpty) catSet.add(item.category);
+            }
+            _categories = ['All', ...catSet.toList()];
           });
           _filterResults();
         }

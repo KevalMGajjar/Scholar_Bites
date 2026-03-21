@@ -62,13 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _unreadNotifsCount = 0;
 
   // Categories with Material icons for Story UI
-  final List<Map<String, dynamic>> _categories = [
-    {'name': 'Burgers', 'icon': Icons.lunch_dining_rounded},
-    {'name': 'Healthy', 'icon': Icons.eco_rounded},
-    {'name': 'Coffee', 'icon': Icons.coffee_rounded},
-    {'name': 'Snacks', 'icon': Icons.bakery_dining_rounded},
-    {'name': 'Drinks', 'icon': Icons.local_cafe_rounded},
-  ];
+  List<Map<String, dynamic>> _categories = [];
 
   final TextEditingController _homeSearchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -184,23 +178,38 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         } catch (_) {}
         
-        // Fetch trending items and unread notifications count concurrently
+        // Fetch trending items, unread count, AND all items concurrently
         final responses = await Future.wait([
           menuService.getTrendingItems(uniId),
           NotificationService().getUnreadCount(),
+          menuService.getMenuItems(uniId),
         ]);
         List<FoodItem> trending = responses[0] as List<FoodItem>;
         final int unreadCount = responses[1] as int;
+        final List<FoodItem> allItems = responses[2] as List<FoodItem>;
 
         if (trending.isEmpty) {
-          final allItems = await menuService.getMenuItems(uniId);
           trending = allItems.take(5).toList();
         }
+
+        // Build dynamic categories based on available menu
+        final Set<String> catSet = {};
+        for (var item in allItems) {
+          if (item.category.isNotEmpty) catSet.add(item.category);
+        }
+        
+        final List<Map<String, dynamic>> dynCategories = catSet.map((cat) {
+          return {
+            'name': cat,
+            'icon': _getIconForCategory(cat),
+          };
+        }).toList();
 
         if (mounted) {
           setState(() {
             _restaurants = rests;
             _trendingItems = trending;
+            _categories = dynCategories;
             _unreadNotifsCount = unreadCount;
             _isLoading = false;
           });
@@ -211,6 +220,19 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  IconData _getIconForCategory(String category) {
+    final lower = category.toLowerCase();
+    if (lower.contains('burger')) return Icons.lunch_dining_rounded;
+    if (lower.contains('pizza')) return Icons.local_pizza_rounded;
+    if (lower.contains('drink') || lower.contains('beverage') || lower.contains('coffee')) return Icons.local_cafe_rounded;
+    if (lower.contains('healthy') || lower.contains('salad')) return Icons.eco_rounded;
+    if (lower.contains('snack')) return Icons.bakery_dining_rounded;
+    if (lower.contains('dessert') || lower.contains('sweet')) return Icons.icecream_rounded;
+    if (lower.contains('indian')) return Icons.ramen_dining_rounded;
+    if (lower.contains('chinese')) return Icons.takeout_dining_rounded;
+    return Icons.restaurant_rounded;
   }
 
   void _onNavTapped(int index) {
@@ -248,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showFilterPopup() async {
-    final categories = ['All', ..._categories.map((c) => c['name'] as String), 'Pizza', 'Desserts', 'Chicken'];
+    final categories = ['All', ..._categories.map((c) => c['name'] as String)];
     final result = await showModalBottomSheet<SearchFilters>(
       context: context,
       isScrollControlled: true,
@@ -665,7 +687,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // 3. "Cravings" Story-style categories
                       SliverToBoxAdapter(
-                        child: Column(
+                        child: _categories.isNotEmpty ? Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Padding(
@@ -723,13 +745,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                         ),
                                       ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        cat['name'] as String,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1E1E1E),
+                                        ),
+                                      ),
                                     ],
                                   );
                                 }).toList(),
                               ),
                             ),
                           ],
-                        ),
+                        ) : const SizedBox.shrink(),
                       ),
 
                       // 4. Trending on Campus Carousel

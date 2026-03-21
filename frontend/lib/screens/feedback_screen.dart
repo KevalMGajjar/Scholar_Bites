@@ -27,7 +27,15 @@ const _knowledgeBase = <_FAQEntry>[
         'You can track your order in real-time from the Order History section in your profile. '
         'Once your food is being prepared, you\'ll receive a notification. '
         'Most orders are delivered within 15-25 minutes during peak hours.',
-    keywords: ['order', 'track', 'where', 'status', 'delivery', 'late', 'waiting'],
+    keywords: [
+      'order',
+      'track',
+      'where',
+      'status',
+      'delivery',
+      'late',
+      'waiting'
+    ],
   ),
   _FAQEntry(
     question: 'I received the wrong order',
@@ -39,8 +47,7 @@ const _knowledgeBase = <_FAQEntry>[
   ),
   _FAQEntry(
     question: 'How do I pay?',
-    answer:
-        'We support multiple payment methods:\n'
+    answer: 'We support multiple payment methods:\n'
         '\u{2022} UPI (Google Pay, PhonePe, Paytm)\n'
         '\u{2022} Debit/Credit Cards\n'
         '\u{2022} Scholar Bites Wallet\n\n'
@@ -61,19 +68,26 @@ const _knowledgeBase = <_FAQEntry>[
   ),
   _FAQEntry(
     question: 'The app is slow or crashing',
-    answer:
-        'Try these steps:\n'
+    answer: 'Try these steps:\n'
         '1. Close and reopen the app\n'
         '2. Check your internet connection\n'
         '3. Clear the app cache from your phone settings\n'
         '4. Update to the latest version\n\n'
         'If the issue persists, please email us with your phone model and Android version.',
-    keywords: ['slow', 'crash', 'bug', 'error', 'not working', 'lag', 'freeze', 'stuck'],
+    keywords: [
+      'slow',
+      'crash',
+      'bug',
+      'error',
+      'not working',
+      'lag',
+      'freeze',
+      'stuck'
+    ],
   ),
   _FAQEntry(
     question: 'How do I change my university?',
-    answer:
-        'To switch your university:\n'
+    answer: 'To switch your university:\n'
         '1. Go to Profile\n'
         '2. Log out\n'
         '3. Log in again with your phone number\n'
@@ -83,18 +97,25 @@ const _knowledgeBase = <_FAQEntry>[
   ),
   _FAQEntry(
     question: 'Food quality issue',
-    answer:
-        'We take food quality very seriously! Please:\n'
+    answer: 'We take food quality very seriously! Please:\n'
         '1. Take a photo of the food item\n'
         '2. Contact the canteen staff immediately using the options below\n'
         '3. We\'ll investigate and take appropriate action\n\n'
         'Your feedback helps us maintain high standards across all canteens.',
-    keywords: ['quality', 'bad', 'stale', 'cold', 'taste', 'hygiene', 'dirty', 'hair'],
+    keywords: [
+      'quality',
+      'bad',
+      'stale',
+      'cold',
+      'taste',
+      'hygiene',
+      'dirty',
+      'hair'
+    ],
   ),
   _FAQEntry(
     question: 'Canteen operating hours',
-    answer:
-        'Operating hours vary by canteen. Generally:\n'
+    answer: 'Operating hours vary by canteen. Generally:\n'
         '\u{2022} Breakfast: 7:30 AM - 10:00 AM\n'
         '\u{2022} Lunch: 12:00 PM - 3:00 PM\n'
         '\u{2022} Snacks: 4:00 PM - 6:00 PM\n'
@@ -151,7 +172,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     Future.delayed(const Duration(milliseconds: 600), () {
       final response = _findBestResponse(text);
       if (mounted) {
-        setState(() => _messages.add(_ChatMessage(text: response, isBot: true)));
+        setState(() {
+          _messages.add(_ChatMessage(text: response, isBot: true));
+          _showQuickTopics = true;
+        });
         _scrollToBottom();
       }
     });
@@ -166,7 +190,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
-        setState(() => _messages.add(_ChatMessage(text: entry.answer, isBot: true)));
+        setState(() {
+          _messages.add(_ChatMessage(text: entry.answer, isBot: true));
+          _showQuickTopics = true;
+        });
         _scrollToBottom();
       }
     });
@@ -337,7 +364,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: (msg.isBot ? Colors.black : _maroon).withValues(alpha: 0.08),
+              color:
+                  (msg.isBot ? Colors.black : _maroon).withValues(alpha: 0.08),
               blurRadius: 12,
               offset: const Offset(0, 3),
             ),
@@ -375,7 +403,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       _knowledgeBase[3], // Refund
       _knowledgeBase[4], // App issues
       _knowledgeBase[6], // Food quality
-      _knowledgeBase[8], // Hours
+      _knowledgeBase[7], // Hours
     ];
 
     return Padding(
@@ -696,8 +724,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   ),
                 ],
               ),
-              child: const Icon(Icons.send_rounded,
-                  color: Colors.white, size: 20),
+              child:
+                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],
