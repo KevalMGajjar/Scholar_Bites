@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { ChevronLeft, ChevronRight, RotateCcw, Clock, X, AlertTriangle } from 'lucide-react';
 
@@ -25,7 +24,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function OrderHistory() {
-  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
