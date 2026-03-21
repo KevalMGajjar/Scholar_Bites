@@ -33,23 +33,38 @@ class Restaurant {
 
   /// Whether the restaurant is currently accepting orders
   /// based on `is_open` flag AND opening/closing time window.
+  /// Uses UTC + 5:30 (IST) to ensure consistent behavior across iOS/Android.
   bool get isCurrentlyOpen {
     if (!isOpen) return false;
     if (openingTime == null || closingTime == null) return isOpen;
 
-    final now = DateTime.now();
-    final currentMinutes = now.hour * 60 + now.minute;
+    try {
+      // Use IST (UTC+5:30) instead of device local time to ensure
+      // consistent behavior across iOS and Android regardless of
+      // device timezone settings.
+      final utcNow = DateTime.now().toUtc();
+      final istNow = utcNow.add(const Duration(hours: 5, minutes: 30));
+      final currentMinutes = istNow.hour * 60 + istNow.minute;
 
-    final openParts = openingTime!.split(':');
-    final closeParts = closingTime!.split(':');
-    final openMinutes = int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
-    final closeMinutes = int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+      final openParts = openingTime!.split(':');
+      final closeParts = closingTime!.split(':');
 
-    // Handles overnight ranges (e.g. 22:00 - 02:00)
-    if (closeMinutes < openMinutes) {
-      return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
+      if (openParts.length < 2 || closeParts.length < 2) return isOpen;
+
+      final openMinutes = (int.tryParse(openParts[0]) ?? 0) * 60 +
+          (int.tryParse(openParts[1]) ?? 0);
+      final closeMinutes = (int.tryParse(closeParts[0]) ?? 0) * 60 +
+          (int.tryParse(closeParts[1]) ?? 0);
+
+      // Handles overnight ranges (e.g. 22:00 - 02:00)
+      if (closeMinutes < openMinutes) {
+        return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
+      }
+      return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    } catch (_) {
+      // If anything goes wrong parsing times, fall back to the is_open flag
+      return isOpen;
     }
-    return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
   }
 
   /// Human-friendly hours string

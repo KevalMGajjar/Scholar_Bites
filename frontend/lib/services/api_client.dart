@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../main.dart';
-import '../screens/splash_screen.dart';
+import '../models/user_model.dart';
+import '../screens/welcome_screen.dart';
 import '../utils/app_config.dart';
 import '../utils/token_storage.dart';
 
@@ -74,23 +76,31 @@ class ApiClient {
     );
   }
 
-  /// Navigate to splash screen and show a device-conflict message
-  static void _forceLogout(String message) {
-    final ctx = FoodTechApp.navigatorKey.currentContext;
-    if (ctx == null) return;
+  /// Clear all session data and navigate to welcome screen on device conflict
+  static void _forceLogout(String message) async {
+    // 1. Wipe secure storage (JWT + user metadata)
+    await TokenStorage.deleteToken();
 
-    // Navigate to splash and clear the stack
-    FoodTechApp.navigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SplashScreen()),
+    // 2. Wipe Hive cached user so SplashScreen can't auto-login
+    try {
+      final userBox = Hive.box<UserModel>('userBox');
+      await userBox.delete('currentUser');
+    } catch (_) {}
+
+    // 3. Navigate directly to WelcomeScreen (not SplashScreen)
+    final navState = FoodTechApp.navigatorKey.currentState;
+    if (navState == null) return;
+
+    navState.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       (route) => false,
     );
 
-    // Show a snackbar on the splash screen after the frame
+    // 4. Show explanation snackbar
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final scaffoldMessenger = ScaffoldMessenger.maybeOf(
-        FoodTechApp.navigatorKey.currentContext!,
-      );
-      scaffoldMessenger?.showSnackBar(
+      final ctx = FoodTechApp.navigatorKey.currentContext;
+      if (ctx == null) return;
+      ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: const Color(0xFF8B1C28),

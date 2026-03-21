@@ -81,6 +81,28 @@ export default function Restaurants() {
   const inputClass = "w-full px-4 py-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[14px] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder-slate-600";
   const labelClass = "block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2";
 
+  /** Compute real-time open/closed status using is_open flag + time window */
+  const computeIsOpen = (r: Restaurant): boolean => {
+    if (!r.is_open) return false;
+    if (!r.opening_time || !r.closing_time) return r.is_open;
+    try {
+      const now = new Date();
+      // Use IST (UTC+5:30) for consistency with backend
+      const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+      const currentMinutes = (utcMinutes + 330) % 1440; // +5h30m in minutes
+      const openParts = r.opening_time.substring(0, 5).split(':');
+      const closeParts = r.closing_time.substring(0, 5).split(':');
+      const openMin = parseInt(openParts[0]) * 60 + parseInt(openParts[1]);
+      const closeMin = parseInt(closeParts[0]) * 60 + parseInt(closeParts[1]);
+      if (closeMin < openMin) {
+        return currentMinutes >= openMin || currentMinutes <= closeMin;
+      }
+      return currentMinutes >= openMin && currentMinutes <= closeMin;
+    } catch {
+      return r.is_open;
+    }
+  };
+
   return (
     <div className="p-8 animate-fade-in">
       {/* ── Header ── */}
@@ -160,9 +182,11 @@ export default function Restaurants() {
               </div>
               {/* Status */}
               <div className="absolute bottom-3 right-3">
-                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest backdrop-blur-md ${r.is_open ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/15 text-red-400 border border-red-500/20'}`}>
-                  {r.is_open ? 'Open' : 'Closed'}
+                {(() => { const open = computeIsOpen(r); return (
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest backdrop-blur-md ${open ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/15 text-red-400 border border-red-500/20'}`}>
+                  {open ? 'Open' : 'Closed'}
                 </span>
+                ); })()}
               </div>
             </div>
             {/* Content */}
