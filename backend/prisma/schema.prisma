@@ -72,6 +72,7 @@ model User {
 enum TransactionType {
   credit
   debit
+  refund
 }
 
 model WalletTransaction {
