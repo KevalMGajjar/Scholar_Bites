@@ -23,11 +23,8 @@ export const generalLimiter = rateLimit({
     max: 500,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { message: 'Too many requests, please try again later.' },
-    keyGenerator: (req) => {
-        // Use X-Forwarded-For if behind a proxy, otherwise IP
-        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
-    },
+    message: { message: 'Too many requests, please try again later.' }
+    // Removed custom keyGenerator so express-rate-limit uses its default secure IP handling
 });
 
 /** Auth endpoint rate limiter: 10 requests per 15 minutes per IP */
@@ -39,7 +36,8 @@ export const authLimiter = rateLimit({
     message: { message: 'Too many authentication attempts. Please try again in 15 minutes.' },
     keyGenerator: (req) => {
         // Rate limit by IP + email (if provided) to prevent distributed attacks
-        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+        // Using req.socket.remoteAddress to avoid ERR_ERL_KEY_GEN_IPV6 validation error
+        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
         const email = req.body?.email || '';
         return `${ip}:${email}`;
     },
