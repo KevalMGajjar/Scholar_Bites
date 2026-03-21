@@ -51,8 +51,10 @@ class _GroupMenuPickerScreenState extends State<GroupMenuPickerScreen> {
       final items = await _menuService.getMenuItems(universityId);
       if (!mounted) return;
       setState(() {
-        _allItems = items;
-        _filtered = items;
+        // Keep all items but sort available ones first
+        _allItems = items
+          ..sort((a, b) => (b.actuallyAvailable ? 1 : 0).compareTo(a.actuallyAvailable ? 1 : 0));
+        _filtered = _allItems;
         _isLoading = false;
       });
     } catch (e) {
@@ -201,104 +203,122 @@ class _GroupMenuPickerScreenState extends State<GroupMenuPickerScreen> {
   }
 
   Widget _buildFoodCard(FoodItem item, int index) {
+    final isAvailable = item.actuallyAvailable;
+
     return GestureDetector(
-      onTap: () => _addItem(item),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _maroon.withValues(alpha: 0.06)),
-          boxShadow: [
-            BoxShadow(color: _maroon.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Food image in circular dish style
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: _getDishColor(index),
-                  width: 3,
+      onTap: isAvailable ? () => _addItem(item) : null,
+      child: Opacity(
+        opacity: isAvailable ? 1.0 : 0.5,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isAvailable ? Colors.white : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: isAvailable ? _maroon.withValues(alpha: 0.06) : Colors.grey.shade300),
+            boxShadow: isAvailable
+                ? [BoxShadow(color: _maroon.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))]
+                : [],
+          ),
+          child: Row(
+            children: [
+              // Food image in circular dish style
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isAvailable ? _getDishColor(index) : Colors.grey.shade400,
+                    width: 3,
+                  ),
+                  boxShadow: isAvailable
+                      ? [BoxShadow(color: _getDishColor(index).withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 3))]
+                      : [],
                 ),
-                boxShadow: [
-                  BoxShadow(color: _getDishColor(index).withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 3)),
-                ],
+                child: ClipOval(
+                  child: item.imageUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: item.imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(color: Colors.grey[100], child: Center(child: SpoonLoader(size: 20))),
+                          errorWidget: (_, __, ___) => Container(color: Colors.grey[100], child: const Icon(Icons.fastfood_rounded, color: Colors.grey)),
+                        )
+                      : Container(color: Colors.grey[100], child: const Icon(Icons.fastfood_rounded, color: Colors.grey)),
+                ),
               ),
-              child: ClipOval(
-                child: item.imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: item.imageUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(color: Colors.grey[100], child: Center(child: SpoonLoader(size: 20))),
-                        errorWidget: (_, __, ___) => Container(color: Colors.grey[100], child: const Icon(Icons.fastfood_rounded, color: Colors.grey)),
-                      )
-                    : Container(color: Colors.grey[100], child: const Icon(Icons.fastfood_rounded, color: Colors.grey)),
+
+              const SizedBox(width: 14),
+
+              // Item details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 15, color: isAvailable ? _darkText : Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: isAvailable ? _maroon.withValues(alpha: 0.08) : Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            item.category,
+                            style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: isAvailable ? _maroon : Colors.grey),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${item.calories} cal',
+                          style: GoogleFonts.poppins(fontSize: 11, color: _darkText.withValues(alpha: 0.4)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(width: 14),
-
-            // Item details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // Price + Add button or Unavailable chip
+              Column(
                 children: [
                   Text(
-                    item.name,
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 15, color: _darkText),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    '₹${item.price.toStringAsFixed(0)}',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w900, fontSize: 16, color: isAvailable ? _maroon : Colors.grey),
                   ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: _maroon.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          item.category,
-                          style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: _maroon),
-                        ),
+                  const SizedBox(height: 4),
+                  if (isAvailable)
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _maroon,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${item.calories} cal',
-                        style: GoogleFonts.poppins(fontSize: 11, color: _darkText.withValues(alpha: 0.4)),
+                      child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ],
-                  ),
+                      child: Text(
+                        'Closed',
+                        style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.grey.shade600),
+                      ),
+                    ),
                 ],
               ),
-            ),
-
-            // Price + Add button
-            Column(
-              children: [
-                Text(
-                  '₹${item.price.toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w900, fontSize: 16, color: _maroon),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: _maroon,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ).animate().fadeIn(delay: Duration(milliseconds: 50 * index), duration: 300.ms).slideX(begin: 0.05);
