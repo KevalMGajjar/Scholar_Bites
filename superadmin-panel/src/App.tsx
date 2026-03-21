@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import UniversityAnalysis from './pages/UniversityAnalysis';
 import AuditLogs from './pages/AuditLogs';
+import RefundQueue from './pages/RefundQueue';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -40,6 +41,7 @@ export default function App() {
 
             <Route path="/universities/:id" element={<UniversityAnalysis />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
+            <Route path="/refunds" element={<RefundQueue />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
