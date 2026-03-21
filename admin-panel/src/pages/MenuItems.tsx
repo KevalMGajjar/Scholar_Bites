@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Edit2, Image as ImageIcon, Plus, Power, PowerOff, X, Flame, Weight } from 'lucide-react';
+import { Edit2, Image as ImageIcon, Plus, Power, PowerOff, X, Flame, Weight, Leaf, Beef } from 'lucide-react';
 
 interface MenuItem {
   id: string;
@@ -13,6 +13,7 @@ interface MenuItem {
   is_available: boolean;
   stock_quantity: number;
   restaurant_id: string;
+  is_veg?: boolean;
   nutritional_info?: { calories?: number; weight?: number; weight_grams?: number };
 }
 
@@ -29,7 +30,7 @@ export default function MenuItems() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState('');
-  const [form, setForm] = useState({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '', calories: '', weight_grams: '' });
+  const [form, setForm] = useState({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: '', calories: '', weight_grams: '', is_veg: true });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -56,13 +57,13 @@ export default function MenuItems() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant, calories: '', weight_grams: '' });
+    setForm({ name: '', description: '', price: '', category: '', stock_quantity: 50, restaurant_id: selectedRestaurant, calories: '', weight_grams: '', is_veg: true });
     setImageFile(null); setImagePreview(null); setShowForm(true);
   };
 
   const openEdit = (item: MenuItem) => {
     setEditing(item);
-    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight_grams: item.nutritional_info?.weight?.toString() || item.nutritional_info?.weight_grams?.toString() || '' });
+    setForm({ name: item.name, description: item.description || '', price: item.price, category: item.category, stock_quantity: item.stock_quantity, restaurant_id: item.restaurant_id, calories: item.nutritional_info?.calories?.toString() || '', weight_grams: item.nutritional_info?.weight?.toString() || item.nutritional_info?.weight_grams?.toString() || '', is_veg: item.is_veg ?? true });
     setImageFile(null); setImagePreview(item.image_url || null); setShowForm(true);
   };
 
@@ -74,6 +75,7 @@ export default function MenuItems() {
       fd.append('price', form.price); fd.append('category', form.category);
       if (!editing) fd.append('restaurant_id', form.restaurant_id);
       fd.append('stock_quantity', form.stock_quantity.toString());
+      fd.append('is_veg', form.is_veg.toString());
       const nutritionalInfo: Record<string, number> = {};
       if (form.calories) nutritionalInfo.calories = parseFloat(form.calories);
       if (form.weight_grams) nutritionalInfo.weight = parseFloat(form.weight_grams);
@@ -129,7 +131,7 @@ export default function MenuItems() {
               <div><label className={labelClass}>Description <span className="text-red-400">*</span></label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} required
                   className={`${inputClass} resize-none`} placeholder="Brief details about the item…" /></div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelClass}>Price (₹) <span className="text-red-400">*</span></label>
                   <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required className={inputClass} /></div>
                 <div><label className={labelClass}>Category <span className="text-red-400">*</span></label>
@@ -144,6 +146,21 @@ export default function MenuItems() {
                     <option value="Chinese" className="bg-[#0c0f18]">Chinese</option>
                     <option value="Snacks" className="bg-[#0c0f18]">Snacks</option>
                   </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Dietary Type</label>
+                  <div className="flex gap-3">
+                    <label className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all border ${form.is_veg ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:bg-white/[0.06]'}`}>
+                      <input type="radio" name="diet" className="hidden" checked={form.is_veg} onChange={() => setForm({ ...form, is_veg: true })} />
+                      <Leaf size={14} /> <span className="text-[13px] font-bold">Veg</span>
+                    </label>
+                    <label className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all border ${!form.is_veg ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:bg-white/[0.06]'}`}>
+                      <input type="radio" name="diet" className="hidden" checked={!form.is_veg} onChange={() => setForm({ ...form, is_veg: false })} />
+                      <Beef size={14} /> <span className="text-[13px] font-bold">Non-Veg</span>
+                    </label>
+                  </div>
                 </div>
                 <div><label className={labelClass}>Inventory <span className="text-red-400">*</span></label>
                   <input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: parseInt(e.target.value) })} required className={inputClass} /></div>
@@ -198,7 +215,12 @@ export default function MenuItems() {
                         <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center"><ImageIcon size={18} className="text-slate-700" /></div>
                       )}
                       <div>
-                        <p className="text-white text-[13px] font-bold tracking-[-0.01em]">{item.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-white text-[13px] font-bold tracking-[-0.01em]">{item.name}</p>
+                          <div title={item.is_veg !== false ? 'Vegetarian' : 'Non-Vegetarian'} className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${item.is_veg !== false ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-red-500/50 bg-red-500/10'}`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${item.is_veg !== false ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                          </div>
+                        </div>
                         <p className="text-slate-600 text-[12px] truncate max-w-[250px]">{item.description}</p>
                         {item.nutritional_info && (item.nutritional_info.calories || item.nutritional_info.weight_grams) && (
                           <div className="flex items-center gap-2 mt-1">

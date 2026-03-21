@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:math' as math;
 import '../services/auth_service.dart';
@@ -185,7 +185,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 _iconRotation.value * (math.pi * 2), // Radians
                             child: ClipOval(
                               child: Image.asset(
-                                'assets/icon/image1.png',
+                                'assets/icon/app_icon_maroon.png',
                                 width: 80,
                                 height: 80,
                                 fit: BoxFit.cover,

@@ -63,6 +63,7 @@ const createTablesQuery = `
     category VARCHAR(50) NOT NULL,
     image_url TEXT,
     is_available BOOLEAN DEFAULT TRUE,
+    is_veg BOOLEAN DEFAULT TRUE,
     stock_quantity INTEGER DEFAULT 0 CHECK (stock_quantity >= 0),
     nutritional_info JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()

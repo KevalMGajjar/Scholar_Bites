@@ -484,27 +484,28 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
     final hasCustomEmail = supportEmail != null && supportEmail.trim().isNotEmpty;
     final hasCustomPhone = supportPhone != null && supportPhone.trim().isNotEmpty;
-    final hasAnyCustom = hasCustomEmail || hasCustomPhone;
-
-    final showEmail = hasCustomEmail || !hasAnyCustom;
-    final showPhone = hasCustomPhone || !hasAnyCustom;
 
     final List<Widget> chips = [];
 
-    if (showEmail) {
-      chips.add(Expanded(
-        child: _buildContactChip(
-          icon: Icons.email_rounded,
-          label: 'Email Us',
-          color: const Color(0xFF5C6BC0),
-          onTap: () => _showContactInfo(
-            'Email Support',
-            hasCustomEmail ? supportEmail : 'support@scholarbites.in',
-            'Send us an email for detailed issues, refund requests, or suggestions. We typically respond within 24 hours.',
-            Icons.email_rounded,
-          ),
+    chips.add(Expanded(
+      child: _buildContactChip(
+        icon: Icons.email_rounded,
+        label: 'Email Us',
+        color: const Color(0xFF5C6BC0),
+        onTap: () => _showContactInfo(
+          'Email Support',
+          'scholarbites@gmail.com',
+          'Send us an email for detailed issues, refund requests, or suggestions. We typically respond within 24 hours.',
+          Icons.email_rounded,
         ),
-      ));
+      ),
+    ));
+
+    String staffDetails = 'Visit the canteen counter and ask for the manager. They can help with immediate orders and food quality.';
+    if (hasCustomEmail || hasCustomPhone) {
+      staffDetails += '\n\nUniversity Contact Details:';
+      if (hasCustomPhone) staffDetails += '\nPhone: $supportPhone';
+      if (hasCustomEmail) staffDetails += '\nEmail: $supportEmail';
     }
 
     chips.add(Expanded(
@@ -515,27 +516,25 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         onTap: () => _showContactInfo(
           'University Staff',
           'Canteen Manager',
-          'Visit the canteen counter and ask for the manager. They can help with immediate orders and food quality.',
+          staffDetails,
           Icons.people_alt_rounded,
         ),
       ),
     ));
 
-    if (showPhone) {
-      chips.add(Expanded(
-        child: _buildContactChip(
-          icon: Icons.phone_rounded,
-          label: 'Call',
-          color: const Color(0xFFE65100),
-          onTap: () => _showContactInfo(
-            'Call Support',
-            hasCustomPhone ? supportPhone : '+91 98765 43210',
-            'Available Monday - Saturday\n9:00 AM - 6:00 PM\n\nFor urgent issues during canteen hours, call the helpline directly.',
-            Icons.phone_rounded,
-          ),
+    chips.add(Expanded(
+      child: _buildContactChip(
+        icon: Icons.phone_rounded,
+        label: 'Call',
+        color: const Color(0xFFE65100),
+        onTap: () => _showContactInfo(
+          'Call Support',
+          '7016806164',
+          'Available Monday - Saturday\n9:00 AM - 6:00 PM\n\nFor urgent issues during canteen hours, call the helpline directly.',
+          Icons.phone_rounded,
         ),
-      ));
-    }
+      ),
+    ));
 
     final List<Widget> spacedChips = [];
     for (int i = 0; i < chips.length; i++) {

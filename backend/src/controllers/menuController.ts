@@ -82,7 +82,7 @@ export const getMenu = async (req: Request, res: Response) => {
 };
 
 export const addMenuItem = async (req: AuthRequest, res: Response) => {
-    const { name, description, price, category, image_url, nutritional_info, stock_quantity, restaurant_id } = req.body;
+    const { name, description, price, category, image_url, nutritional_info, stock_quantity, restaurant_id, is_veg } = req.body;
     
     if (!restaurant_id) {
         return res.status(400).json({ message: 'Restaurant ID is required' });
@@ -99,9 +99,9 @@ export const addMenuItem = async (req: AuthRequest, res: Response) => {
         if (restCheck.rows.length === 0) return res.sendStatus(403);
 
         const result = await pool.query(
-            `INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [restaurant_id, name, description, price, category, image_url, nutritional_info ? (typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info) : null, stock_quantity || 0]
+            `INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity, is_veg)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [restaurant_id, name, description, price, category, image_url, nutritional_info ? (typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info) : null, stock_quantity || 0, is_veg !== undefined ? (is_veg === 'true' || is_veg === true) : true]
         );
         
         let item = result.rows[0];
@@ -172,7 +172,7 @@ export const updateStock = async (req: Request, res: Response) => {
 // ─── Admin: Update Menu Item (full edit) ───
 export const updateMenuItem = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, description, price, category, nutritional_info, stock_quantity, is_available } = req.body;
+    const { name, description, price, category, nutritional_info, stock_quantity, is_available, is_veg } = req.body;
     let { image_url } = req.body;
 
     try {
@@ -204,6 +204,7 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         if (nutritional_info !== undefined) { updates.push(`nutritional_info = $${idx++}`); params.push(typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info); }
         if (stock_quantity !== undefined) { updates.push(`stock_quantity = $${idx++}`); params.push(stock_quantity); }
         if (is_available !== undefined) { updates.push(`is_available = $${idx++}`); params.push(is_available); }
+        if (is_veg !== undefined) { updates.push(`is_veg = $${idx++}`); params.push(is_veg === 'true' || is_veg === true); }
 
         if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
 
