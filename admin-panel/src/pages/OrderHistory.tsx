@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, Clock, X, AlertTriangle } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -12,6 +13,7 @@ interface Order {
   items: { item_name: string; quantity: number; price_at_time: string }[];
   created_at: string;
   payment_id: string;
+  order_token?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -23,11 +25,18 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function OrderHistory() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Refund request modal state
+  const [refundModalOrder, setRefundModalOrder] = useState<Order | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -42,11 +51,23 @@ export default function OrderHistory() {
   }, [page, statusFilter]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t); } }, [toast]);
 
-  const refundOrder = async (orderId: string) => {
-    if (!confirm('Are you sure you want to refund this order?')) return;
-    try { await api.post(`/admin/orders/${orderId}/refund`, { reason: 'Admin refund' }); fetchOrders(); }
-    catch (err) { console.error(err); }
+  const submitRefundRequest = async () => {
+    if (!refundModalOrder || !refundReason.trim()) return;
+    setRefundSubmitting(true);
+    try {
+      await api.post(`/admin/orders/${refundModalOrder.id}/request-refund`, { reason: refundReason.trim() });
+      setToast({ msg: 'Refund request submitted for super admin approval ✓', type: 'success' });
+      setRefundModalOrder(null);
+      setRefundReason('');
+      fetchOrders();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to submit refund request';
+      setToast({ msg, type: 'error' });
+    } finally {
+      setRefundSubmitting(false);
+    }
   };
 
   const formatDate = (d: string) =>
@@ -56,6 +77,16 @@ export default function OrderHistory() {
 
   return (
     <div className="p-8 animate-fade-in">
+      {/* ── Toast ── */}
+      {toast && (
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl text-[13px] font-semibold shadow-2xl animate-fade-up flex items-center gap-2 ${
+          toast.type === 'success' ? 'bg-emerald-500/15 border border-emerald-500/20 text-emerald-400' : 'bg-red-500/15 border border-red-500/20 text-red-400'
+        }`}>
+          {toast.msg}
+          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100"><X size={14} /></button>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div className="flex items-end justify-between mb-10 animate-fade-up">
         <div className="space-y-1.5">
@@ -100,7 +131,7 @@ export default function OrderHistory() {
                   <tr key={order.id} className="hover:bg-white/[0.02] transition-colors duration-200 group animate-fade-up" style={{ animationDelay: `${idx * 30}ms` }}>
                     <td className="px-6 py-4">
                       <span className="text-indigo-400 font-mono text-[11px] font-bold bg-indigo-500/8 px-2 py-1 rounded-lg">
-                        #{order.id.slice(-6).toUpperCase()}
+                        #{order.order_token || order.id.slice(-6).toUpperCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -127,10 +158,10 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-6 py-4 text-slate-600 text-[12px] font-medium whitespace-nowrap">{formatDate(order.created_at)}</td>
                     <td className="px-6 py-4">
-                      {order.status !== 'cancelled' && order.status !== 'completed' && (
-                        <button onClick={() => refundOrder(order.id)}
+                      {order.status !== 'cancelled' && (
+                        <button onClick={() => { setRefundModalOrder(order); setRefundReason(''); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[11px] font-bold hover:bg-red-500/15 transition-all opacity-0 group-hover:opacity-100 btn-press">
-                          <RotateCcw size={11} /> Refund
+                          <RotateCcw size={11} /> Request Refund
                         </button>
                       )}
                     </td>
@@ -157,6 +188,69 @@ export default function OrderHistory() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Refund Request Modal ── */}
+      {refundModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setRefundModalOrder(null)}>
+          <div className="bg-[#0c0e16] border border-white/[0.06] rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-white text-[18px] font-extrabold">Request Refund</h3>
+                <p className="text-slate-500 text-[12px] mt-0.5">This will be sent to super admin for approval</p>
+              </div>
+            </div>
+
+            {/* Order summary */}
+            <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 mb-5">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-indigo-400 font-mono text-[12px] font-bold">#{refundModalOrder.order_token || refundModalOrder.id.slice(-6).toUpperCase()}</span>
+                <span className="text-white text-[16px] font-extrabold">₹{parseFloat(refundModalOrder.total_amount).toFixed(0)}</span>
+              </div>
+              <p className="text-slate-500 text-[12px]">{refundModalOrder.user_name} • {refundModalOrder.restaurant_name}</p>
+              <div className="mt-2 space-y-0.5">
+                {refundModalOrder.items?.filter(i => i.item_name).map(i => (
+                  <span key={i.item_name} className="block text-slate-600 text-[11px]">
+                    <span className="text-indigo-400 font-bold">{i.quantity}x</span> {i.item_name}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Reason input */}
+            <label className="block text-slate-400 text-[12px] font-bold uppercase tracking-wider mb-2">
+              Reason for refund <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              value={refundReason}
+              onChange={e => setRefundReason(e.target.value)}
+              placeholder="e.g. Student received wrong order, food quality issue..."
+              rows={3}
+              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-white text-[13px] placeholder-slate-600 focus:outline-none focus:border-indigo-500/30 resize-none transition-colors"
+            />
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setRefundModalOrder(null)}
+                className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-slate-400 text-[13px] font-semibold hover:bg-white/[0.06] transition-all btn-press">
+                Cancel
+              </button>
+              <button
+                onClick={submitRefundRequest}
+                disabled={!refundReason.trim() || refundSubmitting}
+                className="flex-1 py-3 rounded-xl bg-red-500/15 border border-red-500/20 text-red-400 text-[13px] font-bold hover:bg-red-500/25 transition-all disabled:opacity-30 btn-press flex items-center justify-center gap-2">
+                {refundSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin" />
+                ) : (
+                  <><Clock size={14} /> Submit for Approval</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

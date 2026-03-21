@@ -173,6 +173,22 @@ const createTablesQuery = `
   ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS active_token TEXT;
   ALTER TABLE staff ADD COLUMN IF NOT EXISTS active_token TEXT;
+
+  -- 11. Refund Requests Table (Two-step approval: admin → super_admin)
+  CREATE TABLE IF NOT EXISTS refund_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES orders(id),
+    requested_by UUID NOT NULL REFERENCES staff(id),
+    approved_by UUID REFERENCES staff(id),
+    reason TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    admin_note TEXT,
+    amount NUMERIC(10,2) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS idx_refund_status ON refund_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_refund_order ON refund_requests(order_id);
 `;
 
 const initDb = async () => {

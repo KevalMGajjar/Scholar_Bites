@@ -487,52 +487,209 @@ export const getOrderDetails = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// ─── Admin: Refund Order ───
-export const refundOrder = async (req: AuthRequest, res: Response) => {
+// ─── Admin: Request Refund (creates pending request for super_admin approval) ───
+export const requestRefund = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { reason } = req.body;
+    const staffId = req.user?.id;
+
+    if (!reason || reason.trim().length === 0) {
+        return res.status(400).json({ message: 'Reason is required for refund requests' });
+    }
+
+    try {
+        // Check if order exists
+        const orderRes = await pool.query('SELECT id, total_amount, status FROM orders WHERE id = $1', [id]);
+        if (orderRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const order = orderRes.rows[0];
+
+        if (order.status === 'cancelled') {
+            return res.status(400).json({ message: 'Order is already cancelled' });
+        }
+
+        // Check no pending request already exists for this order
+        const existingReq = await pool.query(
+            "SELECT id FROM refund_requests WHERE order_id = $1 AND status = 'pending'",
+            [id]
+        );
+        if (existingReq.rows.length > 0) {
+            return res.status(409).json({ message: 'A refund request is already pending for this order' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO refund_requests (order_id, requested_by, reason, amount, status)
+             VALUES ($1, $2, $3, $4, 'pending') RETURNING *`,
+            [id, staffId, reason.trim(), order.total_amount]
+        );
+
+        auditLog({ userId: staffId, action: 'REFUND_REQUESTED', resource: `order:${id}`, details: reason, ip: getRequestIp(req) });
+
+        res.status(201).json({ message: 'Refund request submitted for approval', request: result.rows[0] });
+    } catch (error: any) {
+        console.error('requestRefund error:', error);
+        res.status(500).json({ message: error.message || 'Server error' });
+    }
+};
+
+// ─── Super Admin: Get All Refund Requests ───
+export const getRefundRequests = async (req: AuthRequest, res: Response) => {
+    const { status: filterStatus } = req.query;
+
+    try {
+        const staffRes = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
+        if (staffRes.rows.length === 0) return res.sendStatus(403);
+        const uniId = staffRes.rows[0].university_id;
+
+        let query = `
+            SELECT rr.*,
+                   o.order_token, o.status as order_status,
+                   u.name as customer_name, u.phone as customer_phone,
+                   r.name as restaurant_name,
+                   s.name as requested_by_name, s.role as requested_by_role,
+                   sa.name as approved_by_name,
+                   COALESCE(json_agg(
+                       json_build_object(
+                           'item_name', mi.name,
+                           'quantity', oi.quantity,
+                           'price_at_time', oi.price_at_time
+                       )
+                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as order_items
+            FROM refund_requests rr
+            JOIN orders o ON rr.order_id = o.id
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN staff s ON rr.requested_by = s.id
+            LEFT JOIN staff sa ON rr.approved_by = sa.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.university_id = $1
+        `;
+        const params: any[] = [uniId];
+        let pIdx = 2;
+
+        if (filterStatus) {
+            query += ` AND rr.status = $${pIdx++}`;
+            params.push(filterStatus);
+        }
+
+        query += ` GROUP BY rr.id, o.order_token, o.status, u.name, u.phone, r.name, s.name, s.role, sa.name
+                   ORDER BY rr.created_at DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error: any) {
+        console.error('getRefundRequests error:', error);
+        res.status(500).json({ message: error.message || 'Server error' });
+    }
+};
+
+// ─── Super Admin: Approve Refund ───
+export const approveRefund = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params; // refund_request id
+    const superAdminId = req.user?.id;
 
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        const orderRes = await client.query('SELECT status, user_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
-        const currentOrder = orderRes.rows[0];
-        
-        if (!currentOrder) {
-            throw new Error('Order not found');
+        // 1. Lock and validate the refund request
+        const reqRes = await client.query(
+            "SELECT * FROM refund_requests WHERE id = $1 AND status = 'pending' FOR UPDATE",
+            [id]
+        );
+        if (reqRes.rows.length === 0) {
+            throw new Error('Refund request not found or already processed');
         }
 
-        // If not already cancelled, cancel it and restore stock
-        if (currentOrder.status !== 'cancelled') {
-            const itemsRes = await client.query('SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1', [id]);
-            
-            const sortedItems = itemsRes.rows.sort((a, b) => a.menu_item_id.localeCompare(b.menu_item_id));
-            
+        const refundReq = reqRes.rows[0];
+        const orderId = refundReq.order_id;
+        const refundAmount = Number(refundReq.amount);
+
+        // 2. Get the order and user
+        const orderRes = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+        if (orderRes.rows.length === 0) throw new Error('Order not found');
+        const order = orderRes.rows[0];
+
+        // 3. If not already cancelled, cancel + restore stock
+        if (order.status !== 'cancelled') {
+            const itemsRes = await client.query('SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1', [orderId]);
+            const sortedItems = itemsRes.rows.sort((a: any, b: any) => a.menu_item_id.localeCompare(b.menu_item_id));
             for (const item of sortedItems) {
                 await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
                 await client.query('UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
             }
+            await client.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [orderId]);
         }
 
-        const result = await client.query(
-            `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *`,
-            [id]
+        // 4. Credit wallet
+        await client.query(
+            'UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+            [refundAmount, order.user_id]
         );
 
-        const order = result.rows[0];
+        // 5. Record wallet transaction
+        await client.query(
+            `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
+             VALUES ($1, $2, 'refund', $3, $4)`,
+            [order.user_id, refundAmount, `Refund for Order #${order.order_token || orderId.toString().substring(0, 8)}`, orderId]
+        );
+
+        // 6. Mark refund request as approved
+        await client.query(
+            "UPDATE refund_requests SET status = 'approved', approved_by = $1, resolved_at = NOW() WHERE id = $2",
+            [superAdminId, id]
+        );
+
         await client.query('COMMIT');
 
-        // Notify user about refund
-        emitStatusUpdate(currentOrder.user_id, { ...order, refund_reason: reason || 'Refund processed by admin' });
+        // 7. Notify user via socket + push
+        emitStatusUpdate(order.user_id, { ...order, status: 'cancelled', refund_amount: refundAmount });
 
-        res.json({ message: 'Order refunded successfully', order });
+        await createAndPush(
+            order.user_id,
+            'refund',
+            'Refund Credited! 💰',
+            `₹${refundAmount.toFixed(0)} has been refunded to your wallet for Order #${order.order_token || orderId.toString().substring(0, 6)}.`,
+            { order_id: String(orderId), type: 'refund', amount: String(refundAmount) }
+        );
+
+        auditLog({ userId: superAdminId, action: 'REFUND_APPROVED', resource: `order:${orderId}`, details: `amount:${refundAmount}`, ip: getRequestIp(req) });
+
+        res.json({ message: `₹${refundAmount.toFixed(0)} refunded to student's wallet`, refund_request_id: id });
     } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error(error);
+        console.error('approveRefund error:', error);
         res.status(500).json({ message: error.message || 'Server error' });
     } finally {
         client.release();
+    }
+};
+
+// ─── Super Admin: Reject Refund ───
+export const rejectRefund = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { note } = req.body;
+    const superAdminId = req.user?.id;
+
+    try {
+        const result = await pool.query(
+            "UPDATE refund_requests SET status = 'rejected', approved_by = $1, admin_note = $2, resolved_at = NOW() WHERE id = $3 AND status = 'pending' RETURNING *",
+            [superAdminId, note || 'Rejected by super admin', id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Refund request not found or already processed' });
+        }
+
+        auditLog({ userId: superAdminId, action: 'REFUND_REJECTED', resource: `refund_request:${id}`, details: note, ip: getRequestIp(req) });
+
+        res.json({ message: 'Refund request rejected', request: result.rows[0] });
+    } catch (error: any) {
+        console.error('rejectRefund error:', error);
+        res.status(500).json({ message: error.message || 'Server error' });
     }
 };

@@ -4,6 +4,7 @@ import { SocketProvider } from './context/SocketContext';
 import Login from './pages/Login';
 import LiveOrders from './pages/LiveOrders';
 import OrderHistory from './pages/OrderHistory';
+import RefundQueue from './pages/RefundQueue';
 import Restaurants from './pages/Restaurants';
 import MenuItems from './pages/MenuItems';
 import Statistics from './pages/Statistics';
@@ -50,6 +51,12 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SuperAdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== 'super_admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <BrowserRouter basename="/admin">
@@ -59,6 +66,7 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<LiveOrders />} />
             <Route path="/orders" element={<AdminRoute><OrderHistory /></AdminRoute>} />
+            <Route path="/refunds" element={<SuperAdminRoute><RefundQueue /></SuperAdminRoute>} />
             <Route path="/restaurants" element={<AdminRoute><Restaurants /></AdminRoute>} />
             <Route path="/menu" element={<AdminRoute><MenuItems /></AdminRoute>} />
             <Route path="/statistics" element={<AdminRoute><Statistics /></AdminRoute>} />

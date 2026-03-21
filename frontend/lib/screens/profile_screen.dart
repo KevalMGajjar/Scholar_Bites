@@ -287,9 +287,10 @@ class _WalletScreenState extends State<WalletScreen> {
                         )
                       else
                         ..._transactions.map((tx) {
-                          final isCredit = tx['type'] == 'credit';
+                          final isCredit = tx['type'] == 'credit' || tx['type'] == 'refund';
+                          final isRefund = tx['type'] == 'refund';
                           final amount = double.parse(tx['amount'].toString());
-                          final date = DateTime.parse(tx['created_at']);
+                          final date = DateTime.parse(tx['created_at']).toLocal();
                           
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -308,7 +309,8 @@ class _WalletScreenState extends State<WalletScreen> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
-                                    isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                                    isRefund ? Icons.keyboard_return_rounded 
+                                             : (isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded),
                                     color: isCredit ? Colors.green : Colors.red,
                                     size: 20,
                                   ),
@@ -319,8 +321,10 @@ class _WalletScreenState extends State<WalletScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        tx['description'] ?? (isCredit ? 'Top-up' : 'Payment'),
+                                        tx['description'] ?? (isRefund ? 'Refund' : (isCredit ? 'Top-up' : 'Payment')),
                                         style: const TextStyle(fontWeight: FontWeight.bold, color: _darkText, fontSize: 15),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(

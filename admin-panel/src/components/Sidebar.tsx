@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { Radio, ClipboardList, Store, UtensilsCrossed, BarChart3, Settings, LogOut } from 'lucide-react';
+import { Radio, ClipboardList, Store, UtensilsCrossed, BarChart3, Settings, LogOut, ShieldCheck } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Live Orders', icon: <Radio size={18} />, roles: ['staff', 'admin', 'super_admin'] },
   { path: '/orders', label: 'Order History', icon: <ClipboardList size={18} />, roles: ['admin', 'super_admin'] },
+  { path: '/refunds', label: 'Refund Queue', icon: <ShieldCheck size={18} />, roles: ['super_admin'] },
   { path: '/restaurants', label: 'Restaurants', icon: <Store size={18} />, roles: ['admin', 'super_admin'] },
   { path: '/menu', label: 'Menu Items', icon: <UtensilsCrossed size={18} />, roles: ['admin', 'super_admin'] },
   { path: '/statistics', label: 'Statistics', icon: <BarChart3 size={18} />, roles: ['admin', 'super_admin'] },

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 import { staffLogin, registerStaff, requestPasswordOtp, verifyOtpAndChangePassword, getStaffByUniversity, deleteStaff } from '../controllers/authController';
-import { getAllOrders, getOrderDetails, refundOrder, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
+import { getAllOrders, getOrderDetails, requestRefund, getRefundRequests, approveRefund, rejectRefund, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
 import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant } from '../controllers/restaurantController';
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
 import { upload } from '../controllers/uploadController';
@@ -23,7 +23,12 @@ router.patch('/orders/:id/status', authorizeRole(['staff', 'admin', 'super_admin
 // ─── Orders (Admin only) ───
 router.get('/orders', authorizeRole(['admin', 'super_admin']), getAllOrders);
 router.get('/orders/:id', authorizeRole(['admin', 'super_admin']), getOrderDetails);
-router.post('/orders/:id/refund', authorizeRole(['admin', 'super_admin']), refundOrder);
+
+// ─── Refund Workflow ───
+router.post('/orders/:id/request-refund', authorizeRole(['staff', 'admin', 'super_admin']), requestRefund);
+router.get('/refund-requests', authorizeRole(['super_admin']), getRefundRequests);
+router.post('/refund-requests/:id/approve', authorizeRole(['super_admin']), approveRefund);
+router.post('/refund-requests/:id/reject', authorizeRole(['super_admin']), rejectRefund);
 
 // ─── Restaurants (Admin only) ───
 router.get('/restaurants/:university_id', authorizeRole(['admin', 'super_admin']), getAllRestaurants);
