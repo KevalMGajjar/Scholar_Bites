@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
-import { staffLogin, registerStaff, requestPasswordOtp, verifyOtpAndChangePassword, getStaffByUniversity, deleteStaff } from '../controllers/authController';
+import { staffLogin, verifyLoginOtp, googleLogin, registerStaff, requestPasswordOtp, verifyOtpAndChangePassword, getStaffByUniversity, deleteStaff } from '../controllers/authController';
 import { getAllOrders, getOrderDetails, requestRefund, getRefundRequests, approveRefund, rejectRefund, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
 import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant } from '../controllers/restaurantController';
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
@@ -11,6 +11,8 @@ const router = Router();
 
 // ─── Auth (no middleware for login) ───
 router.post('/login', staffLogin);
+router.post('/login/verify-otp', verifyLoginOtp);
+router.post('/login/google', googleLogin);
 
 // ─── All routes below require staff/admin JWT ───
 router.use(authenticateJWT);

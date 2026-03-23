@@ -189,6 +189,17 @@ const createTablesQuery = `
   );
   CREATE INDEX IF NOT EXISTS idx_refund_status ON refund_requests(status);
   CREATE INDEX IF NOT EXISTS idx_refund_order ON refund_requests(order_id);
+
+  -- 12. Staff Login OTPs Table (2FA for admin panel)
+  CREATE TABLE IF NOT EXISTS staff_login_otps (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    otp_hash VARCHAR(64) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_staff_otp_staff ON staff_login_otps(staff_id, used);
 `;
 
 const initDb = async () => {

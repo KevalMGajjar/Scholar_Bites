@@ -52,6 +52,8 @@ app.use('/api/', generalLimiter);
 app.use('/api/auth/login-otp', authLimiter);
 app.use('/api/auth/register-otp', authLimiter);
 app.use('/api/admin/login', authLimiter);
+app.use('/api/admin/login/verify-otp', authLimiter);
+app.use('/api/admin/login/google', authLimiter);
 app.use('/api/admin/password/request-otp', otpLimiter);
 
 // Serve uploaded images

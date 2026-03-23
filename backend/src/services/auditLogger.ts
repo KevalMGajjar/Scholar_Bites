@@ -2,6 +2,8 @@ import pool from '../config/db';
 
 export type AuditAction =
     | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGIN_LOCKED'
+    | 'LOGIN_OTP_SENT' | 'LOGIN_OTP_VERIFIED' | 'LOGIN_OTP_FAILED'
+    | 'LOGIN_GOOGLE_SUCCESS' | 'LOGIN_GOOGLE_FAILED'
     | 'LOGOUT'
     | 'PASSWORD_CHANGE' | 'OTP_REQUESTED'
     | 'STAFF_CREATED' | 'STAFF_DELETED'

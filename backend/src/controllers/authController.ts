@@ -5,8 +5,12 @@ import pool from '../config/db';
 import { generateToken } from '../utils/jwt';
 import { checkBruteForce, recordFailedLogin, clearFailedLogins } from '../middlewares/security';
 import { auditLog, getRequestIp } from '../services/auditLogger';
+import { sendLoginOtpEmail } from '../services/emailService';
+import { OAuth2Client } from 'google-auth-library';
 
 const BCRYPT_ROUNDS = 12;
+const OTP_EXPIRY_MINUTES = 5;
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /** Hash a JWT token to a short 64-char hex string for storage */
 function hashToken(token: string): string {
@@ -128,7 +132,7 @@ export const updateUniversity = async (req: Request, res: Response) => {
     }
 };
 
-// ─── Staff Login (Email + Password) for Admin Panel ───
+// ─── Staff Login Step 1: Email + Password → Send OTP ───
 export const staffLogin = async (req: Request, res: Response) => {
     const { email, password } = req.body;
     const ip = getRequestIp(req);
@@ -169,13 +173,163 @@ export const staffLogin = async (req: Request, res: Response) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // ─── Success: clear brute-force counter ───
+        // ─── Credentials valid: generate OTP ───
         clearFailedLogins(email.toLowerCase());
 
+        // Invalidate any existing unused OTPs for this staff
+        await pool.query(
+            "UPDATE staff_login_otps SET used = TRUE WHERE staff_id = $1 AND used = FALSE",
+            [staff.id]
+        );
+
+        // Generate 6-digit OTP and hash it
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+        const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+        const otpResult = await pool.query(
+            `INSERT INTO staff_login_otps (staff_id, otp_hash, expires_at)
+             VALUES ($1, $2, $3) RETURNING id`,
+            [staff.id, otpHash, expiresAt]
+        );
+
+        // Send OTP email (fire and don't block on failure)
+        try {
+            await sendLoginOtpEmail(staff.email, otp, staff.name);
+        } catch (emailErr) {
+            console.error('Failed to send login OTP email:', emailErr);
+            return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
+        }
+
+        auditLog({ userId: staff.id, action: 'LOGIN_OTP_SENT', resource: `email:${email}`, ip });
+
+        res.json({
+            requires_otp: true,
+            otp_session_id: otpResult.rows[0].id,
+            message: 'Verification code sent to your email',
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Staff Login Step 2: Verify OTP → Issue JWT ───
+export const verifyLoginOtp = async (req: Request, res: Response) => {
+    const { otp_session_id, otp } = req.body;
+    const ip = getRequestIp(req);
+
+    if (!otp_session_id || !otp) {
+        return res.status(400).json({ message: 'Session ID and OTP are required' });
+    }
+
+    try {
+        // Fetch OTP record with staff details
+        const result = await pool.query(
+            `SELECT lo.*, s.id as sid, s.email, s.name, s.role, s.university_id,
+                    uni.name as university_name
+             FROM staff_login_otps lo
+             JOIN staff s ON lo.staff_id = s.id
+             LEFT JOIN universities uni ON s.university_id = uni.id
+             WHERE lo.id = $1`,
+            [otp_session_id]
+        );
+
+        const record = result.rows[0];
+
+        if (!record) {
+            return res.status(404).json({ message: 'Invalid or expired session. Please log in again.' });
+        }
+
+        if (record.used) {
+            return res.status(410).json({ message: 'This code has already been used. Please log in again.' });
+        }
+
+        if (new Date(record.expires_at) < new Date()) {
+            auditLog({ userId: record.sid, action: 'LOGIN_OTP_FAILED', details: 'OTP expired', resource: `email:${record.email}`, ip });
+            return res.status(410).json({ message: 'Verification code has expired. Please log in again.' });
+        }
+
+        // Verify OTP hash
+        const otpHash = crypto.createHash('sha256').update(String(otp)).digest('hex');
+        if (otpHash !== record.otp_hash) {
+            auditLog({ userId: record.sid, action: 'LOGIN_OTP_FAILED', details: 'Wrong OTP', resource: `email:${record.email}`, ip });
+            return res.status(401).json({ message: 'Incorrect verification code' });
+        }
+
+        // ─── OTP valid: mark used and issue JWT ───
+        await pool.query("UPDATE staff_login_otps SET used = TRUE WHERE id = $1", [otp_session_id]);
+
+        const token = generateToken({ id: record.sid, email: record.email, role: record.role, university_id: record.university_id });
+        await saveActiveToken(record.sid, token, 'staff');
+
+        auditLog({ userId: record.sid, action: 'LOGIN_OTP_VERIFIED', resource: `email:${record.email}`, ip });
+
+        res.json({
+            token,
+            user: {
+                id: record.sid,
+                name: record.name,
+                email: record.email,
+                role: record.role,
+                university_id: record.university_id,
+                university_name: record.university_name,
+            },
+        });
+    } catch (error) {
+        console.error('verifyLoginOtp error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Google Sign-In for Admin Panel ───
+export const googleLogin = async (req: Request, res: Response) => {
+    const { credential } = req.body;
+    const ip = getRequestIp(req);
+
+    if (!credential) {
+        return res.status(400).json({ message: 'Google credential is required' });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(500).json({ message: 'Google Sign-In is not configured on this server' });
+    }
+
+    try {
+        // Verify the Google ID token
+        const ticket = await googleClient.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload || !payload.email) {
+            return res.status(401).json({ message: 'Invalid Google token' });
+        }
+
+        const googleEmail = payload.email.toLowerCase();
+
+        // Look up staff by email
+        const result = await pool.query(
+            `SELECT s.*, uni.name as university_name
+             FROM staff s
+             LEFT JOIN universities uni ON s.university_id = uni.id
+             WHERE LOWER(s.email) = $1`,
+            [googleEmail]
+        );
+
+        const staff = result.rows[0];
+
+        if (!staff) {
+            auditLog({ action: 'LOGIN_GOOGLE_FAILED', details: 'No staff account for this Google email', resource: `email:${googleEmail}`, ip });
+            return res.status(403).json({ message: 'No admin account found for this Google email. Contact your administrator.' });
+        }
+
+        // ─── Google is 2FA by default — issue JWT directly ───
         const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
         await saveActiveToken(staff.id, token, 'staff');
 
-        auditLog({ userId: staff.id, action: 'LOGIN_SUCCESS', resource: `email:${email}`, ip });
+        auditLog({ userId: staff.id, action: 'LOGIN_GOOGLE_SUCCESS', resource: `email:${googleEmail}`, ip });
 
         res.json({
             token,
@@ -188,8 +342,11 @@ export const staffLogin = async (req: Request, res: Response) => {
                 university_name: staff.university_name,
             },
         });
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('googleLogin error:', error);
+        if (error.message?.includes('Token used too late') || error.message?.includes('Invalid token')) {
+            return res.status(401).json({ message: 'Google token is invalid or expired. Please try again.' });
+        }
         res.status(500).json({ message: 'Server error' });
     }
 };
