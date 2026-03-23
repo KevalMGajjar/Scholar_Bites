@@ -23,6 +23,7 @@ import '../utils/token_storage.dart';
 import '../utils/animation_utils.dart';
 import '../widgets/physics_cravings_box.dart';
 import '../widgets/filter_bottom_sheet.dart';
+import '../widgets/price_filter_chips.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'search_screen.dart';
@@ -286,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (result != null) {
+      if (!mounted) return;
       if (result.hasActiveFilters || result.category != 'All') {
         Navigator.push(
           context,
@@ -317,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         final now = DateTime.now();
         if (_currentBackPressTime == null ||
@@ -696,6 +698,30 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                           ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+                        ),
+                      ),
+
+                      // Price Filter Chips
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: PriceFilterChips(
+                            selectedMaxPrice: null,
+                            onPriceSelected: (maxPrice) {
+                              if (maxPrice != null) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => SearchScreen(
+                                      initialFilters: SearchFilters(maxPrice: maxPrice),
+                                    ),
+                                  ),
+                                ).then((_) {
+                                  _searchFocusNode.unfocus();
+                                });
+                              }
+                            },
+                          ),
                         ),
                       ),
 

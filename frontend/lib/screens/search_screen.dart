@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/food_item.dart';
 import '../widgets/food_card.dart';
 import '../widgets/filter_bottom_sheet.dart';
+import '../widgets/price_filter_chips.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
 import '../utils/animation_utils.dart';
@@ -85,7 +86,7 @@ class _SearchScreenState extends State<SearchScreen> {
             for (var item in _allMeals) {
               if (item.category.isNotEmpty) catSet.add(item.category);
             }
-            _categories = ['All', ...catSet.toList()];
+            _categories = ['All', ...catSet];
           });
           _filterResults();
         }
@@ -525,6 +526,24 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                     ),
                   );
+                },
+              ),
+            ),
+
+            // Price Filter Chips
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: PriceFilterChips(
+                selectedMaxPrice: _filters.maxPrice,
+                onPriceSelected: (maxPrice) {
+                  setState(() {
+                    if (maxPrice != null) {
+                      _filters = _filters.copyWith(maxPrice: maxPrice);
+                    } else {
+                      _filters = _filters.copyWith(clearMaxPrice: true);
+                    }
+                  });
+                  _filterResults();
                 },
               ),
             ),
