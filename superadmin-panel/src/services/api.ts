@@ -17,11 +17,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 || err.response?.status === 403) {
-      if (!window.location.pathname.includes('/login')) {
-         localStorage.removeItem('superadmin_token');
-         window.location.href = '/superadmin/';
-      }
+    const url = err.config?.url || '';
+    const isAuthEndpoint = url.includes('/login') || url.includes('/verify-otp');
+
+    if ((err.response?.status === 401 || err.response?.status === 403) && !isAuthEndpoint) {
+      localStorage.removeItem('superadmin_token');
+      window.location.href = '/superadmin/';
     }
     return Promise.reject(err);
   }

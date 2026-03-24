@@ -19,6 +19,10 @@ export default function Login() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(30);
   const [resending, setResending] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpShake, setOtpShake] = useState(false);
+  const MAX_OTP_ATTEMPTS = 5;
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
@@ -144,12 +148,35 @@ export default function Login() {
 
   const submitOtp = async (otp: string) => {
     setError('');
+    setOtpError('');
     setOtpLoading(true);
     try {
       await verifyOtp(otp);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Verification failed');
+      const newAttempts = otpAttempts + 1;
+      setOtpAttempts(newAttempts);
+
+      // Shake animation
+      setOtpShake(true);
+      setTimeout(() => setOtpShake(false), 600);
+
+      if (newAttempts >= MAX_OTP_ATTEMPTS) {
+        setOtpError('Too many failed attempts. Please log in again.');
+        // Force back to credentials after a brief delay
+        setTimeout(() => {
+          cancelOtp();
+          setOtpDigits(['', '', '', '', '', '']);
+          setOtpError('');
+          setOtpAttempts(0);
+          setError('Session expired due to too many failed OTP attempts. Please sign in again.');
+        }, 2000);
+      } else {
+        const remaining = MAX_OTP_ATTEMPTS - newAttempts;
+        const msg = err.response?.data?.message || 'Incorrect verification code';
+        setOtpError(`${msg}. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+      }
+
       setOtpDigits(['', '', '', '', '', '']);
       otpRefs.current[0]?.focus();
     } finally {
@@ -173,6 +200,8 @@ export default function Login() {
     cancelOtp();
     setOtpDigits(['', '', '', '', '', '']);
     setError('');
+    setOtpError('');
+    setOtpAttempts(0);
   };
 
   return (
@@ -222,22 +251,31 @@ export default function Login() {
                 </div>
 
                 {/* OTP Input Boxes */}
-                <div className="flex gap-3 justify-center" onPaste={handleOtpPaste}>
-                  {otpDigits.map((digit, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => { otpRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(i, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                      disabled={otpLoading}
-                      className="w-14 h-16 text-center text-[24px] font-extrabold text-white bg-white/[0.03] border border-white/[0.08] rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/40 transition-all duration-200 disabled:opacity-40"
-                      autoFocus={i === 0}
-                    />
-                  ))}
+                <div>
+                  <div className={`flex gap-3 justify-center ${otpShake ? 'animate-shake' : ''}`} onPaste={handleOtpPaste}>
+                    {otpDigits.map((digit, i) => (
+                      <input
+                        key={i}
+                        ref={(el) => { otpRefs.current[i] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(i, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                        disabled={otpLoading || otpAttempts >= MAX_OTP_ATTEMPTS}
+                        className={`w-14 h-16 text-center text-[24px] font-extrabold text-white bg-white/[0.03] border rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/40 transition-all duration-200 disabled:opacity-40 ${
+                          otpError ? 'border-red-500/50' : 'border-white/[0.08]'
+                        }`}
+                        autoFocus={i === 0}
+                      />
+                    ))}
+                  </div>
+                  {otpError && (
+                    <p className="text-red-400 text-[13px] font-medium text-center mt-3 animate-fade-up">
+                      {otpError}
+                    </p>
+                  )}
                 </div>
 
                 {/* Resend + Back */}

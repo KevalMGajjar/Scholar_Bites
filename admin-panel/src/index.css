@@ -99,6 +99,16 @@
   animation: pulse-glow 3s ease-in-out infinite;
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-6px); }
+  30%, 60%, 90% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
 /* Staggered children animation */
 .stagger-children > * {
   animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;

@@ -18,11 +18,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-logout on 401/403
+// Auto-logout on 401/403 — but NOT for auth-related endpoints
+// (login, verify-otp, google login return 401/403 for invalid credentials,
+//  which should be handled by the calling component, not trigger a redirect)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 || err.response?.status === 403) {
+    const url = err.config?.url || '';
+    const isAuthEndpoint = url.includes('/login') || url.includes('/verify-otp');
+
+    if (
+      (err.response?.status === 401 || err.response?.status === 403) &&
+      !isAuthEndpoint
+    ) {
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
       window.location.href = '/admin/login';
