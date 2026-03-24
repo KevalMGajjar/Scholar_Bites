@@ -178,7 +178,7 @@ async function queryAuditLogs(page: number, limit: number, offset: number, actio
                 al.user_id,
                 COALESCE(s.name, u.name, 'System') as user_name,
                 COALESCE(s.email, u.phone, '') as user_identifier,
-                COALESCE(s.role, 'student') as user_role
+                COALESCE(CAST(s.role AS VARCHAR), 'student') as user_role
          FROM audit_logs al
          LEFT JOIN staff s ON al.user_id = s.id
          LEFT JOIN users u ON al.user_id = u.id AND s.id IS NULL
