@@ -23,10 +23,9 @@ export const generalLimiter = rateLimit({
     max: 500,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
     message: { message: 'Too many requests, please try again later.' },
     keyGenerator: (req) => {
-        // Use X-Forwarded-For if behind a proxy, otherwise fallback to socket IP.
-        // Using req.socket.remoteAddress instead of req.ip to avoid ERR_ERL_KEY_GEN_IPV6 crash string-check
         const forwarded = req.headers['x-forwarded-for'];
         const ip = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') || req.socket?.remoteAddress || 'unknown';
         return ip;
@@ -39,9 +38,9 @@ export const authLimiter = rateLimit({
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
     message: { message: 'Too many authentication attempts. Please try again in 15 minutes.' },
     keyGenerator: (req) => {
-        // Rate limit by IP + email (if provided) to prevent distributed attacks
         const forwarded = req.headers['x-forwarded-for'];
         const ip = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') || req.socket?.remoteAddress || 'unknown';
         const email = req.body?.email || '';
@@ -55,7 +54,13 @@ export const otpLimiter = rateLimit({
     max: 5,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
     message: { message: 'Too many OTP requests. Please try again in 15 minutes.' },
+    keyGenerator: (req) => {
+        const forwarded = req.headers['x-forwarded-for'];
+        const ip = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') || req.socket?.remoteAddress || 'unknown';
+        return ip;
+    },
 });
 
 // ═══════════════════════════════════════════════════════
