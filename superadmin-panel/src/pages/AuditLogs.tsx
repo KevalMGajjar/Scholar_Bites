@@ -77,6 +77,7 @@ function timeAgo(dateStr: string) {
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -86,16 +87,20 @@ export default function AuditLogs() {
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setFetchError('');
     try {
       const params: any = { page, limit: 30 };
       if (actionFilter) params.action = actionFilter;
       if (search) params.search = search;
       const { data } = await api.get('/superadmin/audit-logs', { params });
-      setLogs(data.logs);
-      setTotalPages(data.totalPages);
-      setTotal(data.total);
-    } catch (err) {
+      setLogs(data.logs || []);
+      setTotalPages(data.totalPages || 1);
+      setTotal(data.total || 0);
+    } catch (err: any) {
       console.error('Failed to fetch audit logs', err);
+      const msg = err.response?.data?.message || err.message || 'Failed to load audit logs';
+      setFetchError(msg);
+      setLogs([]);
     } finally {
       setLoading(false);
     }
@@ -177,6 +182,18 @@ export default function AuditLogs() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" />
+          </div>
+        ) : fetchError ? (
+          <div className="flex flex-col items-center justify-center py-20 text-red-400">
+            <AlertTriangle size={40} className="mb-3 opacity-60" />
+            <p className="font-medium">Failed to load audit logs</p>
+            <p className="text-xs mt-1 text-slate-500 max-w-sm text-center">{fetchError}</p>
+            <button
+              onClick={fetchLogs}
+              className="mt-4 px-4 py-2 bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-sm font-medium rounded-lg hover:bg-indigo-500/30 transition-all"
+            >
+              Retry
+            </button>
           </div>
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">

@@ -135,6 +135,62 @@ export const getUniversityDetailedStats = async (req: Request, res: Response) =>
 };
 
 // ─── Audit Logs ───
+const AUDIT_TABLE_DDL = `
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    action VARCHAR(50) NOT NULL,
+    resource VARCHAR(255),
+    details TEXT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+`;
+
+async function queryAuditLogs(page: number, limit: number, offset: number, action?: string, search?: string) {
+    let whereClause = '';
+    const params: any[] = [];
+    let idx = 1;
+
+    if (action) {
+        whereClause += ` AND al.action = $${idx++}`;
+        params.push(action);
+    }
+    if (search) {
+        whereClause += ` AND (al.resource ILIKE $${idx} OR al.details ILIKE $${idx} OR s.email ILIKE $${idx} OR s.name ILIKE $${idx})`;
+        params.push(`%${search}%`);
+        idx++;
+    }
+
+    const countResult = await pool.query(
+        `SELECT COUNT(*)::int as total
+         FROM audit_logs al
+         LEFT JOIN staff s ON al.user_id = s.id
+         WHERE 1=1 ${whereClause}`,
+        params
+    );
+
+    const logsResult = await pool.query(
+        `SELECT al.id, al.action, al.resource, al.details, al.ip_address, al.created_at,
+                al.user_id,
+                COALESCE(s.name, u.name, 'System') as user_name,
+                COALESCE(s.email, u.phone, '') as user_identifier,
+                COALESCE(s.role, 'student') as user_role
+         FROM audit_logs al
+         LEFT JOIN staff s ON al.user_id = s.id
+         LEFT JOIN users u ON al.user_id = u.id AND s.id IS NULL
+         WHERE 1=1 ${whereClause}
+         ORDER BY al.created_at DESC
+         LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
+    );
+
+    return { countResult, logsResult };
+}
+
 export const getAuditLogs = async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
@@ -143,51 +199,26 @@ export const getAuditLogs = async (req: Request, res: Response) => {
     const search = req.query.search as string;
 
     try {
-        let whereClause = '';
-        const params: any[] = [];
-        let idx = 1;
-
-        if (action) {
-            whereClause += ` AND al.action = $${idx++}`;
-            params.push(action);
+        let result;
+        try {
+            result = await queryAuditLogs(page, limit, offset, action, search);
+        } catch (firstErr: any) {
+            // Auto-create table if it doesn't exist (migration not run on this server)
+            if (firstErr.code === '42P01') {  // relation does not exist
+                console.warn('[AuditLogs] Table missing — auto-creating audit_logs...');
+                await pool.query(AUDIT_TABLE_DDL);
+                result = await queryAuditLogs(page, limit, offset, action, search);
+            } else {
+                throw firstErr;
+            }
         }
-        if (search) {
-            whereClause += ` AND (al.resource ILIKE $${idx} OR al.details ILIKE $${idx} OR s.email ILIKE $${idx} OR s.name ILIKE $${idx})`;
-            params.push(`%${search}%`);
-            idx++;
-        }
-
-        // Get total count
-        const countResult = await pool.query(
-            `SELECT COUNT(*)::int as total
-             FROM audit_logs al
-             LEFT JOIN staff s ON al.user_id = s.id
-             WHERE 1=1 ${whereClause}`,
-            params
-        );
-
-        // Get logs with user details
-        const logsResult = await pool.query(
-            `SELECT al.id, al.action, al.resource, al.details, al.ip_address, al.created_at,
-                    al.user_id,
-                    COALESCE(s.name, u.name, 'System') as user_name,
-                    COALESCE(s.email, u.phone, '') as user_identifier,
-                    COALESCE(s.role, 'student') as user_role
-             FROM audit_logs al
-             LEFT JOIN staff s ON al.user_id = s.id
-             LEFT JOIN users u ON al.user_id = u.id AND s.id IS NULL
-             WHERE 1=1 ${whereClause}
-             ORDER BY al.created_at DESC
-             LIMIT $${idx} OFFSET $${idx + 1}`,
-            [...params, limit, offset]
-        );
 
         res.json({
-            logs: logsResult.rows,
-            total: countResult.rows[0].total,
+            logs: result.logsResult.rows,
+            total: result.countResult.rows[0].total,
             page,
             limit,
-            totalPages: Math.ceil(countResult.rows[0].total / limit),
+            totalPages: Math.ceil(result.countResult.rows[0].total / limit),
         });
     } catch (error) {
         console.error('Error fetching audit logs:', error);
