@@ -29,11 +29,20 @@ export const generateToken = (payload: object) => {
 
 export const verifyToken = (token: string) => {
     try {
+        // Primary: strict verification with issuer + audience claims
         return jwt.verify(token, getSecret(), {
             issuer: 'scholar-bites-api',
             audience: 'scholar-bites-client',
         });
-    } catch (error) {
-        return null;
+    } catch (strictError) {
+        // Fallback: verify without issuer/audience for legacy tokens
+        // issued before the security update added these claims
+        try {
+            const decoded = jwt.verify(token, getSecret());
+            console.warn('[JWT] Legacy token accepted (missing iss/aud claims) — user should re-login for a new token');
+            return decoded;
+        } catch (fallbackError) {
+            return null;
+        }
     }
 };
