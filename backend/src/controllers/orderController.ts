@@ -183,6 +183,74 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// ─── Cancel Pending (Unpaid) Order ───
+export const cancelPendingOrder = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // Lock the order row — only cancel if still 'pending' (unpaid)
+        const orderRes = await client.query(
+            "SELECT id, user_id, status FROM orders WHERE id = $1 FOR UPDATE",
+            [id]
+        );
+
+        if (orderRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const order = orderRes.rows[0];
+
+        // Only the order owner can cancel their own pending order
+        if (order.user_id !== userId) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        if (order.status !== 'pending') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: 'Only unpaid (pending) orders can be cancelled this way' });
+        }
+
+        // Restore stock for all items
+        const itemsRes = await client.query(
+            'SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1',
+            [id]
+        );
+        const sortedItems = itemsRes.rows.sort((a: any, b: any) =>
+            a.menu_item_id.localeCompare(b.menu_item_id)
+        );
+        for (const item of sortedItems) {
+            await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
+            await client.query(
+                'UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2',
+                [item.quantity, item.menu_item_id]
+            );
+        }
+
+        // Mark order as cancelled
+        await client.query(
+            "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
+            [id]
+        );
+
+        await client.query('COMMIT');
+        console.log(`🗑️ Pending order ${id} cancelled by user, stock restored`);
+        res.json({ message: 'Order cancelled and stock restored' });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('cancelPendingOrder error:', error);
+        res.status(500).json({ message: error.message || 'Server error' });
+    } finally {
+        client.release();
+    }
+};
+
 export const getMyOrders = async (req: AuthRequest, res: Response) => {
     try {
         const result = await pool.query(`
@@ -298,7 +366,7 @@ export const getPendingOrders = async (req: AuthRequest, res: Response) => {
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             WHERE o.university_id = $1
-              AND o.status NOT IN ('completed', 'cancelled')
+              AND o.status NOT IN ('completed', 'cancelled', 'pending')
             GROUP BY o.id, u.name, u.phone, r.name
             ORDER BY o.created_at ASC
         `, [uniId]);
@@ -692,4 +760,73 @@ export const rejectRefund = async (req: AuthRequest, res: Response) => {
         console.error('rejectRefund error:', error);
         res.status(500).json({ message: error.message || 'Server error' });
     }
+};
+
+// ═══════════════════════════════════════════════════════
+// Auto-Expire Stale Pending Orders
+// ═══════════════════════════════════════════════════════
+// Safety net: cancels orders stuck in 'pending' (unpaid) for > 15 minutes.
+// Runs every 5 minutes. Restores stock for each expired order.
+
+const PENDING_EXPIRY_MINUTES = 15;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+const expireStalePendingOrders = async () => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Find and lock all stale pending orders
+        const staleOrders = await client.query(
+            `SELECT id FROM orders
+             WHERE status = 'pending'
+               AND created_at < NOW() - INTERVAL '${PENDING_EXPIRY_MINUTES} minutes'
+             FOR UPDATE`
+        );
+
+        if (staleOrders.rows.length === 0) {
+            await client.query('COMMIT');
+            return;
+        }
+
+        for (const order of staleOrders.rows) {
+            // Restore stock
+            const itemsRes = await client.query(
+                'SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1',
+                [order.id]
+            );
+            const sortedItems = itemsRes.rows.sort((a: any, b: any) =>
+                a.menu_item_id.localeCompare(b.menu_item_id)
+            );
+            for (const item of sortedItems) {
+                await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
+                await client.query(
+                    'UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2',
+                    [item.quantity, item.menu_item_id]
+                );
+            }
+
+            // Cancel the order
+            await client.query(
+                "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
+                [order.id]
+            );
+        }
+
+        await client.query('COMMIT');
+        console.log(`🧹 Auto-expired ${staleOrders.rows.length} stale pending order(s)`);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('expireStalePendingOrders error:', error);
+    } finally {
+        client.release();
+    }
+};
+
+// Start the cleanup interval
+export const startPendingOrderCleanup = () => {
+    console.log(`🕐 Pending order cleanup scheduled every ${CLEANUP_INTERVAL_MS / 60000} minutes (expiry: ${PENDING_EXPIRY_MINUTES} min)`);
+    setInterval(expireStalePendingOrders, CLEANUP_INTERVAL_MS);
+    // Run once on startup after a short delay
+    setTimeout(expireStalePendingOrders, 10_000);
 };

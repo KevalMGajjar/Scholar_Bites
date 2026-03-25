@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import '../models/cart_model.dart';
 
@@ -46,6 +47,17 @@ class OrderService {
       }
     } on DioException catch (e) {
       throw Exception(e.response?.data['message'] ?? 'Payment verification failed');
+    }
+  }
+
+  /// Cancel an unpaid (pending) order and restore stock.
+  /// Called when the user dismisses Razorpay without completing payment.
+  Future<void> cancelOrder(String orderId) async {
+    try {
+      await _dio.post('/orders/$orderId/cancel');
+    } on DioException catch (e) {
+      // Log but don't throw — the auto-expire job will clean it up
+      debugPrint('⚠️ Failed to cancel order $orderId: ${e.response?.data['message'] ?? e.message}');
     }
   }
 

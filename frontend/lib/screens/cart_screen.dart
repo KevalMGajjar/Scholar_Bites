@@ -146,10 +146,18 @@ class _CartScreenState extends State<CartScreen> {
     _processFailedOrder(response.message ?? 'Payment was cancelled');
   }
 
-  void _processFailedOrder(String message) {
+  void _processFailedOrder(String message) async {
+    // Cancel the pending order on the backend to restore stock
+    if (_currentDbOrderId != null) {
+      debugPrint('🗑️ Cancelling pending order $_currentDbOrderId after payment failure...');
+      await OrderService().cancelOrder(_currentDbOrderId!);
+      _currentDbOrderId = null;
+      _currentOrderToken = null;
+    }
+
     if (mounted) {
       setState(() => _isProcessingPayment = false);
-      _showCustomToast('Payment Failed: $message', isError: true, icon: Icons.payment_rounded);
+      _showCustomToast('Payment cancelled. No charge was made.', isError: true, icon: Icons.payment_rounded);
     }
   }
 
