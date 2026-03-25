@@ -47,98 +47,117 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-start">
+    <div className="p-8 lg:p-12 max-w-7xl mx-auto space-y-10 animate-fade-up font-body">
+      {/* Header section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-2">Platform Overview</h1>
-          <p className="text-slate-400">High-level metrics across all onboarded institutions</p>
+          <h1 className="text-4xl font-display font-bold text-[#e5e2e1] mb-2 tracking-tight">Prestige Command</h1>
+          <p className="text-[#a38b88] text-sm">High-level metrics across all onboarded institutions</p>
         </div>
         <button 
           onClick={() => setShowModal(true)}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition font-medium"
+          className="btn-premium px-6 py-2.5 flex items-center gap-2 shadow-[0_0_15px_rgba(255,180,168,0.2)]"
         >
-          <Plus size={20} />
+          <Plus size={18} />
           Add University
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-slate-800/50 border border-slate-700/50 p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-              <IndianRupee size={24} />
+      {/* KPI Cards: Intentional Asymmetry */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Large Revenue Card */}
+        <div className="md:col-span-2 bg-[#1c1b1b] border border-[#554240]/15 p-8 rounded-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#f0513e]/5 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none transition-opacity group-hover:bg-[#f0513e]/10" />
+          
+          <div className="flex items-center justify-between mb-8 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-[#4c0000]/50 border border-[#f0513e]/20 text-[#ffb4a8] flex items-center justify-center shadow-inner">
+              <IndianRupee size={28} />
             </div>
-            <span className="text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg text-sm font-medium">
-              Global
+            <span className="text-[#ffb4a8] bg-[#4c0000]/30 px-3 py-1.5 rounded-lg label-premium">
+              Global Gross
             </span>
           </div>
-          <p className="text-slate-400 text-sm mb-1">Total Platform Revenue</p>
-          <p className="text-3xl font-bold text-white">₹{totalGlobalRevenue.toLocaleString()}</p>
+          <div className="relative z-10">
+            <p className="label-premium mb-2">Total Platform Revenue</p>
+            <p className="text-5xl font-display font-bold text-[#e5e2e1] tracking-tight">
+              ₹{totalGlobalRevenue.toLocaleString()}
+            </p>
+          </div>
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700/50 p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+        {/* Regular Cards */}
+        <div className="bg-[#1c1b1b] border border-[#554240]/15 p-8 rounded-2xl flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-6">
+            <div className="w-12 h-12 rounded-xl bg-[#201f1f] border border-[#554240]/20 text-[#a38b88] flex items-center justify-center">
               <TrendingUp size={24} />
             </div>
-            <span className="text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg text-sm font-medium">
-              Global
-            </span>
           </div>
-          <p className="text-slate-400 text-sm mb-1">Total Platform Orders</p>
-          <p className="text-3xl font-bold text-white">{totalGlobalOrders.toLocaleString()}</p>
+          <div>
+            <p className="label-premium mb-2">Total Orders</p>
+            <p className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">{totalGlobalOrders.toLocaleString()}</p>
+          </div>
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700/50 p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+        <div className="bg-[#1c1b1b] border border-[#554240]/15 p-8 rounded-2xl flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute bottom-0 right-0 w-32 h-32 bg-[#eac34a]/5 rounded-full blur-[50px] pointer-events-none" />
+          <div className="flex items-center justify-between mb-6 relative z-10">
+            <div className="w-12 h-12 rounded-xl bg-[#eac34a]/10 border border-[#eac34a]/20 text-[#eac34a] flex items-center justify-center">
               <Store size={24} />
             </div>
           </div>
-          <p className="text-slate-400 text-sm mb-1">Active Universities</p>
-          <p className="text-3xl font-bold text-white">{stats.length}</p>
+          <div className="relative z-10">
+            <p className="label-premium mb-2">Active Entities</p>
+            <p className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">{stats.length}</p>
+          </div>
         </div>
       </div>
 
       {/* Universities list */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-700/50 flex justify-between items-center">
-          <h2 className="text-white font-bold text-lg">Onboarded Institutions</h2>
+      <div className="bg-[#1c1b1b] border border-[#554240]/15 rounded-2xl overflow-hidden mt-8">
+        <div className="p-8 border-b border-[#554240]/15 bg-[#201f1f]">
+          <h2 className="text-[#e5e2e1] font-display font-bold text-xl tracking-tight">Onboarded Institutions</h2>
+          <p className="text-[#a38b88] text-sm mt-1">Manage and view analytics for individual universities.</p>
         </div>
-        <div className="divide-y divide-slate-700/50">
-          {stats.map((uni) => (
-             <div 
-               key={uni.id} 
-               onClick={() => navigate(`/universities/${uni.id}`)}
-               className="p-6 flex items-center justify-between hover:bg-slate-700/20 transition cursor-pointer"
-             >
-               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 rounded-xl bg-slate-700 overflow-hidden flex items-center justify-center flex-shrink-0">
-                   {uni.logo_url ? (
-                     <img src={uni.logo_url} alt={uni.name} className="w-full h-full object-cover" />
-                   ) : (
-                     <Store className="text-slate-400" />
-                   )}
-                 </div>
-                 <div>
-                   <h3 className="text-indigo-400 font-semibold mb-1">{uni.name}</h3>
-                   <p className="text-slate-400 text-sm truncate max-w-sm">{uni.address}</p>
-                 </div>
-               </div>
-               
-               <div className="flex gap-12 text-right">
-                 <div>
-                   <p className="text-slate-400 text-xs mb-1 uppercase tracking-wider">Orders</p>
-                   <p className="text-white font-medium">{uni.total_orders}</p>
-                 </div>
-                 <div>
-                   <p className="text-slate-400 text-xs mb-1 uppercase tracking-wider">Revenue</p>
-                   <p className="text-emerald-400 font-medium">₹{Number(uni.total_revenue).toLocaleString()}</p>
-                 </div>
-               </div>
-             </div>
-          ))}
+        
+        <div className="divide-y divide-[#554240]/15">
+          {stats.length === 0 ? (
+            <div className="p-12 text-center text-[#a38b88]">
+               No universities onboarded yet.
+            </div>
+          ) : (
+            stats.map((uni) => (
+              <div 
+                key={uni.id} 
+                onClick={() => navigate(`/universities/${uni.id}`)}
+                className="p-6 md:px-8 hover-ember bg-[#1c1b1b] hover:bg-[#201f1f] transition-all cursor-pointer flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 rounded-2xl bg-[#131313] border border-[#554240]/20 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-inner">
+                    {uni.logo_url ? (
+                      <img src={uni.logo_url} alt={uni.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Store className="text-[#554240]" size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-[#ffb4a8] font-display font-bold text-lg leading-tight mb-1">{uni.name}</h3>
+                    <p className="text-[#a38b88] text-sm truncate max-w-[250px] lg:max-w-md">{uni.address}</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-10 md:text-right bg-[#131313]/50 p-4 rounded-xl border border-[#554240]/10 w-full md:w-auto">
+                  <div>
+                    <p className="label-premium mb-1">Orders</p>
+                    <p className="text-[#e5e2e1] font-display font-semibold text-lg">{uni.total_orders}</p>
+                  </div>
+                  <div>
+                    <p className="label-premium mb-1 text-[#eac34a]">Revenue</p>
+                    <p className="text-[#eac34a] font-display font-bold text-lg tracking-tight">₹{Number(uni.total_revenue).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
       

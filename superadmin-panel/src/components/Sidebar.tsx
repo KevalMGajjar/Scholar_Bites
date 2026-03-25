@@ -5,77 +5,58 @@ import { LayoutDashboard, LogOut, ShieldCheck, Undo2 } from 'lucide-react';
 export default function Sidebar() {
   const { user, logout } = useAuth();
 
+  const getNavLinkClass = (isActive: boolean) => {
+    return `relative flex items-center gap-3 px-6 py-3.5 text-[0.9rem] font-medium transition-all duration-300 ${
+      isActive
+        ? 'text-[#e5e2e1] bg-[#1c1b1b]/50 before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-[#eac34a] before:rounded-r-full before:shadow-[0_0_8px_rgba(234,195,74,0.6)]'
+        : 'text-[#dcc0bd] hover:text-[#e5e2e1] hover:bg-[#1c1b1b]/30'
+    }`;
+  };
+
   return (
-    <aside className="w-64 h-screen bg-slate-900 border-r border-slate-800 flex flex-col fixed left-0 top-0 z-40">
-      <div className="p-6 border-b border-slate-800">
+    <aside className="w-64 h-screen bg-[#0e0e0e] border-r border-[#554240]/15 flex flex-col fixed left-0 top-0 z-40">
+      <div className="p-6 border-b border-[#554240]/15">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <span className="text-white font-bold text-lg">SA</span>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffb4a8] to-[#f0513e] flex items-center justify-center shadow-[0_0_15px_rgba(255,180,168,0.25)]">
+            <span className="text-[#410000] font-display font-bold text-lg">SB</span>
           </div>
           <div>
-            <h1 className="text-white font-bold text-lg leading-tight">Super Admin</h1>
-            <p className="text-slate-500 text-xs">Scholar Bites</p>
+            <h1 className="text-[#e5e2e1] font-display font-bold text-lg leading-tight tracking-tight">Super Admin</h1>
+            <p className="text-[#a38b88] label-premium mt-0.5">Scholar Bites</p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-        <NavLink
-          to="/"
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-              isActive
-                ? 'bg-indigo-500/10 text-indigo-400 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`
-          }
-        >
-          <LayoutDashboard size={20} />
-          Dashboard
+      <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
+        <NavLink to="/" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <LayoutDashboard size={20} className="opacity-80" />
+          Prestige Command
         </NavLink>
 
-        <NavLink
-          to="/audit-logs"
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-              isActive
-                ? 'bg-indigo-500/10 text-indigo-400 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`
-          }
-        >
-          <ShieldCheck size={20} />
+        <NavLink to="/audit-logs" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <ShieldCheck size={20} className="opacity-80" />
           Audit Logs
         </NavLink>
 
-        <NavLink
-          to="/refunds"
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-              isActive
-                ? 'bg-indigo-500/10 text-indigo-400 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`
-          }
-        >
-          <Undo2 size={20} />
+        <NavLink to="/refunds" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <Undo2 size={20} className="opacity-80" />
           Refund Queue
         </NavLink>
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
+      <div className="p-5 border-t border-[#554240]/15 bg-[#131313]/30">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
-             <span className="text-white font-medium">{user?.name?.charAt(0) || 'A'}</span>
+          <div className="w-10 h-10 rounded-full bg-[#1c1b1b] border border-[#554240]/20 flex items-center justify-center shrink-0">
+             <span className="text-[#e5e2e1] font-medium font-display">{user?.name?.charAt(0) || 'A'}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{user?.name}</p>
-            <p className="text-slate-500 text-xs truncate">{user?.email}</p>
+            <p className="text-[#e5e2e1] text-sm font-medium truncate font-display">{user?.name}</p>
+            <p className="text-[#a38b88] text-xs truncate">{user?.email}</p>
           </div>
         </div>
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500/10 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[#554240]/20 bg-[#1c1b1b]/50 text-[#dcc0bd] text-sm font-medium hover:bg-[#1c1b1b] hover:text-[#eac34a] transition-colors"
         >
           <LogOut size={16} />
           Sign Out

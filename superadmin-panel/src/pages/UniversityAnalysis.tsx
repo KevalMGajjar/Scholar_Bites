@@ -40,13 +40,13 @@ export default function UniversityAnalysis() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full" />
+      <div className="flex h-screen items-center justify-center bg-[#131313]">
+        <div className="animate-spin w-8 h-8 flex border-2 border-[#f0513e] border-t-transparent rounded-full" />
       </div>
     );
   }
 
-  if (!stats) return <div className="text-white p-8">Analysis unavailable.</div>;
+  if (!stats) return <div className="text-[#e5e2e1] p-8 font-body">Analysis unavailable.</div>;
 
   const lineChartData = {
     labels: stats.monthly_revenue.map((m) => m.month),
@@ -54,19 +54,20 @@ export default function UniversityAnalysis() {
       {
         label: 'Revenue (₹)',
         data: stats.monthly_revenue.map((m) => m.revenue),
-        borderColor: '#818cf8',
-        backgroundColor: 'rgba(129, 140, 248, 0.5)',
+        borderColor: '#f0513e',
+        backgroundColor: 'rgba(240, 81, 62, 0.2)',
         tension: 0.4,
+        fill: true,
       },
     ],
   };
 
   const statusColors: Record<string, string> = {
-    pending: '#f59e0b',
-    preparing: '#3b82f6',
-    ready: '#10b981',
-    completed: '#6366f1',
-    cancelled: '#ef4444',
+    pending: '#eac34a',
+    preparing: '#ffb4a8',
+    ready: '#f0513e',
+    completed: '#4c0000',
+    cancelled: '#93000a',
   };
 
   const doughnutData = {
@@ -81,78 +82,115 @@ export default function UniversityAnalysis() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition">
-          <ArrowLeft size={20} />
+    <div className="p-8 lg:p-12 max-w-7xl mx-auto space-y-10 animate-fade-up font-body">
+      <div className="flex items-center gap-6 mb-8">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="w-12 h-12 rounded-xl bg-[#1c1b1b] border border-[#554240]/20 flex items-center justify-center text-[#a38b88] hover:text-[#e5e2e1] hover:bg-[#201f1f] transition-all shadow-inner"
+        >
+          <ArrowLeft size={22} />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-white">Deep Performance Analysis</h1>
-          <p className="text-slate-400">Detailed historical insight for selected university</p>
+          <h1 className="text-3xl lg:text-4xl font-display font-bold text-[#e5e2e1] tracking-tight mb-1">Deep Performance Analysis</h1>
+          <p className="text-[#a38b88] text-sm font-medium">Detailed historical insight for selected university</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-          <div className="text-emerald-400 mb-2"><IndianRupee size={24} /></div>
-          <p className="text-slate-400 text-sm">Today's Revenue</p>
-          <p className="text-3xl font-bold text-white">₹{stats.revenue_today.toLocaleString()}</p>
+        <div className="bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 hover-ember transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#eac34a]/10 rounded-full blur-[40px] -mr-10 -mt-10 pointer-events-none group-hover:bg-[#eac34a]/20 transition-all" />
+          <div className="w-12 h-12 rounded-xl bg-[#eac34a]/10 border border-[#eac34a]/20 text-[#eac34a] flex items-center justify-center mb-6 relative z-10">
+            <IndianRupee size={24} />
+          </div>
+          <div className="relative z-10">
+            <p className="label-premium mb-2">Today's Revenue</p>
+            <p className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">₹{stats.revenue_today.toLocaleString()}</p>
+          </div>
         </div>
-        <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-          <div className="text-indigo-400 mb-2"><ShoppingBag size={24} /></div>
-          <p className="text-slate-400 text-sm">Today's Orders</p>
-          <p className="text-3xl font-bold text-white">{stats.orders_today.toLocaleString()}</p>
+
+        <div className="bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 hover-ember transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#ffb4a8]/10 rounded-full blur-[40px] -mr-10 -mt-10 pointer-events-none group-hover:bg-[#ffb4a8]/20 transition-all" />
+          <div className="w-12 h-12 rounded-xl bg-[#ffb4a8]/10 border border-[#ffb4a8]/20 text-[#ffb4a8] flex items-center justify-center mb-6 relative z-10">
+            <ShoppingBag size={24} />
+          </div>
+          <div className="relative z-10">
+            <p className="label-premium mb-2">Today's Orders</p>
+            <p className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">{stats.orders_today.toLocaleString()}</p>
+          </div>
         </div>
-        <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-          <div className="text-purple-400 mb-2"><PieChart size={24} /></div>
-          <p className="text-slate-400 text-sm">Avg Order Value</p>
-          <p className="text-3xl font-bold text-white">₹{stats.avg_order_value}</p>
+
+        <div className="bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 hover-ember transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#f0513e]/10 rounded-full blur-[40px] -mr-10 -mt-10 pointer-events-none group-hover:bg-[#f0513e]/20 transition-all" />
+          <div className="w-12 h-12 rounded-xl bg-[#f0513e]/10 border border-[#f0513e]/20 text-[#f0513e] flex items-center justify-center mb-6 relative z-10">
+            <PieChart size={24} />
+          </div>
+          <div className="relative z-10">
+            <p className="label-premium mb-2">Avg Order Value</p>
+            <p className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">₹{stats.avg_order_value}</p>
+          </div>
         </div>
-        <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-          <div className="text-blue-400 mb-2"><Users size={24} /></div>
-          <p className="text-slate-400 text-sm">Total Customers</p>
-          <p className="text-3xl font-bold text-white">{stats.total_customers.toLocaleString()}</p>
+
+        <div className="bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 hover-ember transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#4c0000]/30 rounded-full blur-[40px] -mr-10 -mt-10 pointer-events-none group-hover:bg-[#4c0000]/50 transition-all" />
+          <div className="w-12 h-12 rounded-xl bg-[#4c0000]/50 border border-[#f0513e]/20 text-[#ffb4a8] flex items-center justify-center mb-6 relative z-10 shadow-inner">
+            <Users size={24} />
+          </div>
+          <div className="relative z-10">
+            <p className="label-premium mb-2">Total Customers</p>
+            <p className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">{stats.total_customers.toLocaleString()}</p>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-          <h2 className="text-lg font-bold text-white mb-6">Revenue Trajectory (6 Months)</h2>
+        <div className="lg:col-span-2 bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 shadow-xl">
+          <h2 className="text-xl font-display font-bold text-[#e5e2e1] mb-6 tracking-tight">Revenue Trajectory (6 Months)</h2>
           <div className="h-[300px]">
             <Line 
               data={lineChartData} 
-              options={{ maintainAspectRatio: false, scales: { y: { grid: { color: '#334155' } }, x: { grid: { color: '#334155' } } }, plugins: { legend: { display: false } } }} 
+              options={{ 
+                maintainAspectRatio: false, 
+                scales: { 
+                  y: { grid: { color: 'rgba(85, 66, 64, 0.2)' }, ticks: { color: '#a38b88', font: { family: 'Inter' } } }, 
+                  x: { grid: { color: 'rgba(85, 66, 64, 0.2)' }, ticks: { color: '#a38b88', font: { family: 'Inter' } } } 
+                }, 
+                plugins: { legend: { display: false } } 
+              }} 
             />
           </div>
         </div>
         
-        <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-          <h2 className="text-lg font-bold text-white mb-6">Order Status Ratio</h2>
+        <div className="bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 shadow-xl">
+          <h2 className="text-xl font-display font-bold text-[#e5e2e1] mb-6 tracking-tight">Order Status Ratio</h2>
           <div className="h-[300px] flex items-center justify-center">
             <Doughnut 
               data={doughnutData} 
-              options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } }} 
+              options={{ 
+                maintainAspectRatio: false, 
+                plugins: { legend: { position: 'bottom', labels: { color: '#a38b88', font: { family: 'Inter' }, padding: 20 } } } 
+              }} 
             />
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
-        <h2 className="text-lg font-bold text-white mb-6">Top 5 Best Selling Items</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="bg-[#1c1b1b] p-8 rounded-2xl border border-[#554240]/15 shadow-xl">
+        <h2 className="text-xl font-display font-bold text-[#e5e2e1] mb-8 tracking-tight">Top 5 Best Selling Items</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {stats.best_sellers.map((item, idx) => (
-            <div key={idx} className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/30">
-              <div className="aspect-square rounded-lg bg-slate-800 overflow-hidden flex items-center justify-center mb-4">
+            <div key={idx} className="bg-[#131313] rounded-2xl p-5 border border-[#554240]/20 hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(240,81,62,0.1)] transition-all duration-300">
+              <div className="aspect-square rounded-xl bg-[#201f1f] border border-[#554240]/10 overflow-hidden flex items-center justify-center mb-5 relative group">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10" />
                 {item.image_url ? (
-                   <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                   <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 ) : (
-                   <span className="text-slate-600 font-bold">{idx + 1}</span>
+                   <span className="text-[#a38b88] font-display font-bold text-3xl opacity-50">{idx + 1}</span>
                 )}
               </div>
-              <h3 className="text-white font-medium truncate mb-1">{item.name}</h3>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-400">{item.total_sold} sold</span>
-                <span className="text-emerald-400 font-medium">₹{item.total_revenue}</span>
+              <h3 className="text-[#e5e2e1] font-display font-semibold truncate mb-2 text-lg">{item.name}</h3>
+              <div className="flex justify-between items-center text-sm font-medium">
+                <span className="text-[#a38b88] bg-[#1c1b1b] px-2.5 py-1 rounded-md border border-[#554240]/20">{item.total_sold} sold</span>
+                <span className="text-[#eac34a]">₹{item.total_revenue}</span>
               </div>
             </div>
           ))}

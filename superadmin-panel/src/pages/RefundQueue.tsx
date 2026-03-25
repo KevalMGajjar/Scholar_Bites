@@ -23,9 +23,9 @@ interface RefundRequest {
 }
 
 const STATUS_PILL: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-400 border-amber-500/15',
-  approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15',
-  rejected: 'bg-red-500/10 text-red-400 border-red-500/15',
+  pending: 'bg-[#eac34a]/10 text-[#eac34a] border-[#eac34a]/20',
+  approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  rejected: 'bg-[#f0513e]/10 text-[#f0513e] border-[#f0513e]/20',
 };
 
 export default function RefundQueue() {
@@ -86,44 +86,44 @@ export default function RefundQueue() {
   const pendingCount = requests.filter(r => r.status === 'pending').length;
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-8 lg:p-12 max-w-7xl mx-auto animate-fade-in font-body">
       {/* ── Toast ── */}
       {toast && (
-        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl text-[13px] font-semibold shadow-2xl animate-fade-up flex items-center gap-2 ${
-          toast.type === 'success' ? 'bg-emerald-500/15 border border-emerald-500/20 text-emerald-400' : 'bg-red-500/15 border border-red-500/20 text-red-400'
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl animate-fade-up flex items-center gap-3 backdrop-blur-md ${
+          toast.type === 'success' ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400' : 'bg-[#93000a]/40 border border-[#f0513e]/30 text-[#ffb4ab]'
         }`}>
           {toast.msg}
-          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100"><X size={14} /></button>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100 transition-opacity"><X size={16} /></button>
         </div>
       )}
 
       {/* ── Header ── */}
-      <div className="flex items-end justify-between mb-10 animate-fade-up">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-red-500/20 flex items-center justify-center">
-              <ShieldCheck size={20} className="text-amber-400" />
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 gap-6 animate-fade-up">
+        <div className="space-y-2">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#eac34a]/20 to-[#f0513e]/20 border border-[#f0513e]/20 flex items-center justify-center shadow-inner">
+              <ShieldCheck size={24} className="text-[#ffb4a8]" />
             </div>
             <div>
-              <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Refund Queue</h1>
-              <p className="text-slate-500 text-[14px] font-medium">
+              <h1 className="text-4xl font-display font-bold text-[#e5e2e1] tracking-tight">Refund Queue</h1>
+              <p className="text-[#a38b88] text-sm font-medium mt-1">
                 {filter === 'pending' && pendingCount > 0 ? (
-                  <><span className="text-amber-400 font-bold">{pendingCount}</span> awaiting your approval</>
+                  <><span className="text-[#eac34a] font-bold">{pendingCount}</span> awaiting your approval</>
                 ) : (
-                  <><span className="text-white font-bold">{requests.length}</span> requests</>
+                  <><span className="text-[#e5e2e1] font-bold">{requests.length}</span> requests</>
                 )}
               </p>
             </div>
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {['pending', 'approved', 'rejected', ''].map((s) => (
             <button key={s}
               onClick={() => setFilter(s)}
-              className={`px-4 py-2 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all btn-press ${
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold tracking-widest uppercase transition-all duration-300 ${
                 filter === s
-                  ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                  : 'bg-white/[0.03] border border-white/[0.06] text-slate-500 hover:text-white hover:bg-white/[0.06]'
+                  ? 'bg-[#4c0000] text-[#ffb4a8] border border-[#f0513e]/30 shadow-[0_4px_20px_rgba(240,81,62,0.2)] shadow-inner'
+                  : 'bg-[#1c1b1b] border border-[#554240]/20 text-[#a38b88] hover:text-[#e5e2e1] hover:bg-[#201f1f]'
               }`}>
               {s || 'All'}
             </button>
@@ -133,112 +133,117 @@ export default function RefundQueue() {
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="animate-spin w-6 h-6 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full" />
+          <div className="animate-spin w-8 h-8 border-2 border-[#f0513e] border-t-transparent rounded-full" />
         </div>
       ) : requests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 animate-fade-up">
-          <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-white/[0.04] flex items-center justify-center mb-4">
-            <RotateCcw size={28} className="text-slate-600" />
+          <div className="w-20 h-20 rounded-2xl bg-[#1c1b1b] border border-[#554240]/15 flex items-center justify-center mb-5 shadow-inner">
+            <RotateCcw size={32} className="text-[#554240]" />
           </div>
-          <p className="text-slate-500 text-[15px] font-semibold">No refund requests</p>
-          <p className="text-slate-600 text-[13px] mt-1">
+          <p className="text-[#a38b88] font-display font-semibold text-lg">No refund requests</p>
+          <p className="text-[#554240] text-sm mt-1">
             {filter === 'pending' ? 'All caught up! No pending approvals.' : 'No requests match this filter.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {requests.map((req, idx) => (
             <div
               key={req.id}
-              className="bg-white/[0.015] border border-white/[0.04] rounded-2xl p-6 hover:bg-white/[0.025] transition-all duration-200 animate-fade-up"
-              style={{ animationDelay: `${idx * 50}ms` }}
+              className="bg-[#1c1b1b] border border-[#554240]/15 rounded-2xl p-6 hover-ember hover:bg-[#201f1f] transition-all duration-300 animate-fade-up shadow-lg"
+              style={{ animationDelay: `${idx * 40}ms` }}
             >
-              <div className="flex items-start justify-between gap-6">
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 lg:gap-6">
                 {/* Left — Order Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-indigo-400 font-mono text-[12px] font-bold bg-indigo-500/8 px-2.5 py-1 rounded-lg">
+                <div className="flex-1 min-w-0 w-full">
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    <span className="text-[#ffb4a8] font-mono text-xs font-bold bg-[#4c0000]/50 border border-[#f0513e]/20 px-3 py-1 rounded-md shadow-inner">
                       #{req.order_token || req.order_id.slice(-6).toUpperCase()}
                     </span>
-                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border ${STATUS_PILL[req.status]}`}>
+                    <span className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border ${STATUS_PILL[req.status]}`}>
                       {req.status}
                     </span>
-                    <span className="text-white text-[18px] font-extrabold ml-auto">₹{parseFloat(req.amount).toFixed(0)}</span>
+                    <span className="text-[#eac34a] text-xl font-display font-bold lg:ml-auto block w-full lg:w-auto mt-2 lg:mt-0">
+                      ₹{parseFloat(req.amount).toFixed(0)}
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 mb-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-5 bg-[#131313]/50 border border-[#554240]/10 rounded-xl p-4">
                     <div>
-                      <p className="text-slate-600 text-[10px] font-bold uppercase tracking-wider mb-0.5">Customer</p>
-                      <p className="text-white text-[13px] font-semibold">{req.customer_name}</p>
-                      <p className="text-slate-600 text-[11px]">{req.customer_phone}</p>
+                      <p className="label-premium mb-1">Customer</p>
+                      <p className="text-[#e5e2e1] text-sm font-semibold">{req.customer_name}</p>
+                      <p className="text-[#a38b88] text-xs mt-0.5">{req.customer_phone}</p>
                     </div>
                     <div>
-                      <p className="text-slate-600 text-[10px] font-bold uppercase tracking-wider mb-0.5">Restaurant</p>
-                      <p className="text-slate-400 text-[13px]">{req.restaurant_name}</p>
+                      <p className="label-premium mb-1">Restaurant</p>
+                      <p className="text-[#dcc0bd] text-sm">{req.restaurant_name}</p>
                     </div>
-                    <div>
-                      <p className="text-slate-600 text-[10px] font-bold uppercase tracking-wider mb-0.5">Requested By</p>
-                      <p className="text-slate-400 text-[13px]">{req.requested_by_name}</p>
-                      <p className="text-slate-600 text-[11px] capitalize">{req.requested_by_role?.replace('_', ' ')}</p>
+                    <div className="col-span-2 md:col-span-1 border-t md:border-t-0 border-[#554240]/10 pt-4 md:pt-0">
+                      <p className="label-premium mb-1">Requested By</p>
+                      <p className="text-[#dcc0bd] text-sm space-x-2">
+                        <span>{req.requested_by_name}</span>
+                        <span className="text-[#554240] text-[10px] uppercase font-bold tracking-widest bg-[#1c1b1b] px-1.5 py-0.5 rounded border border-[#554240]/20">{req.requested_by_role?.replace('_', ' ')}</span>
+                      </p>
                     </div>
                   </div>
 
                   {/* Items */}
-                  <div className="flex flex-wrap gap-2 mb-3">
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {req.order_items?.filter(i => i.item_name).map(i => (
-                      <span key={i.item_name} className="text-slate-500 text-[11px] bg-white/[0.03] px-2 py-0.5 rounded-lg">
-                        <span className="text-indigo-400 font-bold">{i.quantity}x</span> {i.item_name}
+                      <span key={i.item_name} className="text-[#dcc0bd] text-xs bg-[#131313] border border-[#554240]/20 px-2.5 py-1 rounded-md shadow-inner">
+                        <span className="text-[#ffb4a8] font-bold">{i.quantity}x</span> {i.item_name}
                       </span>
                     ))}
                   </div>
 
                   {/* Reason */}
-                  <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl px-4 py-3">
-                    <p className="text-amber-300/60 text-[10px] font-bold uppercase tracking-wider mb-1">Reason</p>
-                    <p className="text-slate-300 text-[13px] leading-relaxed">{req.reason}</p>
+                  <div className="bg-[#eac34a]/5 border border-[#eac34a]/10 rounded-xl px-5 py-4">
+                    <p className="text-[#eac34a]/70 text-[10px] font-bold uppercase tracking-widest mb-1.5">Reason</p>
+                    <p className="text-[#e5e2e1] text-sm leading-relaxed">{req.reason}</p>
                   </div>
 
                   {/* Admin note (if rejected) */}
                   {req.admin_note && req.status === 'rejected' && (
-                    <div className="bg-red-500/5 border border-red-500/10 rounded-xl px-4 py-3 mt-2">
-                      <p className="text-red-300/60 text-[10px] font-bold uppercase tracking-wider mb-1">Rejection Note</p>
-                      <p className="text-slate-300 text-[13px]">{req.admin_note}</p>
+                    <div className="bg-[#93000a]/10 border border-[#f0513e]/20 rounded-xl px-5 py-4 mt-3">
+                      <p className="text-[#ffb4a8]/70 text-[10px] font-bold uppercase tracking-widest mb-1.5">Rejection Note</p>
+                      <p className="text-[#e5e2e1] text-sm leading-relaxed">{req.admin_note}</p>
                     </div>
                   )}
 
-                  {req.approved_by_name && (
-                    <p className="text-slate-600 text-[11px] mt-2">
-                      {req.status === 'approved' ? 'Approved' : 'Reviewed'} by <span className="text-slate-400 font-semibold">{req.approved_by_name}</span>
-                      {req.resolved_at && <> on {formatDate(req.resolved_at)}</>}
+                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#554240]/15 pt-4">
+                    {req.approved_by_name ? (
+                      <p className="text-[#a38b88] text-xs">
+                        {req.status === 'approved' ? 'Approved' : 'Reviewed'} by <span className="text-[#e5e2e1] font-semibold">{req.approved_by_name}</span>
+                        {req.resolved_at && <> on {formatDate(req.resolved_at)}</>}
+                      </p>
+                    ) : <div />}
+                    <p className="text-[#554240] text-xs font-mono flex items-center gap-1.5 font-medium">
+                      <Clock size={12} className="opacity-70" /> {formatDate(req.created_at)}
                     </p>
-                  )}
-
-                  <p className="text-slate-700 text-[11px] mt-1 flex items-center gap-1">
-                    <Clock size={11} /> {formatDate(req.created_at)}
-                  </p>
+                  </div>
                 </div>
 
                 {/* Right — Actions (only for pending) */}
                 {req.status === 'pending' && (
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex lg:flex-col gap-3 shrink-0 w-full lg:w-48 border-t lg:border-t-0 border-[#554240]/15 pt-4 lg:pt-0">
                     <button
                       onClick={() => handleApprove(req)}
                       disabled={processing === req.id}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/15 text-emerald-400 text-[12px] font-bold hover:bg-emerald-500/20 transition-all disabled:opacity-30 btn-press"
+                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-bold hover:bg-emerald-500/20 transition-all disabled:opacity-30 shadow-inner"
                     >
                       {processing === req.id ? (
-                        <div className="w-4 h-4 border-2 border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
                       ) : (
-                        <Check size={15} />
+                        <Check size={18} />
                       )}
-                      Approve & Refund
+                      Approve
                     </button>
                     <button
                       onClick={() => { setRejectModal(req); setRejectNote(''); }}
                       disabled={processing === req.id}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[12px] font-bold hover:bg-red-500/15 transition-all disabled:opacity-30 btn-press"
+                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#93000a]/20 border border-[#f0513e]/20 text-[#ffb4ab] text-sm font-bold hover:bg-[#93000a]/40 transition-all disabled:opacity-30 shadow-inner"
                     >
-                      <X size={15} /> Reject
+                      <X size={18} /> Reject
                     </button>
                   </div>
                 )}
@@ -250,42 +255,45 @@ export default function RefundQueue() {
 
       {/* ── Reject Modal ── */}
       {rejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setRejectModal(null)}>
-          <div className="bg-[#0c0e16] border border-white/[0.06] rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-up" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-                <AlertTriangle size={20} className="text-red-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in p-4" onClick={() => setRejectModal(null)}>
+          <div className="glass-panel rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-up border border-[#f0513e]/20" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-[#93000a]/30 border border-[#f0513e]/30 flex items-center justify-center shrink-0 shadow-inner">
+                <AlertTriangle size={24} className="text-[#ffb4ab]" />
               </div>
               <div>
-                <h3 className="text-white text-[18px] font-extrabold">Reject Refund</h3>
-                <p className="text-slate-500 text-[12px] mt-0.5">Order #{rejectModal.order_token || rejectModal.order_id.slice(-6).toUpperCase()} • ₹{parseFloat(rejectModal.amount).toFixed(0)}</p>
+                <h3 className="text-[#e5e2e1] text-xl font-display font-bold tracking-tight">Reject Refund</h3>
+                <p className="text-[#a38b88] text-sm mt-1">Order #{rejectModal.order_token || rejectModal.order_id.slice(-6).toUpperCase()} • <span className="text-[#eac34a]">₹{parseFloat(rejectModal.amount).toFixed(0)}</span></p>
               </div>
             </div>
 
-            <label className="block text-slate-400 text-[12px] font-bold uppercase tracking-wider mb-2">
-              Note (optional)
+            <label className="label-premium block mb-2">
+              Rejection Note (optional)
             </label>
             <textarea
               value={rejectNote}
               onChange={e => setRejectNote(e.target.value)}
               placeholder="e.g. Student already received the food, refund not applicable..."
-              rows={3}
-              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-white text-[13px] placeholder-slate-600 focus:outline-none focus:border-red-500/30 resize-none transition-colors"
+              rows={4}
+              className="w-full bg-[#131313] border border-[#554240]/30 rounded-xl px-4 py-3 text-[#e5e2e1] text-sm font-medium placeholder-[#554240] focus:outline-none focus:border-[#f0513e]/50 focus:ring-1 focus:ring-[#f0513e]/20 resize-none transition-all shadow-inner"
             />
 
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setRejectModal(null)}
-                className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-slate-400 text-[13px] font-semibold hover:bg-white/[0.06] transition-all btn-press">
+            <div className="flex gap-3 mt-8">
+              <button 
+                onClick={() => setRejectModal(null)}
+                className="flex-1 py-3.5 rounded-xl bg-[#1c1b1b] border border-[#554240]/20 text-[#a38b88] text-sm font-bold hover:text-[#e5e2e1] hover:bg-[#201f1f] transition-all"
+              >
                 Cancel
               </button>
               <button
                 onClick={handleReject}
                 disabled={processing === rejectModal.id}
-                className="flex-1 py-3 rounded-xl bg-red-500/15 border border-red-500/20 text-red-400 text-[13px] font-bold hover:bg-red-500/25 transition-all disabled:opacity-30 btn-press flex items-center justify-center gap-2">
+                className="flex-1 py-3.5 rounded-xl bg-[#93000a]/30 border border-[#f0513e]/30 text-[#ffb4ab] text-sm font-bold hover:bg-[#93000a]/50 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(240,81,62,0.15)] shadow-inner"
+              >
                 {processing === rejectModal.id ? (
-                  <div className="w-4 h-4 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-[#ffb4ab]/40 border-t-[#ffb4ab] rounded-full animate-spin" />
                 ) : (
-                  <><X size={14} /> Confirm Reject</>
+                  <><X size={16} /> Confirm Reject</>
                 )}
               </button>
             </div>

@@ -148,36 +148,44 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-[#131313] flex items-center justify-center p-4 relative overflow-hidden font-body">
+      {/* Ambient glowing orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#4c0000]/30 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-[#f0513e]/10 rounded-full blur-[150px] pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10 animate-fade-up">
+        {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-xl shadow-indigo-500/20 mb-6">
-            <span className="text-3xl text-white font-bold">SA</span>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#ffb4a8] to-[#f0513e] shadow-[0_0_30px_rgba(240,81,62,0.3)] mb-6">
+            <span className="text-3xl text-[#410000] font-display font-bold">SB</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-3xl font-display font-bold text-[#e5e2e1] mb-2 tracking-tight">
             {otpPending ? 'Verify Your Identity' : 'Super Admin Access'}
           </h1>
-          <p className="text-slate-400">
+          <p className="text-[#a38b88]">
             {otpPending
-              ? <>We sent a 6-digit code to <span className="text-indigo-400 font-semibold">{otpPending.email}</span></>
+              ? <>We sent a 6-digit code to <span className="text-[#ffb4a8] font-semibold">{otpPending.email}</span></>
               : 'Sign in to manage the main platform'
             }
           </p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+        {/* Glass Card */}
+        <div className="glass-panel rounded-2xl p-8 shadow-2xl relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-2xl pointer-events-none" />
+
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-xl mb-6 text-sm text-center">
+            <div className="bg-[#93000a]/20 border border-[#93000a]/50 text-[#ffb4ab] p-4 rounded-xl mb-6 text-sm text-center relative z-20">
               {error}
             </div>
           )}
 
           {otpPending ? (
             /* ── OTP Step ── */
-            <div className="space-y-6">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-                <ShieldCheck size={20} className="text-indigo-400 shrink-0" />
-                <p className="text-indigo-300 text-sm">Enter the 6-digit code from your email</p>
+            <div className="space-y-6 relative z-20">
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-[#4c0000]/30 border border-[#f0513e]/20">
+                <ShieldCheck size={20} className="text-[#ffb4a8] shrink-0" />
+                <p className="text-[#dcc0bd] text-sm font-medium">Enter the 6-digit code from your email</p>
               </div>
 
               {/* OTP Input Boxes */}
@@ -185,7 +193,6 @@ export default function Login() {
                 <div
                   className={`flex gap-3 justify-center ${otpShake ? 'animate-shake' : ''}`}
                   onPaste={handleOtpPaste}
-                  style={otpShake ? { animation: 'shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both' } : {}}
                 >
                   {otpDigits.map((digit, i) => (
                     <input
@@ -198,15 +205,15 @@ export default function Login() {
                       onChange={(e) => handleOtpChange(i, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(i, e)}
                       disabled={otpLoading || otpAttempts >= MAX_OTP_ATTEMPTS}
-                      className={`w-14 h-16 text-center text-2xl font-bold text-white bg-slate-950 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition disabled:opacity-40 ${
-                        otpError ? 'border-red-500/50' : 'border-slate-700'
+                      className={`w-12 h-16 sm:w-14 text-center text-2xl font-bold font-display text-[#e5e2e1] bg-[#1c1b1b]/50 border-0 border-b-2 rounded-t-lg rounded-b-none focus:outline-none focus:border-[#f0513e] focus:bg-[#2a2a2a]/80 transition-all disabled:opacity-40 shadow-inner ${
+                        otpError ? 'border-[#ffb4ab]' : 'border-[#554240]'
                       }`}
                       autoFocus={i === 0}
                     />
                   ))}
                 </div>
                 {otpError && (
-                  <p className="text-red-400 text-sm font-medium text-center mt-3">
+                  <p className="text-[#ffb4ab] text-sm font-medium text-center mt-4">
                     {otpError}
                   </p>
                 )}
@@ -216,67 +223,67 @@ export default function Login() {
               <div className="flex items-center justify-between">
                 <button
                   onClick={handleBack}
-                  className="flex items-center gap-1.5 text-slate-500 text-sm font-medium hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-[#a38b88] text-sm font-medium hover:text-[#e5e2e1] transition-colors"
                 >
-                  <ArrowLeft size={14} /> Back to login
+                  <ArrowLeft size={14} /> Back
                 </button>
                 <button
                   onClick={handleResend}
                   disabled={resendTimer > 0 || resending}
-                  className="text-sm font-semibold transition-colors disabled:text-slate-600 text-indigo-400 hover:text-indigo-300"
+                  className="text-sm font-semibold transition-colors disabled:text-[#554240] text-[#ffb4a8] hover:text-[#e5e2e1]"
                 >
                   {resending ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend code'}
                 </button>
               </div>
 
               {otpLoading && (
-                <div className="flex justify-center">
-                  <div className="w-6 h-6 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full animate-spin" />
+                <div className="flex justify-center pt-2">
+                  <div className="w-6 h-6 border-2 border-[#f0513e]/40 border-t-[#f0513e] rounded-full animate-spin" />
                 </div>
               )}
             </div>
           ) : (
             /* ── Credentials Step ── */
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6 relative z-20">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Email Address</label>
-                <div className="relative">
+                <label className="block label-premium mb-2">Email Address</label>
+                <div className="relative group">
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    className="w-full bg-[#1c1b1b]/50 border-0 border-b-2 border-[#554240] text-[#e5e2e1] rounded-t-lg rounded-b-none pl-12 pr-4 py-3 focus:outline-none focus:border-[#f0513e] focus:bg-[#2a2a2a] transition-all"
                     placeholder="admin@scholarbites.com"
                   />
-                  <Mail className="absolute left-4 top-3.5 text-slate-500" size={20} />
+                  <Mail className="absolute left-4 top-3.5 text-[#a38b88] group-focus-within:text-[#ffb4a8] transition-colors" size={20} />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Password</label>
-                <div className="relative">
+                <label className="block label-premium mb-2">Password</label>
+                <div className="relative group">
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    className="w-full bg-[#1c1b1b]/50 border-0 border-b-2 border-[#554240] text-[#e5e2e1] rounded-t-lg rounded-b-none pl-12 pr-4 py-3 focus:outline-none focus:border-[#f0513e] focus:bg-[#2a2a2a] transition-all"
                     placeholder="••••••••"
                   />
-                  <Lock className="absolute left-4 top-3.5 text-slate-500" size={20} />
+                  <Lock className="absolute left-4 top-3.5 text-[#a38b88] group-focus-within:text-[#ffb4a8] transition-colors" size={20} />
                 </div>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium py-3 rounded-xl transition shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full btn-premium py-3 mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
               >
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2.5">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Verifying…
+                  <span className="flex items-center gap-2.5">
+                    <div className="w-5 h-5 border-2 border-[#410000]/30 border-t-[#410000] rounded-full animate-spin" />
+                    Authenticating...
                   </span>
                 ) : 'Secure Sign In'}
               </button>
@@ -284,22 +291,10 @@ export default function Login() {
           )}
         </div>
 
-        <p className="text-slate-600 text-xs text-center mt-6">
+        <p className="text-[#554240] text-xs font-medium text-center mt-8">
           {otpPending ? "Didn't receive the email? Check your spam folder." : 'Contact your administrator if you don\'t have access.'}
         </p>
       </div>
-
-      {/* Inline shake animation (no Tailwind config needed) */}
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          15%, 45%, 75% { transform: translateX(-6px); }
-          30%, 60%, 90% { transform: translateX(6px); }
-        }
-        .animate-shake {
-          animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-        }
-      `}</style>
     </div>
   );
 }
