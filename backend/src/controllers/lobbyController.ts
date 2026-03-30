@@ -697,14 +697,38 @@ async function _checkAllPaid(groupOrder: any, code: string, paidUserId: string) 
             [token, groupOrder.id]
         );
 
-        // Notify kitchen
-        const orderRes = await pool.query('SELECT university_id FROM orders WHERE group_order_id = $1 LIMIT 1', [groupOrder.id]);
+        // Notify kitchen — fetch full order with joins
+        const orderRes = await pool.query('SELECT id, university_id FROM orders WHERE group_order_id = $1 LIMIT 1', [groupOrder.id]);
         if (orderRes.rows.length > 0) {
-            emitNewOrder(orderRes.rows[0].university_id, {
-                type: 'group_order',
-                group_order_id: groupOrder.id,
-                total_amount: groupOrder.total_amount,
-            });
+            const fullOrderRes = await pool.query(`
+                SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                       o.created_at, o.updated_at, o.university_id,
+                       u.name as user_name, u.phone as user_phone,
+                       r.name as restaurant_name,
+                       COALESCE(json_agg(
+                           json_build_object(
+                               'id', oi.id,
+                               'menu_item_id', oi.menu_item_id,
+                               'quantity', oi.quantity,
+                               'price_at_time', oi.price_at_time,
+                               'item_name', mi.name,
+                               'item_image', mi.image_url
+                           )
+                       ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                FROM orders o
+                LEFT JOIN users u ON o.user_id = u.id
+                LEFT JOIN restaurants r ON o.restaurant_id = r.id
+                LEFT JOIN order_items oi ON oi.order_id = o.id
+                LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+                WHERE o.group_order_id = $1
+                GROUP BY o.id, u.name, u.phone, r.name
+                ORDER BY o.created_at ASC
+            `, [groupOrder.id]);
+
+            // Emit each sub-order so admin sees all items
+            for (const fullOrder of fullOrderRes.rows) {
+                emitNewOrder(orderRes.rows[0].university_id, fullOrder);
+            }
         }
 
         const pickupRestaurant = restaurantRes.rows[0]?.name || 'Restaurant';

@@ -247,11 +247,22 @@ export default function MenuItems() {
                     <span className="px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-slate-400 text-[10px] font-bold tracking-widest uppercase">{item.category}</span>
                   </td>
                   <td className="px-6 py-4 text-white text-[14px] font-extrabold tracking-[-0.01em]">₹{parseFloat(item.price).toFixed(0)}</td>
-                  <td className="px-6 py-4 text-slate-500 font-mono text-[13px] font-medium">{item.stock_quantity}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${item.is_available ? 'bg-emerald-500/8 text-emerald-400 border border-emerald-500/15' : 'bg-red-500/8 text-red-400 border border-red-500/15'}`}>
-                      {item.is_available ? 'Available' : 'Disabled'}
+                    <span className={`font-mono text-[13px] font-medium ${item.stock_quantity <= 0 ? 'text-red-400' : item.stock_quantity <= 5 ? 'text-amber-400' : 'text-slate-500'}`}>
+                      {item.stock_quantity}
+                      {item.stock_quantity > 0 && item.stock_quantity <= 5 && <span className="ml-1.5 text-[9px] font-bold text-amber-400/80 uppercase tracking-wider">Low</span>}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {item.stock_quantity <= 0 && !item.is_available ? (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-red-500/8 text-red-400 border border-red-500/15">
+                        Out of Stock
+                      </span>
+                    ) : (
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${item.is_available ? 'bg-emerald-500/8 text-emerald-400 border border-emerald-500/15' : 'bg-red-500/8 text-red-400 border border-red-500/15'}`}>
+                        {item.is_available ? 'Available' : 'Disabled'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-1.5 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">

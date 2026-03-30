@@ -68,7 +68,14 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             orderItemsData.push({ ...item, price });
 
             // Decrement the stock quantity immediately
+            const newStock = menuItem.stock_quantity - item.quantity;
             await client.query('UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
+
+            // Auto-disable item when stock runs out
+            if (newStock <= 0) {
+                await client.query('UPDATE menu_items SET is_available = false WHERE id = $1', [item.menu_item_id]);
+                console.log(`📦 Auto-disabled item ${menuItem.name} (stock exhausted)`);
+            }
         }
 
         if (!restaurantId) {
@@ -168,9 +175,35 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
 
             const order = result.rows[0];
 
-            // Emit to Staff
+            // Emit to Staff — fetch full order with joins so admin panel
+            // receives user_name, restaurant_name, and items[] immediately
             if (order) {
-                emitNewOrder(order.university_id, order);
+                const fullOrderRes = await pool.query(`
+                    SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                           o.created_at, o.updated_at, o.university_id,
+                           u.name as user_name, u.phone as user_phone,
+                           r.name as restaurant_name,
+                           COALESCE(json_agg(
+                               json_build_object(
+                                   'id', oi.id,
+                                   'menu_item_id', oi.menu_item_id,
+                                   'quantity', oi.quantity,
+                                   'price_at_time', oi.price_at_time,
+                                   'item_name', mi.name,
+                                   'item_image', mi.image_url
+                               )
+                           ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                    FROM orders o
+                    LEFT JOIN users u ON o.user_id = u.id
+                    LEFT JOIN restaurants r ON o.restaurant_id = r.id
+                    LEFT JOIN order_items oi ON oi.order_id = o.id
+                    LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+                    WHERE o.id = $1
+                    GROUP BY o.id, u.name, u.phone, r.name
+                `, [order.id]);
+
+                const fullOrder = fullOrderRes.rows[0] || order;
+                emitNewOrder(order.university_id, fullOrder);
             }
 
             res.json({ status: 'success', order });

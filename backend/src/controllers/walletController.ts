@@ -249,10 +249,36 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
 
         await client.query('COMMIT');
 
-        // 6. Emit to staff (import at top if needed)
+        // 6. Emit to staff — fetch full order with joins so admin panel
+        // receives user_name, restaurant_name, and items[] immediately
         try {
             const { emitNewOrder } = require('../services/socketService');
-            emitNewOrder(order.university_id, { ...order, status: 'preparing' });
+            const fullOrderRes = await pool.query(`
+                SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                       o.created_at, o.updated_at, o.university_id,
+                       u.name as user_name, u.phone as user_phone,
+                       r.name as restaurant_name,
+                       COALESCE(json_agg(
+                           json_build_object(
+                               'id', oi.id,
+                               'menu_item_id', oi.menu_item_id,
+                               'quantity', oi.quantity,
+                               'price_at_time', oi.price_at_time,
+                               'item_name', mi.name,
+                               'item_image', mi.image_url
+                           )
+                       ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                FROM orders o
+                LEFT JOIN users u ON o.user_id = u.id
+                LEFT JOIN restaurants r ON o.restaurant_id = r.id
+                LEFT JOIN order_items oi ON oi.order_id = o.id
+                LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+                WHERE o.id = $1
+                GROUP BY o.id, u.name, u.phone, r.name
+            `, [order_id]);
+
+            const fullOrder = fullOrderRes.rows[0] || { ...order, status: 'preparing' };
+            emitNewOrder(order.university_id, fullOrder);
         } catch (_) {
             // Socket service may not be available, ignore
         }
