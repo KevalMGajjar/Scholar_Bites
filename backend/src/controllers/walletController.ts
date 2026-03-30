@@ -241,7 +241,45 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
             [userId, orderAmount, `Order Payment #${(order.order_token || order_id).toString().substring(0, 8)}`, order_id]
         );
 
-        // 5. Mark order as preparing (payment complete)
+        // 5. Decrement stock — payment is confirmed, now we touch inventory
+        const itemsRes = await client.query(
+            'SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1',
+            [order_id]
+        );
+
+        // Sort by menu_item_id to prevent deadlocks
+        const sortedItems = itemsRes.rows.sort((a: any, b: any) =>
+            a.menu_item_id.localeCompare(b.menu_item_id)
+        );
+
+        for (const item of sortedItems) {
+            const miRes = await client.query(
+                'SELECT stock_quantity, name, is_available FROM menu_items WHERE id = $1 FOR UPDATE',
+                [item.menu_item_id]
+            );
+            const mi = miRes.rows[0];
+
+            if (!mi || !mi.is_available) {
+                throw new Error(`Item ${mi?.name || item.menu_item_id} is no longer available`);
+            }
+            if (mi.stock_quantity < item.quantity) {
+                throw new Error(`Insufficient stock for ${mi.name}. Only ${mi.stock_quantity} left.`);
+            }
+
+            const newStock = mi.stock_quantity - item.quantity;
+            await client.query(
+                'UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2',
+                [item.quantity, item.menu_item_id]
+            );
+
+            // Auto-disable item when stock runs out
+            if (newStock <= 0) {
+                await client.query('UPDATE menu_items SET is_available = false WHERE id = $1', [item.menu_item_id]);
+                console.log(`📦 Auto-disabled item ${mi.name} (stock exhausted)`);
+            }
+        }
+
+        // 6. Mark order as preparing (payment + stock confirmed)
         await client.query(
             "UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1",
             [order_id]

@@ -50,8 +50,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         const sortedItems = [...items].sort((a, b) => a.menu_item_id.localeCompare(b.menu_item_id));
 
         for (const item of sortedItems) {
-            // Lock the menu item row for update to ensure accurate stock reading and updating
-            const result = await client.query('SELECT price, is_available, restaurant_id, stock_quantity, name FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
+            // Read-only availability check — stock is NOT decremented here.
+            // Stock is only decremented after successful payment in verifyPayment/payOrderWithWallet.
+            const result = await client.query('SELECT price, is_available, restaurant_id, stock_quantity, name FROM menu_items WHERE id = $1', [item.menu_item_id]);
             const menuItem = result.rows[0];
 
             if (!menuItem || !menuItem.is_available) {
@@ -67,15 +68,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             if (!restaurantId) restaurantId = menuItem.restaurant_id;
             orderItemsData.push({ ...item, price });
 
-            // Decrement the stock quantity immediately
-            const newStock = menuItem.stock_quantity - item.quantity;
-            await client.query('UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
-
-            // Auto-disable item when stock runs out
-            if (newStock <= 0) {
-                await client.query('UPDATE menu_items SET is_available = false WHERE id = $1', [item.menu_item_id]);
-                console.log(`📦 Auto-disabled item ${menuItem.name} (stock exhausted)`);
-            }
+            // ⚠️ NO stock decrement here — user hasn't paid yet.
+            // If we decrement now and user cancels Razorpay checkout,
+            // the stock is lost until the 15-min cleanup runs.
         }
 
         if (!restaurantId) {
@@ -167,17 +162,73 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
         }
 
         if (isValid) {
-            // Payment successful
-            const result = await pool.query(
-                "UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE payment_id = $1 RETURNING *",
-                [razorpay_order_id]
-            );
+            // Payment confirmed — NOW we decrement stock (inside a transaction)
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
 
-            const order = result.rows[0];
+                // 1. Lock and fetch the order
+                const orderRes = await client.query(
+                    "SELECT * FROM orders WHERE payment_id = $1 AND status = 'pending' FOR UPDATE",
+                    [razorpay_order_id]
+                );
 
-            // Emit to Staff — fetch full order with joins so admin panel
-            // receives user_name, restaurant_name, and items[] immediately
-            if (order) {
+                if (orderRes.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ status: 'failure', message: 'Order not found or already processed' });
+                }
+
+                const order = orderRes.rows[0];
+
+                // 2. Fetch order items and decrement stock
+                const itemsRes = await client.query(
+                    'SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1',
+                    [order.id]
+                );
+
+                // Sort by menu_item_id to prevent deadlocks
+                const sortedItems = itemsRes.rows.sort((a: any, b: any) =>
+                    a.menu_item_id.localeCompare(b.menu_item_id)
+                );
+
+                for (const item of sortedItems) {
+                    // Lock menu item row
+                    const miRes = await client.query(
+                        'SELECT stock_quantity, name, is_available FROM menu_items WHERE id = $1 FOR UPDATE',
+                        [item.menu_item_id]
+                    );
+                    const mi = miRes.rows[0];
+
+                    if (!mi || !mi.is_available) {
+                        throw new Error(`Item ${mi?.name || item.menu_item_id} is no longer available`);
+                    }
+                    if (mi.stock_quantity < item.quantity) {
+                        throw new Error(`Insufficient stock for ${mi.name}. Only ${mi.stock_quantity} left.`);
+                    }
+
+                    // Decrement stock
+                    const newStock = mi.stock_quantity - item.quantity;
+                    await client.query(
+                        'UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2',
+                        [item.quantity, item.menu_item_id]
+                    );
+
+                    // Auto-disable item when stock runs out
+                    if (newStock <= 0) {
+                        await client.query('UPDATE menu_items SET is_available = false WHERE id = $1', [item.menu_item_id]);
+                        console.log(`📦 Auto-disabled item ${mi.name} (stock exhausted)`);
+                    }
+                }
+
+                // 3. Mark order as preparing
+                await client.query(
+                    "UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1",
+                    [order.id]
+                );
+
+                await client.query('COMMIT');
+
+                // 4. Emit to Staff — fetch full order with joins
                 const fullOrderRes = await pool.query(`
                     SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
                            o.created_at, o.updated_at, o.university_id,
@@ -204,9 +255,17 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
 
                 const fullOrder = fullOrderRes.rows[0] || order;
                 emitNewOrder(order.university_id, fullOrder);
-            }
 
-            res.json({ status: 'success', order });
+                res.json({ status: 'success', order: { ...order, status: 'preparing' } });
+            } catch (stockError: any) {
+                await client.query('ROLLBACK');
+                console.error('verifyPayment stock error:', stockError);
+                // Payment was valid but stock check failed — order stays pending
+                // TODO: Initiate Razorpay refund here in production
+                res.status(409).json({ status: 'failure', message: stockError.message || 'Stock unavailable after payment' });
+            } finally {
+                client.release();
+            }
         } else {
             res.status(400).json({ status: 'failure', message: 'Invalid signature' });
         }
@@ -250,21 +309,8 @@ export const cancelPendingOrder = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Only unpaid (pending) orders can be cancelled this way' });
         }
 
-        // Restore stock for all items
-        const itemsRes = await client.query(
-            'SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1',
-            [id]
-        );
-        const sortedItems = itemsRes.rows.sort((a: any, b: any) =>
-            a.menu_item_id.localeCompare(b.menu_item_id)
-        );
-        for (const item of sortedItems) {
-            await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
-            await client.query(
-                'UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2',
-                [item.quantity, item.menu_item_id]
-            );
-        }
+        // Pending orders never had stock decremented (stock is only
+        // decremented after successful payment), so NO stock restoration needed.
 
         // Mark order as cancelled
         await client.query(
@@ -273,8 +319,8 @@ export const cancelPendingOrder = async (req: AuthRequest, res: Response) => {
         );
 
         await client.query('COMMIT');
-        console.log(`🗑️ Pending order ${id} cancelled by user, stock restored`);
-        res.json({ message: 'Order cancelled and stock restored' });
+        console.log(`🗑️ Pending order ${id} cancelled by user (no stock to restore)`);
+        res.json({ message: 'Order cancelled' });
     } catch (error: any) {
         await client.query('ROLLBACK');
         console.error('cancelPendingOrder error:', error);
@@ -434,12 +480,13 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ message: 'Forbidden' });
         }
 
-        // If the order is being cancelled, restore the stock
-        if (currentOrder.status !== 'cancelled' && status === 'cancelled') {
+        // If a PAID order is being cancelled by admin, restore the stock.
+        // Pending orders never had stock decremented, so skip those.
+        if (currentOrder.status !== 'cancelled' && currentOrder.status !== 'pending' && status === 'cancelled') {
             const itemsRes = await client.query('SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1', [id]);
             
             // Sort items to prevent deadlocks when restoring stock
-            const sortedItems = itemsRes.rows.sort((a, b) => a.menu_item_id.localeCompare(b.menu_item_id));
+            const sortedItems = itemsRes.rows.sort((a: any, b: any) => a.menu_item_id.localeCompare(b.menu_item_id));
             
             for (const item of sortedItems) {
                 // We use FOR UPDATE to acquire locks in consistent order
@@ -823,23 +870,9 @@ const expireStalePendingOrders = async () => {
         }
 
         for (const order of staleOrders.rows) {
-            // Restore stock
-            const itemsRes = await client.query(
-                'SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1',
-                [order.id]
-            );
-            const sortedItems = itemsRes.rows.sort((a: any, b: any) =>
-                a.menu_item_id.localeCompare(b.menu_item_id)
-            );
-            for (const item of sortedItems) {
-                await client.query('SELECT id FROM menu_items WHERE id = $1 FOR UPDATE', [item.menu_item_id]);
-                await client.query(
-                    'UPDATE menu_items SET stock_quantity = stock_quantity + $1 WHERE id = $2',
-                    [item.quantity, item.menu_item_id]
-                );
-            }
-
-            // Cancel the order
+            // Pending orders never had stock decremented (stock is only
+            // decremented after successful payment), so NO stock restoration needed.
+            // Just cancel the order.
             await client.query(
                 "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
                 [order.id]
@@ -847,7 +880,7 @@ const expireStalePendingOrders = async () => {
         }
 
         await client.query('COMMIT');
-        console.log(`🧹 Auto-expired ${staleOrders.rows.length} stale pending order(s)`);
+        console.log(`🧹 Auto-expired ${staleOrders.rows.length} stale pending order(s) (no stock to restore)`);
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('expireStalePendingOrders error:', error);

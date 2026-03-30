@@ -672,72 +672,124 @@ async function _checkAllPaid(groupOrder: any, code: string, paidUserId: string) 
 
     if (pendingCount === 0) {
         // ALL PAID → Finalize
-        await pool.query("UPDATE group_orders SET status = 'paid' WHERE id = $1", [groupOrder.id]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        // Determine main restaurant (most items) for pickup
-        const restaurantRes = await pool.query(
-            `SELECT o.restaurant_id, r.name, COUNT(oi.id) as item_count
-             FROM orders o
-             JOIN order_items oi ON oi.order_id = o.id
-             JOIN restaurants r ON o.restaurant_id = r.id
-             WHERE o.group_order_id = $1
-             GROUP BY o.restaurant_id, r.name
-             ORDER BY item_count DESC
-             LIMIT 1`,
-            [groupOrder.id]
-        );
+            await client.query("UPDATE group_orders SET status = 'paid' WHERE id = $1", [groupOrder.id]);
 
-        // Generate order tokens and set status to preparing
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        let token = '';
-        for (let i = 0; i < 4; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+            // Determine main restaurant (most items) for pickup
+            const restaurantRes = await client.query(
+                `SELECT o.restaurant_id, r.name, COUNT(oi.id) as item_count
+                 FROM orders o
+                 JOIN order_items oi ON oi.order_id = o.id
+                 JOIN restaurants r ON o.restaurant_id = r.id
+                 WHERE o.group_order_id = $1
+                 GROUP BY o.restaurant_id, r.name
+                 ORDER BY item_count DESC
+                 LIMIT 1`,
+                [groupOrder.id]
+            );
 
-        await pool.query(
-            "UPDATE orders SET status = 'preparing', order_token = $1, updated_at = NOW() WHERE group_order_id = $2",
-            [token, groupOrder.id]
-        );
+            // Decrement stock for all items in the group order
+            const allItemsRes = await client.query(
+                `SELECT oi.menu_item_id, SUM(oi.quantity)::int as total_qty
+                 FROM order_items oi
+                 JOIN orders o ON oi.order_id = o.id
+                 WHERE o.group_order_id = $1
+                 GROUP BY oi.menu_item_id
+                 ORDER BY oi.menu_item_id`,
+                [groupOrder.id]
+            );
 
-        // Notify kitchen — fetch full order with joins
-        const orderRes = await pool.query('SELECT id, university_id FROM orders WHERE group_order_id = $1 LIMIT 1', [groupOrder.id]);
-        if (orderRes.rows.length > 0) {
-            const fullOrderRes = await pool.query(`
-                SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
-                       o.created_at, o.updated_at, o.university_id,
-                       u.name as user_name, u.phone as user_phone,
-                       r.name as restaurant_name,
-                       COALESCE(json_agg(
-                           json_build_object(
-                               'id', oi.id,
-                               'menu_item_id', oi.menu_item_id,
-                               'quantity', oi.quantity,
-                               'price_at_time', oi.price_at_time,
-                               'item_name', mi.name,
-                               'item_image', mi.image_url
-                           )
-                       ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
-                FROM orders o
-                LEFT JOIN users u ON o.user_id = u.id
-                LEFT JOIN restaurants r ON o.restaurant_id = r.id
-                LEFT JOIN order_items oi ON oi.order_id = o.id
-                LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
-                WHERE o.group_order_id = $1
-                GROUP BY o.id, u.name, u.phone, r.name
-                ORDER BY o.created_at ASC
-            `, [groupOrder.id]);
+            for (const item of allItemsRes.rows) {
+                const miRes = await client.query(
+                    'SELECT stock_quantity, name, is_available FROM menu_items WHERE id = $1 FOR UPDATE',
+                    [item.menu_item_id]
+                );
+                const mi = miRes.rows[0];
 
-            // Emit each sub-order so admin sees all items
-            for (const fullOrder of fullOrderRes.rows) {
-                emitNewOrder(orderRes.rows[0].university_id, fullOrder);
+                if (!mi || !mi.is_available) {
+                    throw new Error(`Item ${mi?.name || item.menu_item_id} is no longer available`);
+                }
+                if (mi.stock_quantity < item.total_qty) {
+                    throw new Error(`Insufficient stock for ${mi.name}. Only ${mi.stock_quantity} left, need ${item.total_qty}.`);
+                }
+
+                const newStock = mi.stock_quantity - item.total_qty;
+                await client.query(
+                    'UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2',
+                    [item.total_qty, item.menu_item_id]
+                );
+
+                if (newStock <= 0) {
+                    await client.query('UPDATE menu_items SET is_available = false WHERE id = $1', [item.menu_item_id]);
+                    console.log(`📦 Auto-disabled item ${mi.name} (stock exhausted via group order)`);
+                }
             }
+
+            // Generate order tokens and set status to preparing
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let token = '';
+            for (let i = 0; i < 4; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+
+            await client.query(
+                "UPDATE orders SET status = 'preparing', order_token = $1, updated_at = NOW() WHERE group_order_id = $2",
+                [token, groupOrder.id]
+            );
+
+            await client.query('COMMIT');
+
+            // Notify kitchen — fetch full order with joins (outside transaction)
+            const orderRes = await pool.query('SELECT id, university_id FROM orders WHERE group_order_id = $1 LIMIT 1', [groupOrder.id]);
+            if (orderRes.rows.length > 0) {
+                const fullOrderRes = await pool.query(`
+                    SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                           o.created_at, o.updated_at, o.university_id,
+                           u.name as user_name, u.phone as user_phone,
+                           r.name as restaurant_name,
+                           COALESCE(json_agg(
+                               json_build_object(
+                                   'id', oi.id,
+                                   'menu_item_id', oi.menu_item_id,
+                                   'quantity', oi.quantity,
+                                   'price_at_time', oi.price_at_time,
+                                   'item_name', mi.name,
+                                   'item_image', mi.image_url
+                               )
+                           ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                    FROM orders o
+                    LEFT JOIN users u ON o.user_id = u.id
+                    LEFT JOIN restaurants r ON o.restaurant_id = r.id
+                    LEFT JOIN order_items oi ON oi.order_id = o.id
+                    LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+                    WHERE o.group_order_id = $1
+                    GROUP BY o.id, u.name, u.phone, r.name
+                    ORDER BY o.created_at ASC
+                `, [groupOrder.id]);
+
+                for (const fullOrder of fullOrderRes.rows) {
+                    emitNewOrder(orderRes.rows[0].university_id, fullOrder);
+                }
+            }
+
+            const pickupRestaurant = restaurantRes.rows[0]?.name || 'Restaurant';
+
+            emitGroupUpdate(code, 'order_completed', {
+                message: 'All paid! Order sent to kitchen.',
+                pickup_restaurant: pickupRestaurant,
+                order_token: token,
+            });
+        } catch (finalizationError: any) {
+            await client.query('ROLLBACK');
+            console.error('Group order finalization error:', finalizationError);
+            // The individual payments already went through — log but don't throw
+            emitGroupUpdate(code, 'order_error', {
+                message: 'Payment received but order finalization failed. Please contact support.',
+            });
+        } finally {
+            client.release();
         }
-
-        const pickupRestaurant = restaurantRes.rows[0]?.name || 'Restaurant';
-
-        emitGroupUpdate(code, 'order_completed', {
-            message: 'All paid! Order sent to kitchen.',
-            pickup_restaurant: pickupRestaurant,
-            order_token: token,
-        });
     } else {
         emitGroupUpdate(code, 'member_paid', { userId: paidUserId });
     }
