@@ -1,136 +1,144 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 
-export const getAllUniversitiesWithStats = async (req: Request, res: Response) => {
+import bcrypt from 'bcrypt';
+
+// ─── 1. System Health ───
+export const getSystemHealth = async (req: Request, res: Response) => {
     try {
-        const result = await pool.query(`
-            SELECT 
-                u.id, 
-                u.name, 
-                u.logo_url, 
-                u.address, 
-                u.created_at,
-                COUNT(DISTINCT o.id)::int as total_orders,
-                COALESCE(SUM(o.total_amount), 0)::numeric as total_revenue
-            FROM universities u
-            LEFT JOIN orders o ON u.id = o.university_id AND o.status IN ('preparing', 'ready', 'completed')
-            GROUP BY u.id
-            ORDER BY u.name ASC
+        const orderStatusResult = await pool.query(`
+            SELECT status, COUNT(*)::int as count 
+            FROM orders 
+            WHERE created_at >= CURRENT_DATE
+            GROUP BY status
         `);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching universities with stats:', error);
-        res.status(500).json({ message: 'Server error' });
+        const ordersToday: Record<string, number> = {};
+        let totalOrdersToday = 0;
+        orderStatusResult.rows.forEach(r => {
+            ordersToday[r.status] = r.count;
+            totalOrdersToday += r.count;
+        });
+
+        const revenueResult = await pool.query(`
+            SELECT COALESCE(SUM(total_amount), 0)::numeric as revenue
+            FROM orders 
+            WHERE status IN ('completed', 'preparing', 'ready') AND created_at >= CURRENT_DATE
+        `);
+        const revenueToday = parseFloat(revenueResult.rows[0].revenue);
+
+        const staffResult = await pool.query(`
+            SELECT COUNT(DISTINCT user_id)::int as count
+            FROM audit_logs
+            WHERE action = 'LOGIN_SUCCESS' AND created_at >= CURRENT_DATE
+        `);
+        const activeStaffToday = staffResult.rows[0].count;
+
+        const anomalyResult = await pool.query(`
+            SELECT action, details, created_at, user_id 
+            FROM audit_logs 
+            WHERE action IN ('LOGIN_FAILED', 'REFUND_REJECTED', 'ORDER_STATUS_CHANGED') 
+              AND details ILIKE '%error%' OR action = 'LOGIN_LOCKED'
+            ORDER BY created_at DESC 
+            LIMIT 10
+        `);
+
+        res.json({
+            ordersToday,
+            totalOrdersToday,
+            revenueToday,
+            activeStaffToday,
+            recentAnomalies: anomalyResult.rows
+        });
+    } catch (err) {
+        console.error('Error fetching system health:', err);
+        res.status(500).json({ message: 'Server error retrieving system health.' });
     }
 };
 
-export const getUniversityDetailedStats = async (req: Request, res: Response) => {
-    const { id: uniId } = req.params;
-
+// ─── 2. Staff Management ───
+export const getStaffMembers = async (req: Request, res: Response) => {
     try {
-        // Verify university exists
-        const uniCheck = await pool.query('SELECT id FROM universities WHERE id = $1', [uniId]);
-        if (uniCheck.rows.length === 0) {
-            return res.status(404).json({ message: 'University not found' });
+        const staff = await pool.query(`
+            SELECT id, name, email, phone, role, created_at 
+            FROM staff 
+            ORDER BY created_at DESC
+        `);
+        res.json(staff.rows);
+    } catch (err) {
+        console.error('Error fetching staff members:', err);
+        res.status(500).json({ message: 'Server error retrieving staff.' });
+    }
+};
+
+export const addStaffMember = async (req: Request, res: Response) => {
+    const { name, email, password, role, phone } = req.body;
+    try {
+        if (!['staff', 'admin', 'super_admin'].includes(role)) {
+            return res.status(400).json({ message: 'Invalid role provided.' });
+        }
+        
+        let passwordHash = null;
+        if (password) {
+            passwordHash = await bcrypt.hash(password, 10);
         }
 
-        // 1. Order counts by status
-        const orderStatusResult = await pool.query(
-            `SELECT status, COUNT(*)::int as count
-             FROM orders WHERE university_id = $1
-             GROUP BY status`,
-            [uniId]
-        );
-        const ordersByStatus: Record<string, number> = {};
-        orderStatusResult.rows.forEach((r: any) => { ordersByStatus[r.status] = r.count; });
+        // We assume single university so we fetch the AU id
+        const uniId = '453dcc78-486d-4d80-b59a-b5c578260bc4';
 
-        // 2. Total revenue
-        const revenueResult = await pool.query(
-            `SELECT COALESCE(SUM(total_amount), 0)::numeric as total_revenue
-             FROM orders WHERE university_id = $1 AND status IN ('preparing', 'ready', 'completed')`,
-            [uniId]
-        );
-        const totalRevenue = parseFloat(revenueResult.rows[0].total_revenue);
+        const newStaff = await pool.query(`
+            INSERT INTO staff (university_id, name, email, password_hash, role, phone)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, name, email, role, phone, created_at
+        `, [uniId, name, email, passwordHash, role, phone]);
 
-        // 3. Monthly revenue (last 6 months)
-        const monthlyResult = await pool.query(
-            `SELECT TO_CHAR(created_at, 'Mon YYYY') as month,
-                    TO_CHAR(created_at, 'YYYY-MM') as sort_key,
-                    SUM(total_amount)::numeric as revenue,
-                    COUNT(*)::int as orders
-             FROM orders
-             WHERE university_id = $1
-               AND status IN ('preparing', 'ready', 'completed')
-               AND created_at >= NOW() - INTERVAL '6 months'
-             GROUP BY month, sort_key
-             ORDER BY sort_key`,
-            [uniId]
-        );
+        res.status(201).json(newStaff.rows[0]);
+    } catch (err: any) {
+        if (err.code === '23505') {
+            return res.status(409).json({ message: 'Email or phone already exists.' });
+        }
+        console.error('Error adding staff member:', err);
+        res.status(500).json({ message: 'Server error adding staff.' });
+    }
+};
 
-        // 4. Top 5 best-selling items
-        const bestSellersResult = await pool.query(
-            `SELECT m.name, m.image_url, m.price,
-                    SUM(oi.quantity)::int as total_sold,
-                    SUM(oi.quantity * oi.price_at_time)::numeric as total_revenue
-             FROM order_items oi
-             JOIN menu_items m ON oi.menu_item_id = m.id
-             JOIN orders o ON oi.order_id = o.id
-             WHERE o.university_id = $1 AND o.status IN ('preparing', 'ready', 'completed')
-             GROUP BY m.id, m.name, m.image_url, m.price
-             ORDER BY total_sold DESC
-             LIMIT 5`,
-            [uniId]
-        );
+export const getStaffAnalytics = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        const loginResult = await pool.query(`
+            SELECT created_at as last_login 
+            FROM audit_logs 
+            WHERE user_id = $1 AND action = 'LOGIN_SUCCESS' 
+            ORDER BY created_at DESC LIMIT 1
+        `, [id]);
 
-        // 5. Average order value
-        const avgResult = await pool.query(
-            `SELECT COALESCE(AVG(total_amount), 0)::numeric as avg_order_value
-             FROM orders WHERE university_id = $1 AND status IN ('preparing', 'ready', 'completed')`,
-            [uniId]
-        );
-        const avgOrderValue = parseFloat(parseFloat(avgResult.rows[0].avg_order_value).toFixed(2));
+        const orderResult = await pool.query(`
+            SELECT COUNT(*)::int as count 
+            FROM audit_logs 
+            WHERE user_id = $1 AND action = 'ORDER_STATUS_CHANGED' AND details ILIKE '%status=completed%'
+        `, [id]);
 
-        // 6. Today's stats
-        const todayResult = await pool.query(
-            `SELECT COUNT(*)::int as orders_today,
-                    COALESCE(SUM(total_amount), 0)::numeric as revenue_today
-             FROM orders
-             WHERE university_id = $1
-               AND created_at >= CURRENT_DATE
-               AND status IN ('preparing', 'ready', 'completed')`,
-            [uniId]
-        );
+        const refundResult = await pool.query(`
+            SELECT COUNT(*)::int as count 
+            FROM audit_logs 
+            WHERE user_id = $1 AND action IN ('REFUND_APPROVED', 'REFUND_REQUESTED')
+        `, [id]);
 
-        // 7. Total customers
-        const customersResult = await pool.query(
-            `SELECT COUNT(DISTINCT user_id)::int as total_customers
-             FROM orders WHERE university_id = $1`,
-            [uniId]
-        );
+        const recentActivity = await pool.query(`
+            SELECT action, resource, details, created_at 
+            FROM audit_logs 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC LIMIT 15
+        `, [id]);
 
         res.json({
-            orders_by_status: ordersByStatus,
-            total_revenue: totalRevenue,
-            monthly_revenue: monthlyResult.rows.map((r: any) => ({
-                month: r.month,
-                revenue: parseFloat(r.revenue),
-                orders: r.orders,
-            })),
-            best_sellers: bestSellersResult.rows.map((r: any) => ({
-                name: r.name,
-                image_url: r.image_url,
-                price: parseFloat(r.price),
-                total_sold: r.total_sold,
-                total_revenue: parseFloat(r.total_revenue),
-            })),
-            avg_order_value: avgOrderValue,
-            orders_today: todayResult.rows[0].orders_today,
-            revenue_today: parseFloat(todayResult.rows[0].revenue_today),
-            total_customers: customersResult.rows[0].total_customers,
+            lastLogin: loginResult.rows[0]?.last_login || null,
+            totalOrdersCompleted: orderResult.rows[0].count,
+            totalRefundsHandled: refundResult.rows[0].count,
+            recentActivity: recentActivity.rows
         });
-    } catch (error) {
-        console.error('Error fetching university detailed stats:', error);
-        res.status(500).json({ message: 'Server error' });
+    } catch (err) {
+        console.error('Error fetching staff analytics:', err);
+        res.status(500).json({ message: 'Server error retrieving staff analytics.' });
     }
 };
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
-import { getAllUniversitiesWithStats, getUniversityDetailedStats, getAuditLogs } from '../controllers/superAdminController';
+import { getSystemHealth, getStaffMembers, getStaffAnalytics, addStaffMember, getAuditLogs } from '../controllers/superAdminController';
 
 const router = Router();
 
@@ -8,8 +8,10 @@ const router = Router();
 router.use(authenticateJWT);
 router.use(authorizeRole(['super_admin']));
 
-router.get('/universities', getAllUniversitiesWithStats);
-router.get('/universities/:id/statistics', getUniversityDetailedStats);
+router.get('/system-health', getSystemHealth);
+router.get('/staff', getStaffMembers);
+router.post('/staff', addStaffMember);
+router.get('/staff/:id/analytics', getStaffAnalytics);
 router.get('/audit-logs', getAuditLogs);
 
 export default router;

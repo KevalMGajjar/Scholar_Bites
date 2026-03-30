@@ -2,9 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import UniversityAnalysis from './pages/UniversityAnalysis';
 import AuditLogs from './pages/AuditLogs';
 import RefundQueue from './pages/RefundQueue';
+import StaffManagement from './pages/StaffManagement';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -39,7 +39,7 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
 
-            <Route path="/universities/:id" element={<UniversityAnalysis />} />
+            <Route path="/staff" element={<StaffManagement />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/refunds" element={<RefundQueue />} />
           </Route>

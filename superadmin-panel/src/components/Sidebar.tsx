@@ -30,7 +30,12 @@ export default function Sidebar() {
       <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
         <NavLink to="/" className={({ isActive }) => getNavLinkClass(isActive)}>
           <LayoutDashboard size={20} className="opacity-80" />
-          Prestige Command
+          System Health
+        </NavLink>
+
+        <NavLink to="/staff" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <ShieldCheck size={20} className="opacity-80" />
+          Access Control
         </NavLink>
 
         <NavLink to="/audit-logs" className={({ isActive }) => getNavLinkClass(isActive)}>
