@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { IndianRupee, TrendingUp, Activity, Users, AlertTriangle, ArrowRight } from 'lucide-react';
+import { TrendingUp, Activity, Users, AlertTriangle, ArrowRight } from 'lucide-react';
 
 interface SystemHealth {
   ordersToday: Record<string, number>;
   totalOrdersToday: number;
-  revenueToday: number;
+  systemEventsToday: number;
   activeStaffToday: number;
   recentAnomalies: {
     action: string;
@@ -67,16 +67,16 @@ export default function Dashboard() {
           
           <div className="flex items-center justify-between mb-8 relative z-10">
             <div className="w-14 h-14 rounded-2xl bg-[#4c0000]/50 border border-[#f0513e]/20 text-[#ffb4a8] flex items-center justify-center shadow-inner">
-              <IndianRupee size={28} />
+              <Activity size={28} />
             </div>
             <span className="text-[#ffb4a8] bg-[#4c0000]/30 px-3 py-1.5 rounded-lg label-premium">
-              Today's Gross
+              Today's Activity
             </span>
           </div>
           <div className="relative z-10">
-            <p className="label-premium mb-2">Platform Revenue (Live)</p>
+            <p className="label-premium mb-2">Global System Events Logged</p>
             <p className="text-5xl font-display font-bold text-[#e5e2e1] tracking-tight">
-              ₹{(health?.revenueToday || 0).toLocaleString()}
+              {(health?.systemEventsToday || 0).toLocaleString()}
             </p>
           </div>
         </div>

@@ -17,8 +17,8 @@ export default function Sidebar() {
     <aside className="w-64 h-screen bg-[#0e0e0e] border-r border-[#554240]/15 flex flex-col fixed left-0 top-0 z-40">
       <div className="p-6 border-b border-[#554240]/15">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffb4a8] to-[#f0513e] flex items-center justify-center shadow-[0_0_15px_rgba(255,180,168,0.25)]">
-            <span className="text-[#410000] font-display font-bold text-lg">SB</span>
+          <div className="w-10 h-10 rounded-xl bg-[#0c0f18] border border-[#f0513e]/20 overflow-hidden flex items-center justify-center shadow-[0_0_15px_rgba(240,81,62,0.25)]">
+            <img src="/logo.png" alt="Platform Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-[#e5e2e1] font-display font-bold text-lg leading-tight tracking-tight">Super Admin</h1>

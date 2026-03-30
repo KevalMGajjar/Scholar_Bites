@@ -19,12 +19,12 @@ export const getSystemHealth = async (req: Request, res: Response) => {
             totalOrdersToday += r.count;
         });
 
-        const revenueResult = await pool.query(`
-            SELECT COALESCE(SUM(total_amount), 0)::numeric as revenue
-            FROM orders 
-            WHERE status IN ('completed', 'preparing', 'ready') AND created_at >= CURRENT_DATE
+        const eventsResult = await pool.query(`
+            SELECT COUNT(*)::int as count
+            FROM audit_logs 
+            WHERE created_at >= CURRENT_DATE
         `);
-        const revenueToday = parseFloat(revenueResult.rows[0].revenue);
+        const systemEventsToday = eventsResult.rows[0].count;
 
         const staffResult = await pool.query(`
             SELECT COUNT(DISTINCT user_id)::int as count
@@ -45,7 +45,7 @@ export const getSystemHealth = async (req: Request, res: Response) => {
         res.json({
             ordersToday,
             totalOrdersToday,
-            revenueToday,
+            systemEventsToday,
             activeStaffToday,
             recentAnomalies: anomalyResult.rows
         });
