@@ -22,7 +22,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-[#e5e2e1] font-display font-bold text-lg leading-tight tracking-tight">Super Admin</h1>
-            <p className="text-[#a38b88] label-premium mt-0.5">Scholar Bites</p>
+            <p className="text-[#a38b88] label-premium mt-0.5">Ahmedabad University Canteen</p>
           </div>
         </div>
       </div>

@@ -156,8 +156,8 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10 animate-fade-up">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#ffb4a8] to-[#f0513e] shadow-[0_0_30px_rgba(240,81,62,0.3)] mb-6">
-            <span className="text-3xl text-[#410000] font-display font-bold">SB</span>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#0c0f18] shadow-[0_0_30px_rgba(240,81,62,0.3)] mb-6 border border-[#f0513e]/20 overflow-hidden">
+            <img src="/logo.png" alt="Ahmedabad University Canteen" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-display font-bold text-[#e5e2e1] mb-2 tracking-tight">
             {otpPending ? 'Verify Your Identity' : 'Super Admin Access'}
@@ -254,7 +254,7 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-[#1c1b1b]/50 border-0 border-b-2 border-[#554240] text-[#e5e2e1] rounded-t-lg rounded-b-none pl-12 pr-4 py-3 focus:outline-none focus:border-[#f0513e] focus:bg-[#2a2a2a] transition-all"
-                    placeholder="admin@scholarbites.com"
+                    placeholder="admin@ahduni.edu.in"
                   />
                   <Mail className="absolute left-4 top-3.5 text-[#a38b88] group-focus-within:text-[#ffb4a8] transition-colors" size={20} />
                 </div>

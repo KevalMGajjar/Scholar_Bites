@@ -15,13 +15,13 @@ const transporter = nodemailer.createTransport({
 
 export const sendOtpEmail = async (to: string, otp: string): Promise<void> => {
     const mailOptions = {
-        from: `"Scholar Bites" <${process.env.SMTP_USER}>`,
+        from: `"Ahmedabad University Canteen" <${process.env.SMTP_USER}>`,
         to,
-        subject: 'Your Password Reset OTP – Scholar Bites',
+        subject: 'Your Password Reset OTP – Ahmedabad University Canteen',
         html: `
-            <div style="font-family: 'Inter', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; background-color: #131313; color: #e5e2e1;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <h1 style="color: #e5e2e1; font-size: 26px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif; letter-spacing: -0.5px;">Scholar Bites</h1>
+            <div style="font-family: Arial, sans-serif; background-color: #0c0f18; padding: 40px; color: #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #e5e2e1; font-size: 26px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif; letter-spacing: -0.5px;">Ahmedabad University Canteen</h1>
                     <p style="color: #a38b88; font-size: 13px; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Admin Panel</p>
                 </div>
                 
@@ -54,13 +54,13 @@ export const sendOtpEmail = async (to: string, otp: string): Promise<void> => {
 
 export const sendLoginOtpEmail = async (to: string, otp: string, name: string): Promise<void> => {
     const mailOptions = {
-        from: `"Scholar Bites" <${process.env.SMTP_USER}>`,
+        from: `"Ahmedabad University Canteen" <${process.env.SMTP_USER}>`,
         to,
-        subject: 'Your Login Verification Code – Scholar Bites',
+        subject: 'Your Login Verification Code – Ahmedabad University Canteen',
         html: `
-            <div style="font-family: 'Inter', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; background-color: #131313; color: #e5e2e1;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <h1 style="color: #e5e2e1; font-size: 26px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif; letter-spacing: -0.5px;">Scholar Bites</h1>
+            <div style="font-family: Arial, sans-serif; background-color: #0c0f18; padding: 40px; color: #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #e5e2e1; font-size: 26px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif; letter-spacing: -0.5px;">Ahmedabad University Canteen</h1>
                     <p style="color: #a38b88; font-size: 13px; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Secure Login Validation</p>
                 </div>
                 

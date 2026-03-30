@@ -267,9 +267,10 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Column(
                       children: [
                         Text(
-                          'Scholar Bites',
+                          'Ahmedabad University Canteen',
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.poppins(
-                            fontSize: 36,
+                            fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF4A0E13),
                             letterSpacing: 1.5,
