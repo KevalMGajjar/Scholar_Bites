@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
-import { ChevronLeft, ChevronRight, RotateCcw, Clock, X, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, Clock, X, AlertTriangle, Search } from 'lucide-react';
+
+interface OrderItem {
+  item_name: string;
+  quantity: number;
+  price_at_time: string;
+}
 
 interface Order {
   id: string;
@@ -9,7 +15,7 @@ interface Order {
   user_name: string;
   user_phone: string;
   restaurant_name: string;
-  items: { item_name: string; quantity: number; price_at_time: string }[];
+  items: OrderItem[];
   created_at: string;
   payment_id: string;
   order_token?: string;
@@ -23,34 +29,68 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-500/8 text-red-400 border border-red-500/15',
 };
 
+const FILTER_OPTIONS = ['', 'pending', 'preparing', 'ready', 'completed', 'cancelled'] as const;
+const PAGE_SIZE = 20;
+
 export default function OrderHistory() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // Refund request modal state
+  // Refund request modal
   const [refundModalOrder, setRefundModalOrder] = useState<Order | null>(null);
   const [refundReason, setRefundReason] = useState('');
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Debounce search input by 400ms ─────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+      setPage(1); // Reset to first page on new search
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // ── Fetch orders from API ──────────────────────────
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { page: String(page), limit: '20' };
+      const params: Record<string, string> = { page: String(page), limit: String(PAGE_SIZE) };
       if (statusFilter) params.status = statusFilter;
+      if (debouncedSearch) params.search = debouncedSearch;
       const res = await api.get('/admin/orders', { params });
       setOrders(res.data.orders);
       setTotal(res.data.total);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  }, [page, statusFilter]);
+    } catch (err) {
+      console.error('Failed to fetch order history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, statusFilter, debouncedSearch]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
-  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t); } }, [toast]);
 
+  // ── Toast auto-dismiss ─────────────────────────────
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // ── Handle filter chip click ───────────────────────
+  const handleFilterChange = (filter: string) => {
+    setStatusFilter(filter);
+    setPage(1);
+  };
+
+  // ── Submit refund ──────────────────────────────────
   const submitRefundRequest = async () => {
     if (!refundModalOrder || !refundReason.trim()) return;
     setRefundSubmitting(true);
@@ -68,10 +108,12 @@ export default function OrderHistory() {
     }
   };
 
+  // ── Helpers ────────────────────────────────────────
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const hasActiveSearch = debouncedSearch.length > 0;
 
   return (
     <div className="p-8 animate-fade-in">
@@ -86,22 +128,51 @@ export default function OrderHistory() {
       )}
 
       {/* ── Header ── */}
-      <div className="flex items-end justify-between mb-10 animate-fade-up">
+      <div className="flex items-end justify-between mb-6 animate-fade-up">
         <div className="space-y-1.5">
           <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Order History</h1>
           <p className="text-slate-500 text-[14px] font-medium">
-            <span className="text-white font-bold">{total}</span> total orders
+            <span className="text-white font-bold">{total}</span> total order{total !== 1 ? 's' : ''}
+            {hasActiveSearch && <span className="text-indigo-400 ml-1">matching "{debouncedSearch}"</span>}
           </p>
         </div>
+      </div>
+
+      {/* ── Search + Filters Row ── */}
+      <div className="flex items-center gap-4 mb-8 animate-fade-up" style={{ animationDelay: '50ms' }}>
+        {/* Search Bar */}
+        <div className="relative flex-1 max-w-md group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-indigo-400 transition-colors" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search by token, name, phone, restaurant…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-10 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-[13px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500/30 transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors p-0.5"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Chips */}
         <div className="flex gap-1.5">
-          {['', 'pending', 'preparing', 'ready', 'completed', 'cancelled'].map((s) => (
-            <button key={s}
-              onClick={() => { setStatusFilter(s); setPage(1); }}
+          {FILTER_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => handleFilterChange(s)}
               className={`px-4 py-2 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all btn-press ${
                 statusFilter === s
                   ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
                   : 'bg-white/[0.03] border border-white/[0.06] text-slate-500 hover:text-white hover:bg-white/[0.06]'
-              }`}>
+              }`}
+            >
               {s || 'All'}
             </button>
           ))}
@@ -111,6 +182,28 @@ export default function OrderHistory() {
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="animate-spin w-6 h-6 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full" />
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 animate-fade-up">
+          <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
+            <Search size={24} className="text-slate-600" />
+          </div>
+          <p className="text-white font-bold text-lg">No orders found</p>
+          <p className="text-slate-600 text-sm mt-1">
+            {hasActiveSearch
+              ? `No results for "${debouncedSearch}"${statusFilter ? ` in ${statusFilter} orders` : ''}`
+              : statusFilter
+                ? `No ${statusFilter} orders yet`
+                : 'No orders to display'}
+          </p>
+          {(hasActiveSearch || statusFilter) && (
+            <button
+              onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+              className="mt-4 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/15 text-indigo-400 text-[12px] font-bold hover:bg-indigo-500/20 transition-all btn-press"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -134,14 +227,16 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-white text-[13px] font-semibold">{order.user_name}</p>
-                      <p className="text-slate-600 text-[11px] mt-0.5">{order.user_phone}</p>
+                      {order.user_phone && (
+                        <p className="text-slate-600 text-[11px] mt-0.5">{order.user_phone}</p>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-slate-400 text-[13px]">{order.restaurant_name}</span>
                     </td>
                     <td className="px-6 py-4 max-w-[200px]">
-                      {order.items?.filter(i => i.item_name).map((i) => (
-                        <span key={i.item_name} className="block text-slate-500 text-[12px] leading-relaxed">
+                      {order.items?.filter(i => i.item_name).map((i, iIdx) => (
+                        <span key={`${order.id}-item-${iIdx}`} className="block text-slate-500 text-[12px] leading-relaxed">
                           <span className="text-indigo-400 font-bold">{i.quantity}x</span> {i.item_name}
                         </span>
                       ))}
@@ -210,8 +305,8 @@ export default function OrderHistory() {
               </div>
               <p className="text-slate-500 text-[12px]">{refundModalOrder.user_name} • {refundModalOrder.restaurant_name}</p>
               <div className="mt-2 space-y-0.5">
-                {refundModalOrder.items?.filter(i => i.item_name).map(i => (
-                  <span key={i.item_name} className="block text-slate-600 text-[11px]">
+                {refundModalOrder.items?.filter(i => i.item_name).map((i, iIdx) => (
+                  <span key={`refund-item-${iIdx}`} className="block text-slate-600 text-[11px]">
                     <span className="text-indigo-400 font-bold">{i.quantity}x</span> {i.item_name}
                   </span>
                 ))}

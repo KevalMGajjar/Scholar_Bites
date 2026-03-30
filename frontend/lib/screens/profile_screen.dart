@@ -1126,8 +1126,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ── NAVIGATION HELPER ──────────────────────────────
-  void _navigate(Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+  void _navigate(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+    // Refresh wallet balance when user returns from any sub-screen
+    _refreshWalletBalance();
+  }
+
+  /// Lightweight balance-only refresh (no full profile reload)
+  Future<void> _refreshWalletBalance() async {
+    try {
+      final data = await WalletService().getWalletData();
+      if (mounted) {
+        setState(() {
+          _walletBalance = double.tryParse(data['balance'].toString()) ?? 0.0;
+        });
+      }
+    } catch (_) {}
   }
 
   // ── LOGOUT ─────────────────────────────────────────

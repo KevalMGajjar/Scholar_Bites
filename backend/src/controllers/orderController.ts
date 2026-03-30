@@ -570,7 +570,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
 // ─── Admin: Get All Orders (with items + user info) ───
 export const getAllOrders = async (req: AuthRequest, res: Response) => {
-    const { status, restaurant_id, page = '1', limit = '50' } = req.query;
+    const { status, restaurant_id, search, page = '1', limit = '50' } = req.query;
 
     try {
         const staffRes = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
@@ -607,6 +607,18 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
             query += ` AND o.restaurant_id = $${pIdx++}`;
             params.push(restaurant_id);
         }
+        if (search && typeof search === 'string' && search.trim()) {
+            const term = `%${search.trim()}%`;
+            query += ` AND (
+                o.order_token ILIKE $${pIdx} OR
+                u.name ILIKE $${pIdx} OR
+                u.phone ILIKE $${pIdx} OR
+                r.name ILIKE $${pIdx} OR
+                CAST(o.id AS TEXT) ILIKE $${pIdx}
+            )`;
+            params.push(term);
+            pIdx++;
+        }
 
         query += ` GROUP BY o.id, u.name, u.phone, r.name ORDER BY o.created_at DESC`;
         query += ` LIMIT $${pIdx++} OFFSET $${pIdx++}`;
@@ -614,12 +626,29 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
 
         const result = await pool.query(query, params);
 
-        // Get total count
-        let countQuery = `SELECT COUNT(DISTINCT o.id) FROM orders o WHERE o.university_id = $1`;
+        // Get total count (same filters, no joins needed for count except for search)
+        let countQuery = `
+            SELECT COUNT(DISTINCT o.id) FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            WHERE o.university_id = $1
+        `;
         const countParams: any[] = [uniId];
         let cIdx = 2;
         if (status) { countQuery += ` AND o.status = $${cIdx++}`; countParams.push(status); }
         if (restaurant_id) { countQuery += ` AND o.restaurant_id = $${cIdx++}`; countParams.push(restaurant_id); }
+        if (search && typeof search === 'string' && search.trim()) {
+            const term = `%${search.trim()}%`;
+            countQuery += ` AND (
+                o.order_token ILIKE $${cIdx} OR
+                u.name ILIKE $${cIdx} OR
+                u.phone ILIKE $${cIdx} OR
+                r.name ILIKE $${cIdx} OR
+                CAST(o.id AS TEXT) ILIKE $${cIdx}
+            )`;
+            countParams.push(term);
+            cIdx++;
+        }
 
         const countResult = await pool.query(countQuery, countParams);
 
