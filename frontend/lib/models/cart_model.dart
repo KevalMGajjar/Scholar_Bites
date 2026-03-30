@@ -120,7 +120,13 @@ class CartProvider with ChangeNotifier {
     return total;
   }
 
-  void addItem(FoodItem food) {
+  /// Adds [food] to the cart. Returns `false` if the item is not available
+  /// (safety net — callers should also check before calling).
+  bool addItem(FoodItem food) {
+    if (!food.actuallyAvailable) {
+      return false;
+    }
+
     final box = _box;
     CartItem? existingItem;
     dynamic keyToDelete;
@@ -147,6 +153,7 @@ class CartProvider with ChangeNotifier {
     try {
       NotificationService().scheduleCartReminder(food.name);
     } catch (_) {}
+    return true;
   }
 
   void removeSingleItem(String foodId) {

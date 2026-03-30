@@ -12,6 +12,9 @@ class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   late final Dio dio;
 
+  /// Prevents multiple simultaneous force-logout navigations.
+  static bool _isLoggingOut = false;
+
   factory ApiClient() {
     return _instance;
   }
@@ -31,7 +34,7 @@ class ApiClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await TokenStorage.getToken();
-          if (token != null) {
+          if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           if (kDebugMode) {
@@ -55,18 +58,36 @@ class ApiClient {
             print('Response: ${e.response?.data}');
           }
 
-          // ─── Device Conflict: logged in on another device ───
-          // ONLY delete the token and force logout on explicit DEVICE_CONFLICT.
-          // Do NOT delete the token on normal 401s (e.g. expired token, missing
-          // header on a non-critical request) — that causes a cascade where every
-          // subsequent request also fails.
-          if (e.response?.statusCode == 401) {
-            final data = e.response?.data;
-            final code = data is Map ? data['code'] : null;
+          final statusCode = e.response?.statusCode;
+          final data = e.response?.data;
+          final code = data is Map ? data['code'] : null;
 
-            if (code == 'DEVICE_CONFLICT') {
-              await TokenStorage.deleteToken();
+          // ─── Skip auth-related error handling for login/register endpoints ───
+          final path = e.requestOptions.path;
+          final isAuthEndpoint = path.contains('/auth/login') ||
+              path.contains('/auth/register') ||
+              path.contains('/auth/update-university');
+
+          if (!isAuthEndpoint) {
+            // ─── DEVICE_CONFLICT: logged in on another device ───
+            if (statusCode == 401 && code == 'DEVICE_CONFLICT') {
               _forceLogout('You have been logged in on another device.');
+              return handler.next(e);
+            }
+
+            // ─── 403: Token decode failure (expired / corrupted / wrong secret) ───
+            // This is the exact case from the error log:
+            // "[Auth] 403: Failed to decode token for /balance"
+            if (statusCode == 403) {
+              _forceLogout('Your session has expired. Please log in again.');
+              return handler.next(e);
+            }
+
+            // ─── 401 without DEVICE_CONFLICT: generic unauthorized ───
+            // Could be a missing token, revoked session, etc.
+            if (statusCode == 401) {
+              _forceLogout('Session expired. Please log in again.');
+              return handler.next(e);
             }
           }
 
@@ -76,37 +97,52 @@ class ApiClient {
     );
   }
 
-  /// Clear all session data and navigate to welcome screen on device conflict
+  /// Clear all session data and navigate to welcome screen.
+  /// Debounced: only runs once when multiple 403s fire simultaneously.
   static void _forceLogout(String message) async {
-    // 1. Wipe secure storage (JWT + user metadata)
-    await TokenStorage.deleteToken();
+    // Prevent cascading logouts from parallel failing requests
+    if (_isLoggingOut) return;
+    _isLoggingOut = true;
 
-    // 2. Wipe Hive cached user so SplashScreen can't auto-login
     try {
-      final userBox = Hive.box<UserModel>('userBox');
-      await userBox.delete('currentUser');
-    } catch (_) {}
+      // 1. Wipe secure storage (JWT + user metadata)
+      await TokenStorage.deleteToken();
 
-    // 3. Navigate directly to WelcomeScreen (not SplashScreen)
-    final navState = FoodTechApp.navigatorKey.currentState;
-    if (navState == null) return;
+      // 2. Wipe Hive cached user so SplashScreen can't auto-login
+      try {
+        final userBox = Hive.box<UserModel>('userBox');
+        await userBox.delete('currentUser');
+      } catch (_) {}
 
-    navState.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      (route) => false,
-    );
+      // 3. Navigate directly to WelcomeScreen (not SplashScreen)
+      final navState = FoodTechApp.navigatorKey.currentState;
+      if (navState == null) {
+        _isLoggingOut = false;
+        return;
+      }
 
-    // 4. Show explanation snackbar
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = FoodTechApp.navigatorKey.currentContext;
-      if (ctx == null) return;
-      ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFF8B1C28),
-          duration: const Duration(seconds: 4),
-        ),
+      navState.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        (route) => false,
       );
-    });
+
+      // 4. Show explanation snackbar
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = FoodTechApp.navigatorKey.currentContext;
+        if (ctx == null) return;
+        ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: const Color(0xFF8B1C28),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      });
+    } finally {
+      // Reset flag after a delay to allow dust to settle
+      Future.delayed(const Duration(seconds: 2), () {
+        _isLoggingOut = false;
+      });
+    }
   }
 }

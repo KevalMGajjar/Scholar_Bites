@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'dart:math' as math;
 import '../services/auth_service.dart';
+import '../models/user_model.dart';
+import '../utils/token_storage.dart';
 import 'welcome_screen.dart';
 import 'home_screen.dart';
 
@@ -113,10 +116,29 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  void _navigateToNext() {
+  void _navigateToNext() async {
     final cachedUser = AuthService.getCachedUser();
-    final Widget destination =
-        cachedUser != null ? const HomeScreen() : const WelcomeScreen();
+    Widget destination;
+
+    if (cachedUser != null) {
+      // Validate the stored JWT before auto-login
+      final hasValid = await TokenStorage.hasValidToken();
+      if (hasValid) {
+        destination = const HomeScreen();
+      } else {
+        // Token is expired/missing/corrupted — clear stale session
+        await TokenStorage.deleteToken();
+        try {
+          final userBox = Hive.box<UserModel>('userBox');
+          await userBox.delete('currentUser');
+        } catch (_) {}
+        destination = const WelcomeScreen();
+      }
+    } else {
+      destination = const WelcomeScreen();
+    }
+
+    if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(

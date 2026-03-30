@@ -11,11 +11,24 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-        console.error(`[Auth] 401: No authorization header for ${req.path}`);
+        console.error(`[Auth] 401: No authorization header for ${req.method} ${req.path}`);
         return res.sendStatus(401);
     }
 
-    const token = authHeader.split(' ')[1];
+    const parts = authHeader.split(' ');
+    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+        console.error(`[Auth] 401: Malformed authorization header for ${req.path}: "${authHeader.substring(0, 20)}..."`);
+        return res.sendStatus(401);
+    }
+
+    const token = parts[1];
+
+    // Guard against empty/null strings from the client
+    if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
+        console.error(`[Auth] 401: Empty or null token string for ${req.path}`);
+        return res.sendStatus(401);
+    }
+
     const decoded = verifyToken(token) as any;
 
     if (!decoded) {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/food_item.dart';
 import '../models/favorites_model.dart';
+import '../utils/availability_helper.dart';
 import '../widgets/favorite_button.dart';
 import '../widgets/heart_overlay.dart';
 
@@ -13,8 +14,7 @@ class FoodCard extends StatefulWidget {
   final VoidCallback onTap;
   final Function(GlobalKey)? onAddTap;
   final VoidCallback? onInteraction;
-  final bool? isAvailable;
-  final String unavailableText;
+  final FoodItemAvailability availability;
 
   const FoodCard({
     super.key,
@@ -22,8 +22,7 @@ class FoodCard extends StatefulWidget {
     required this.onTap,
     this.onAddTap,
     this.onInteraction,
-    this.isAvailable,
-    this.unavailableText = 'Unavailable',
+    this.availability = FoodItemAvailability.available,
   });
 
   @override
@@ -45,14 +44,96 @@ class _FoodCardState extends State<FoodCard> {
     setState(() => _showHeart = true);
   }
 
+  bool get _isAvailable => widget.availability.isAvailable;
+
+  // ─── Overlay & Badge Styling per State ──────────────────────
+
+  Color get _overlayColor {
+    switch (widget.availability) {
+      case FoodItemAvailability.available:
+        return Colors.transparent;
+      case FoodItemAvailability.outOfStock:
+        return Colors.black.withValues(alpha: 0.40);
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFFFF8F00).withValues(alpha: 0.18);
+      case FoodItemAvailability.restaurantClosed:
+        return Colors.black.withValues(alpha: 0.55);
+    }
+  }
+
+  Color get _badgeBgColor {
+    switch (widget.availability) {
+      case FoodItemAvailability.available:
+        return Colors.transparent;
+      case FoodItemAvailability.outOfStock:
+        return const Color(0xFF8B1C28).withValues(alpha: 0.85);
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFFF59E0B).withValues(alpha: 0.90);
+      case FoodItemAvailability.restaurantClosed:
+        return Colors.black.withValues(alpha: 0.70);
+    }
+  }
+
+  Color get _badgeTextColor {
+    switch (widget.availability) {
+      case FoodItemAvailability.available:
+        return Colors.transparent;
+      case FoodItemAvailability.outOfStock:
+        return Colors.white;
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFF4A2800);
+      case FoodItemAvailability.restaurantClosed:
+        return Colors.white;
+    }
+  }
+
+  IconData get _badgeIcon {
+    switch (widget.availability) {
+      case FoodItemAvailability.available:
+        return Icons.check;
+      case FoodItemAvailability.outOfStock:
+        return Icons.inventory_2_outlined;
+      case FoodItemAvailability.unavailable:
+        return Icons.schedule_rounded;
+      case FoodItemAvailability.restaurantClosed:
+        return Icons.storefront_rounded;
+    }
+  }
+
+  // ─── Bottom Pill Styling ───────────────────────────────────
+
+  Color get _pillBgColor {
+    switch (widget.availability) {
+      case FoodItemAvailability.available:
+        return Colors.transparent;
+      case FoodItemAvailability.outOfStock:
+        return Colors.grey.shade200;
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFFFFF3E0);
+      case FoodItemAvailability.restaurantClosed:
+        return const Color(0xFFFFEBEE);
+    }
+  }
+
+  Color get _pillTextColor {
+    switch (widget.availability) {
+      case FoodItemAvailability.available:
+        return Colors.transparent;
+      case FoodItemAvailability.outOfStock:
+        return const Color(0xFF8B1C28);
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFFE65100);
+      case FoodItemAvailability.restaurantClosed:
+        return const Color(0xFFC62828);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool actuallyAvailable = widget.isAvailable ?? widget.food.actuallyAvailable;
-
     return GestureDetector(
-      onTap: actuallyAvailable ? widget.onTap : null,
+      onTap: widget.onTap, // Always allow tap to view details
       child: Opacity(
-        opacity: actuallyAvailable ? 1.0 : 0.55,
+        opacity: _isAvailable ? 1.0 : 0.92,
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -70,7 +151,7 @@ class _FoodCardState extends State<FoodCard> {
             children: [
               Expanded(
                 child: GestureDetector(
-                  onDoubleTap: actuallyAvailable ? () {
+                  onDoubleTap: _isAvailable ? () {
                     final favorites = Provider.of<FavoritesProvider>(context, listen: false);
                     _handleDoubleTap(favorites);
                   } : null,
@@ -113,32 +194,36 @@ class _FoodCardState extends State<FoodCard> {
                           ),
                         ),
                       ),
-                      // Unavailable overlay
-                      if (!actuallyAvailable)
+
+                      // ─── Unavailability Overlay ─────────────────
+                      if (!_isAvailable)
                         Positioned.fill(
                           child: ClipRRect(
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                             child: Container(
-                              color: Colors.black.withValues(alpha: 0.35),
+                              color: _overlayColor,
                               child: Center(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.65),
+                                    color: _badgeBgColor,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.access_time_rounded, color: Colors.white70, size: 14),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        widget.unavailableText,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.5,
+                                      Icon(_badgeIcon, color: _badgeTextColor, size: 14),
+                                      const SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          widget.availability.label,
+                                          style: TextStyle(
+                                            color: _badgeTextColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.3,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -148,7 +233,9 @@ class _FoodCardState extends State<FoodCard> {
                             ),
                           ),
                         ),
-                      if (actuallyAvailable)
+
+                      // ─── Favourite Button (available only) ──────
+                      if (_isAvailable)
                         Positioned(
                           top: 16,
                           right: 16,
@@ -228,8 +315,10 @@ class _FoodCardState extends State<FoodCard> {
                         Expanded(
                           child: Text(
                             widget.food.name,
-                            style: const TextStyle(
-                              color: Color(0xFF4A0E13),
+                            style: TextStyle(
+                              color: _isAvailable
+                                  ? const Color(0xFF4A0E13)
+                                  : const Color(0xFF4A0E13).withValues(alpha: 0.5),
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                             ),
@@ -243,7 +332,7 @@ class _FoodCardState extends State<FoodCard> {
                     Text(
                       '${widget.food.calories} cal \u{2022} ${widget.food.weight}${widget.food.unit}',
                       style: TextStyle(
-                        color: const Color(0xFF8B1C28).withValues(alpha: 0.6),
+                        color: const Color(0xFF8B1C28).withValues(alpha: _isAvailable ? 0.6 : 0.35),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -254,13 +343,15 @@ class _FoodCardState extends State<FoodCard> {
                       children: [
                         Text(
                           '\u{20B9}${widget.food.price.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            color: Color(0xFF4A0E13),
+                          style: TextStyle(
+                            color: _isAvailable
+                                ? const Color(0xFF4A0E13)
+                                : const Color(0xFF4A0E13).withValues(alpha: 0.45),
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        if (actuallyAvailable)
+                        if (_isAvailable)
                           GestureDetector(
                             onTap: () {
                               if (widget.onAddTap != null) widget.onAddTap!(_imageKey);
@@ -294,13 +385,13 @@ class _FoodCardState extends State<FoodCard> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: _pillBgColor,
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                widget.unavailableText,
+                                widget.availability.label,
                                 style: TextStyle(
-                                  color: Colors.grey.shade500,
+                                  color: _pillTextColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                 ),

@@ -7,6 +7,7 @@ import '../widgets/price_filter_chips.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
 import '../utils/animation_utils.dart';
+import '../utils/availability_helper.dart';
 import '../services/menu_service.dart';
 import '../services/speech_service.dart';
 import '../widgets/spoon_loader.dart';
@@ -193,16 +194,8 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  bool _isItemAvailable(FoodItem food) {
-    if (!food.isAvailable) return false;
-    if (food.restaurantId != null) {
-      final restaurant = _restaurants.cast<Restaurant?>().firstWhere(
-        (r) => r?.id == food.restaurantId,
-        orElse: () => null,
-      );
-      if (restaurant != null && !restaurant.isCurrentlyOpen) return false;
-    }
-    return food.actuallyAvailable;
+  FoodItemAvailability _getAvailability(FoodItem food) {
+    return AvailabilityHelper.getAvailability(food, _restaurants);
   }
 
   void _runAddToCartAnimation(GlobalKey widgetKey, String imageUrl) {
@@ -669,21 +662,25 @@ class _SearchScreenState extends State<SearchScreen> {
                         }
                         return FoodCard(
                           food: _displayedMeals[index],
-                          isAvailable: _isItemAvailable(_displayedMeals[index]),
-                          unavailableText: 'Closed',
+                          availability: _getAvailability(_displayedMeals[index]),
                           onTap: () {
                             FocusScope.of(context).unfocus();
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => DetailScreen(food: _displayedMeals[index]),
+                                builder: (_) => DetailScreen(
+                                  food: _displayedMeals[index],
+                                  restaurants: _restaurants,
+                                ),
                               ),
                             );
                           },
-                          onAddTap: (key) {
-                            Provider.of<CartProvider>(context, listen: false).addItem(_displayedMeals[index]);
-                            _runAddToCartAnimation(key, _displayedMeals[index].imageUrl);
-                          },
+                          onAddTap: _getAvailability(_displayedMeals[index]).isAvailable
+                              ? (key) {
+                                  Provider.of<CartProvider>(context, listen: false).addItem(_displayedMeals[index]);
+                                  _runAddToCartAnimation(key, _displayedMeals[index].imageUrl);
+                                }
+                              : null,
                         ).animate().fadeIn(
                               delay: (50 * (index % _pageSize)).ms,
                               duration: 300.ms,

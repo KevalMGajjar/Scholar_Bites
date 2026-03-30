@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class TokenStorage {
@@ -5,11 +6,49 @@ class TokenStorage {
   static const _tokenKey = 'jwt_token';
 
   static Future<void> saveToken(String token) async {
+    if (token.isEmpty) return; // Never save empty tokens
     await _storage.write(key: _tokenKey, value: token);
   }
 
   static Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
+    final token = await _storage.read(key: _tokenKey);
+    // Guard against corrupted or placeholder values
+    if (token == null || token.isEmpty || token == 'null' || token == 'undefined') {
+      return null;
+    }
+    return token;
+  }
+
+  /// Checks if we have a non-expired JWT token stored.
+  /// Returns true if the token exists and has not expired.
+  /// This does NOT verify the signature (that's the server's job).
+  static Future<bool> hasValidToken() async {
+    final token = await getToken();
+    if (token == null) return false;
+
+    try {
+      // JWT = header.payload.signature — decode the payload
+      final parts = token.split('.');
+      if (parts.length != 3) return false;
+
+      // Base64 decode the payload (part[1])
+      String payload = parts[1];
+      // Add padding if needed
+      switch (payload.length % 4) {
+        case 2: payload += '=='; break;
+        case 3: payload += '='; break;
+      }
+      final decoded = json.decode(utf8.decode(base64Url.decode(payload)));
+      final exp = decoded['exp'] as int?;
+      if (exp == null) return false;
+
+      final expiryDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      // Consider token invalid if it expires within the next 60 seconds
+      return expiryDate.isAfter(DateTime.now().add(const Duration(seconds: 60)));
+    } catch (_) {
+      // If we can't decode, the token is corrupted — treat as invalid
+      return false;
+    }
   }
 
   static Future<void> deleteToken() async {

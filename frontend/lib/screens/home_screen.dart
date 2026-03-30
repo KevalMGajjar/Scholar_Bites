@@ -21,6 +21,7 @@ import '../services/university_service.dart';
 import '../services/speech_service.dart';
 import '../utils/token_storage.dart';
 import '../utils/animation_utils.dart';
+import '../utils/availability_helper.dart';
 import '../widgets/physics_cravings_box.dart';
 import '../widgets/filter_bottom_sheet.dart';
 import '../widgets/price_filter_chips.dart';
@@ -249,16 +250,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  bool _isItemAvailable(FoodItem food) {
-    if (!food.isAvailable) return false;
-    if (food.restaurantId != null) {
-      final restaurant = _restaurants.cast<Restaurant?>().firstWhere(
-        (r) => r?.id == food.restaurantId,
-        orElse: () => null,
-      );
-      if (restaurant != null && !restaurant.isCurrentlyOpen) return false;
-    }
-    return food.actuallyAvailable;
+  FoodItemAvailability _getAvailability(FoodItem food) {
+    return AvailabilityHelper.getAvailability(food, _restaurants);
   }
 
   void _runAddToCartAnimation(GlobalKey widgetKey, String imageUrl) {
@@ -852,21 +845,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                       padding: const EdgeInsets.symmetric(horizontal: 8),
                                       child: FoodCard(
                                         food: _trendingItems[index],
-                                        isAvailable: _isItemAvailable(_trendingItems[index]),
-                                        unavailableText: 'Closed',
+                                        availability: _getAvailability(_trendingItems[index]),
                                         onTap: () {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (context) => DetailScreen(food: _trendingItems[index]),
+                                              builder: (context) => DetailScreen(
+                                                food: _trendingItems[index],
+                                                restaurants: _restaurants,
+                                              ),
                                             ),
                                           );
                                         },
-                                        onAddTap: (key) {
-                                          Provider.of<CartProvider>(context, listen: false).addItem(_trendingItems[index]);
-                                          _runAddToCartAnimation(key, _trendingItems[index].imageUrl);
-                                          _pauseAutoScroll();
-                                        },
+                                        onAddTap: _getAvailability(_trendingItems[index]).isAvailable
+                                            ? (key) {
+                                                Provider.of<CartProvider>(context, listen: false).addItem(_trendingItems[index]);
+                                                _runAddToCartAnimation(key, _trendingItems[index].imageUrl);
+                                                _pauseAutoScroll();
+                                              }
+                                            : null,
                                         onInteraction: _pauseAutoScroll,
                                       ),
                                     );

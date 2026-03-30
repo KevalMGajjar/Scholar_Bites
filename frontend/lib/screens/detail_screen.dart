@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/food_item.dart';
 import '../models/favorites_model.dart';
 import '../models/cart_model.dart';
+import '../models/restaurant_model.dart';
+import '../utils/availability_helper.dart';
 import '../widgets/favorite_button.dart';
 import '../utils/animation_utils.dart';
 import '../services/menu_service.dart';
@@ -12,8 +14,13 @@ import 'cart_screen.dart';
 
 class DetailScreen extends StatefulWidget {
   final FoodItem food;
+  final List<Restaurant> restaurants;
 
-  const DetailScreen({super.key, required this.food});
+  const DetailScreen({
+    super.key,
+    required this.food,
+    this.restaurants = const [],
+  });
 
   @override
   State<DetailScreen> createState() => _DetailScreenState();
@@ -51,10 +58,19 @@ class _DetailScreenState extends State<DetailScreen> {
     } catch (_) {}
   }
 
+  FoodItemAvailability get _availability =>
+      AvailabilityHelper.getAvailability(widget.food, widget.restaurants);
+
   @override
   Widget build(BuildContext context) {
-    // We need a key for the image to fly from.
-    final GlobalKey imageKey = GlobalKey();
+    final availability = _availability;
+    final isAvailable = availability.isAvailable;
+
+    // Try to find the restaurant for "Opens at" info
+    final restaurant = AvailabilityHelper.findRestaurant(
+      widget.food,
+      widget.restaurants,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF0F0),
@@ -213,30 +229,44 @@ class _DetailScreenState extends State<DetailScreen> {
             left: 0,
             right: 0,
             height: MediaQuery.of(context).size.height * 0.55,
-            child: Hero(
-              tag: 'food-image-${widget.food.id}',
-              key: imageKey, // Add key to Hero
-              child: CachedNetworkImage(
-                imageUrl: widget.food.imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                placeholder: (context, url) => const Center(
-                  child: SpoonLoader(size: 40),
-                ),
-                errorWidget: (context, url, error) {
-                  return Container(
-                    color: const Color(0xFFFDF0F0),
-                    child: const Center(
-                      child: Icon(
-                        Icons.fastfood,
-                        color: Color(0xFF8B1C28),
-                        size: 60,
-                      ),
+            child: Stack(
+              children: [
+                Hero(
+                  tag: 'food-image-${widget.food.id}',
+                  child: CachedNetworkImage(
+                    imageUrl: widget.food.imageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    placeholder: (context, url) => const Center(
+                      child: SpoonLoader(size: 40),
                     ),
-                  );
-                },
-              ),
+                    errorWidget: (context, url, error) {
+                      return Container(
+                        color: const Color(0xFFFDF0F0),
+                        child: const Center(
+                          child: Icon(
+                            Icons.fastfood,
+                            color: Color(0xFF8B1C28),
+                            size: 60,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Unavailability overlay on the image
+                if (!isAvailable)
+                  Positioned.fill(
+                    child: Container(
+                      color: availability == FoodItemAvailability.restaurantClosed
+                          ? Colors.black.withValues(alpha: 0.45)
+                          : availability == FoodItemAvailability.outOfStock
+                              ? Colors.black.withValues(alpha: 0.30)
+                              : const Color(0xFFFF8F00).withValues(alpha: 0.12),
+                    ),
+                  ),
+              ],
             ),
           ),
 
@@ -386,6 +416,10 @@ class _DetailScreenState extends State<DetailScreen> {
 
                   const Spacer(),
 
+                  // ─── Availability Banner ─────────────────────────
+                  if (!isAvailable)
+                    _buildAvailabilityBanner(availability, restaurant),
+
                   // Bottom Action Bar
                   Row(
                     children: [
@@ -415,32 +449,45 @@ class _DetailScreenState extends State<DetailScreen> {
                       // Add to Cart Button
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () {
-                            context.read<CartProvider>().addItem(widget.food);
-                            AnimationUtils.runFlyAnimation(
-                              context,
-                              _addBtnKey,
-                              _cartKey,
-                              widget.food.imageUrl,
-                            );
-                          },
+                          onPressed: isAvailable
+                              ? () {
+                                  context.read<CartProvider>().addItem(widget.food);
+                                  AnimationUtils.runFlyAnimation(
+                                    context,
+                                    _addBtnKey,
+                                    _cartKey,
+                                    widget.food.imageUrl,
+                                  );
+                                }
+                              : null,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8B1C28),
+                            backgroundColor: isAvailable
+                                ? const Color(0xFF8B1C28)
+                                : _getDisabledButtonColor(availability),
                             foregroundColor: Colors.white,
+                            disabledBackgroundColor: _getDisabledButtonColor(availability),
+                            disabledForegroundColor: _getDisabledButtonTextColor(availability),
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 0,
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.shopping_bag_outlined, size: 20),
-                              SizedBox(width: 8),
+                              Icon(
+                                isAvailable
+                                    ? Icons.shopping_bag_outlined
+                                    : _getDisabledButtonIcon(availability),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
                               Text(
-                                'Add to Cart',
-                                style: TextStyle(
+                                isAvailable
+                                    ? 'Add to Cart'
+                                    : availability.label,
+                                style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -464,6 +511,114 @@ class _DetailScreenState extends State<DetailScreen> {
         ],
       ),
     );
+  }
+
+  // ─── Availability Banner Widget ───────────────────────────────
+
+  Widget _buildAvailabilityBanner(
+    FoodItemAvailability availability,
+    Restaurant? restaurant,
+  ) {
+    Color bgColor;
+    Color textColor;
+    Color iconColor;
+    IconData icon;
+    String message = availability.bannerMessage;
+
+    switch (availability) {
+      case FoodItemAvailability.outOfStock:
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFC62828);
+        iconColor = const Color(0xFFE53935);
+        icon = Icons.inventory_2_outlined;
+        break;
+      case FoodItemAvailability.unavailable:
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFE65100);
+        iconColor = const Color(0xFFF57C00);
+        icon = Icons.schedule_rounded;
+        break;
+      case FoodItemAvailability.restaurantClosed:
+        bgColor = const Color(0xFFF3E5F5).withValues(alpha: 0.5);
+        textColor = const Color(0xFF4A0E13);
+        iconColor = const Color(0xFF8B1C28);
+        icon = Icons.storefront_rounded;
+        // Add opening hours if available
+        if (restaurant != null && restaurant.hoursDisplay.isNotEmpty) {
+          message = '$message\nOpens: ${restaurant.hoursDisplay}';
+        }
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Disabled Button Helpers ──────────────────────────────────
+
+  Color _getDisabledButtonColor(FoodItemAvailability availability) {
+    switch (availability) {
+      case FoodItemAvailability.outOfStock:
+        return Colors.grey.shade300;
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFFFFF3E0);
+      case FoodItemAvailability.restaurantClosed:
+        return const Color(0xFFFFEBEE);
+      default:
+        return Colors.grey.shade300;
+    }
+  }
+
+  Color _getDisabledButtonTextColor(FoodItemAvailability availability) {
+    switch (availability) {
+      case FoodItemAvailability.outOfStock:
+        return Colors.grey.shade600;
+      case FoodItemAvailability.unavailable:
+        return const Color(0xFFE65100);
+      case FoodItemAvailability.restaurantClosed:
+        return const Color(0xFFC62828);
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
+  IconData _getDisabledButtonIcon(FoodItemAvailability availability) {
+    switch (availability) {
+      case FoodItemAvailability.outOfStock:
+        return Icons.inventory_2_outlined;
+      case FoodItemAvailability.unavailable:
+        return Icons.schedule_rounded;
+      case FoodItemAvailability.restaurantClosed:
+        return Icons.storefront_rounded;
+      default:
+        return Icons.block_rounded;
+    }
   }
 
   Widget _buildMetadataChip(IconData icon, String label) {
@@ -491,4 +646,3 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 }
-

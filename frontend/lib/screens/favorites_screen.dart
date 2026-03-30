@@ -7,6 +7,7 @@ import '../models/food_item.dart';
 import '../models/cart_model.dart';
 import '../widgets/food_card.dart';
 import '../utils/animation_utils.dart';
+import '../utils/availability_helper.dart';
 import '../models/restaurant_model.dart';
 import '../services/restaurant_service.dart';
 import '../utils/token_storage.dart';
@@ -56,16 +57,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     } catch (_) {}
   }
 
-  bool _isItemAvailable(FoodItem food) {
-    if (!food.isAvailable) return false;
-    if (food.restaurantId != null) {
-      final restaurant = _restaurants.cast<Restaurant?>().firstWhere(
-        (r) => r?.id == food.restaurantId,
-        orElse: () => null,
-      );
-      if (restaurant != null && !restaurant.isCurrentlyOpen) return false;
-    }
-    return food.actuallyAvailable;
+  FoodItemAvailability _getAvailability(FoodItem food) {
+    return AvailabilityHelper.getAvailability(food, _restaurants);
   }
 
   @override
@@ -265,23 +258,27 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         final food = favoriteItems[index];
                         return FoodCard(
                           food: food,
-                          isAvailable: _isItemAvailable(food),
-                          unavailableText: 'Closed',
+                          availability: _getAvailability(food),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => DetailScreen(food: food),
+                                builder: (context) => DetailScreen(
+                                  food: food,
+                                  restaurants: _restaurants,
+                                ),
                               ),
                             );
                           },
-                          onAddTap: (key) {
-                            Provider.of<CartProvider>(
-                              context,
-                              listen: false,
-                            ).addItem(food);
-                            _runAddToCartAnimation(key, food.imageUrl);
-                          },
+                          onAddTap: _getAvailability(food).isAvailable
+                              ? (key) {
+                                  Provider.of<CartProvider>(
+                                    context,
+                                    listen: false,
+                                  ).addItem(food);
+                                  _runAddToCartAnimation(key, food.imageUrl);
+                                }
+                              : null,
                         ).animate().fadeIn(
                               delay: (80 * index).ms,
                               duration: 400.ms,

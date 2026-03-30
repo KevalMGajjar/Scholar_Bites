@@ -13,6 +13,7 @@ import 'cart_screen.dart';
 import '../services/menu_service.dart';
 import '../utils/token_storage.dart';
 import '../utils/animation_utils.dart'; // Add utils import
+import '../utils/availability_helper.dart';
 
 class RestaurantDetailScreen extends StatefulWidget {
   final Restaurant restaurant;
@@ -435,25 +436,33 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                     ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       FoodItem food = _menuItems[index];
+                      final availability = AvailabilityHelper.getAvailability(
+                        food,
+                        [widget.restaurant],
+                      );
                       return FoodCard(
                         food: food,
-                        isAvailable: widget.restaurant.isCurrentlyOpen && food.isAvailable,
-                        unavailableText: !widget.restaurant.isCurrentlyOpen ? 'Closed' : 'Unavailable',
+                        availability: availability,
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => DetailScreen(food: food),
+                              builder: (context) => DetailScreen(
+                                food: food,
+                                restaurants: [widget.restaurant],
+                              ),
                             ),
                           );
                         },
-                        onAddTap: (key) {
-                          Provider.of<CartProvider>(
-                            context,
-                            listen: false,
-                          ).addItem(food);
-                          _runAddToCartAnimation(key, food.imageUrl);
-                        },
+                        onAddTap: availability.isAvailable
+                            ? (key) {
+                                Provider.of<CartProvider>(
+                                  context,
+                                  listen: false,
+                                ).addItem(food);
+                                _runAddToCartAnimation(key, food.imageUrl);
+                              }
+                            : null,
                       );
                     }, childCount: _menuItems.length),
                   ),
