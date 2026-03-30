@@ -123,6 +123,8 @@ const createTablesQuery = `
     payment_id VARCHAR(255) UNIQUE NOT NULL,
     order_token VARCHAR(6),
     group_order_id UUID REFERENCES group_orders(id) ON DELETE SET NULL,
+    is_scanned BOOLEAN DEFAULT FALSE,
+    scanned_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   );
@@ -130,6 +132,8 @@ const createTablesQuery = `
   -- Migrations for existing DBs
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL;
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_token VARCHAR(6);
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_scanned BOOLEAN DEFAULT FALSE;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS scanned_at TIMESTAMPTZ;
   ALTER TABLE group_orders ADD COLUMN IF NOT EXISTS university_id UUID REFERENCES universities(id) ON DELETE SET NULL;
   ALTER TABLE group_order_members ADD COLUMN IF NOT EXISTS nickname VARCHAR(100);
 

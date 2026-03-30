@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import QrScannerModal from '../components/QrScannerModal';
-import { Bell, ChefHat, CheckCircle2, Search, QrCode, RefreshCcw, X, Clock } from 'lucide-react';
+import { Bell, ChefHat, CheckCircle2, Search, QrCode, RefreshCcw, X, Clock, ShieldAlert } from 'lucide-react';
 
 interface OrderItem {
   id: string;
@@ -51,6 +51,7 @@ export default function LiveOrders() {
   const [scannedOrder, setScannedOrder] = useState<Order | null>(null);
   const [searchError, setSearchError] = useState('');
   const [showScanner, setShowScanner] = useState(false);
+  const [scanWarning, setScanWarning] = useState<{ message: string; scanned_at?: string; token?: string } | null>(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -131,8 +132,17 @@ export default function LiveOrders() {
               onChange={(e) => { setTokenSearch(e.target.value.toUpperCase()); setSearchError(''); }}
               onKeyDown={async (e) => {
                 if (e.key === 'Enter' && tokenSearch.trim()) {
-                  try { setSearchError(''); const res = await api.get(`/admin/orders/scan/${tokenSearch.trim()}`); setScannedOrder(res.data); setTokenSearch(''); }
-                  catch { setSearchError('Not found'); }
+                  try {
+                    setSearchError(''); setScanWarning(null);
+                    const res = await api.get(`/admin/orders/scan/${tokenSearch.trim()}`);
+                    setScannedOrder(res.data); setTokenSearch('');
+                  } catch (err: any) {
+                    if (err?.response?.status === 409) {
+                      const data = err.response.data;
+                      setScanWarning({ message: data.message, scanned_at: data.scanned_at, token: data.order_token });
+                      setTokenSearch('');
+                    } else { setSearchError('Not found'); }
+                  }
                 }
               }}
               className="w-48 px-4 py-2.5 pl-10 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[13px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
@@ -195,10 +205,47 @@ export default function LiveOrders() {
           onClose={() => setShowScanner(false)}
           onScan={async (token) => {
             setShowScanner(false);
-            try { const res = await api.get(`/admin/orders/scan/${token}`); setScannedOrder(res.data); }
-            catch { setSearchError('Order not found for scanned token'); }
+            setScanWarning(null);
+            try {
+              const res = await api.get(`/admin/orders/scan/${token}`);
+              setScannedOrder(res.data);
+            } catch (err: any) {
+              if (err?.response?.status === 409) {
+                const data = err.response.data;
+                setScanWarning({ message: data.message, scanned_at: data.scanned_at, token: data.order_token });
+              } else { setSearchError('Order not found for scanned token'); }
+            }
           }}
         />
+      )}
+
+      {/* ── Already Scanned Warning Modal ── */}
+      {scanWarning && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setScanWarning(null)}>
+          <div className="bg-[#0c0f18] border border-red-500/20 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <ShieldAlert size={32} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-white font-extrabold text-xl tracking-[-0.02em] mb-1">Already Scanned</h3>
+                {scanWarning.token && <p className="text-red-400 font-mono font-bold text-lg">#{scanWarning.token}</p>}
+              </div>
+              <p className="text-slate-400 text-sm leading-relaxed">{scanWarning.message}</p>
+              {scanWarning.scanned_at && (
+                <div className="bg-white/[0.03] rounded-xl px-4 py-3 w-full border border-white/[0.06]">
+                  <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-1">First Scanned At</p>
+                  <p className="text-white font-semibold text-sm">{new Date(scanWarning.scanned_at).toLocaleString()}</p>
+                </div>
+              )}
+              <p className="text-red-400/60 text-xs font-medium">⚠️ This may indicate a duplicate pickup attempt</p>
+              <button onClick={() => setScanWarning(null)}
+                className="w-full py-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-slate-400 font-bold text-sm hover:bg-white/[0.06] transition-all btn-press mt-2">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Kanban Columns ── */}

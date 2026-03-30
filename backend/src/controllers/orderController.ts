@@ -378,13 +378,19 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
 };
 
 // ─── Scan Order by Token (Staff) ───
+// Security: QR can only be scanned ONCE. After the first scan, subsequent
+// scans return 409 Conflict with the original scan timestamp.
 export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
     const { token } = req.params;
 
+    const client = await pool.connect();
     try {
-        const result = await pool.query(`
+        await client.query('BEGIN');
+
+        // Lock the order row to prevent concurrent scans
+        const result = await client.query(`
             SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
-                   o.created_at, o.updated_at,
+                   o.created_at, o.updated_at, o.is_scanned, o.scanned_at,
                    u.name as user_name, u.phone as user_phone,
                    r.name as restaurant_name,
                    COALESCE(json_agg(
@@ -403,18 +409,47 @@ export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             WHERE UPPER(o.order_token) = UPPER($1)
-              AND o.status NOT IN ('completed', 'cancelled')
+              AND o.status NOT IN ('pending', 'cancelled')
             GROUP BY o.id, u.name, u.phone, r.name
+            FOR UPDATE OF o
         `, [token]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Order not found or already completed' });
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Order not found or not yet paid' });
         }
 
-        res.json(result.rows[0]);
+        const order = result.rows[0];
+
+        // ─── Already scanned? Reject with details ───
+        if (order.is_scanned) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+                message: 'This QR code has already been scanned',
+                already_scanned: true,
+                scanned_at: order.scanned_at,
+                order_token: order.order_token,
+            });
+        }
+
+        // ─── First scan — mark as scanned ───
+        await client.query(
+            'UPDATE orders SET is_scanned = TRUE, scanned_at = NOW() WHERE id = $1',
+            [order.id]
+        );
+
+        await client.query('COMMIT');
+
+        console.log(`🔒 Order #${order.order_token} scanned for the first time by staff ${req.user?.id}`);
+        auditLog({ userId: req.user?.id, action: 'ORDER_QR_SCANNED', resource: `order:${order.id}`, details: `token=${order.order_token}`, ip: getRequestIp(req) });
+
+        res.json({ ...order, is_scanned: true, scanned_at: new Date().toISOString() });
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('scanOrderByToken error:', error);
         res.status(500).json({ message: 'Server error' });
+    } finally {
+        client.release();
     }
 };
 
