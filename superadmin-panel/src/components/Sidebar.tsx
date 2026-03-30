@@ -16,13 +16,13 @@ export default function Sidebar() {
   return (
     <aside className="w-64 h-screen bg-[#0e0e0e] border-r border-[#554240]/15 flex flex-col fixed left-0 top-0 z-40">
       <div className="p-6 border-b border-[#554240]/15">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#0c0f18] border border-[#f0513e]/20 overflow-hidden flex items-center justify-center shadow-[0_0_15px_rgba(240,81,62,0.25)]">
-            <img src="/logo.png" alt="Platform Logo" className="w-full h-full object-cover" />
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#f0513e] to-[#ffb4a8] flex items-center justify-center shadow-xl shadow-[#f0513e]/20 p-2 overflow-hidden animate-pulse-glow">
+            <img src="/superadmin/logo.png" alt="Platform Logo" className="w-full h-full object-contain filter brightness-110" />
           </div>
           <div>
-            <h1 className="text-[#e5e2e1] font-display font-bold text-lg leading-tight tracking-tight">Super Admin</h1>
-            <p className="text-[#a38b88] label-premium mt-0.5">Ahmedabad University Canteen</p>
+            <h1 className="text-[13px] font-extrabold text-[#e5e2e1] tracking-[-0.01em] leading-tight">Ahmedabad University Canteen</h1>
+            <p className="text-[11px] font-semibold text-[#a38b88] tracking-widest uppercase mt-0.5">Super Admin</p>
           </div>
         </div>
       </div>
