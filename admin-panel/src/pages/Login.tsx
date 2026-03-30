@@ -219,7 +219,7 @@ export default function Login() {
           {/* Brand */}
           <div className="space-y-6">
             <div className="w-20 h-20 rounded-3xl bg-[#0c0f18] border border-white/[0.06] flex items-center justify-center shadow-2xl p-3.5 overflow-hidden animate-pulse-glow">
-              <img src="/admin/logo.png" alt="Scholar Bites" className="w-full h-full object-contain" />
+              <img src="/admin/logo.png" alt="Ahmedabad University Canteen" className="w-full h-full object-contain" />
             </div>
             <div className="space-y-2">
               <h1 className="text-[32px] font-extrabold text-white tracking-[-0.03em] leading-[1.1]">
@@ -228,7 +228,7 @@ export default function Login() {
               <p className="text-slate-500 text-[15px] leading-relaxed">
                 {otpPending
                   ? <>We sent a code to <span className="text-indigo-400 font-semibold">{otpPending.email}</span></>
-                  : 'Sign in to your Scholar Bites admin account'
+                  : 'Sign in to your Ahmedabad University Canteen admin account'
                 }
               </p>
             </div>

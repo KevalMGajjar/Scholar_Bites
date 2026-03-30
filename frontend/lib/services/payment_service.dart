@@ -46,7 +46,7 @@ class PaymentService {
       'key': 'rzp_test_SPkxayowhOjcMQ',
       'amount': amountInPaise,
       'currency': 'INR',
-      'name': 'Scholar Bites',
+      'name': 'Ahmedabad University Canteen',
       'description': description,
       'order_id': orderId,
       'prefill': {

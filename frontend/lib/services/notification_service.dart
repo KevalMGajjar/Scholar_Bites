@@ -58,8 +58,8 @@ class NotificationService {
     if (Platform.isAndroid) {
       const channel = AndroidNotificationChannel(
         'scholar_bites_notifications',
-        'Scholar Bites',
-        description: 'Notifications from Scholar Bites',
+        'Ahmedabad University Canteen',
+        description: 'Notifications from Ahmedabad University Canteen',
         importance: Importance.high,
       );
       await _localNotifs
@@ -110,8 +110,8 @@ class NotificationService {
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'scholar_bites_notifications',
-          'Scholar Bites',
-          channelDescription: 'Notifications from Scholar Bites',
+          'Ahmedabad University Canteen',
+          channelDescription: 'Notifications from Ahmedabad University Canteen',
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
@@ -150,8 +150,8 @@ class NotificationService {
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'scholar_bites_notifications',
-            'Scholar Bites',
-            channelDescription: 'Notifications from Scholar Bites',
+            'Ahmedabad University Canteen',
+            channelDescription: 'Notifications from Ahmedabad University Canteen',
             importance: Importance.high,
             priority: Priority.high,
           ),

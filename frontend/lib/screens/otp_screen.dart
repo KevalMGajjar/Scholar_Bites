@@ -6,8 +6,6 @@ import 'package:pinput/pinput.dart';
 import '../utils/custom_toast.dart';
 import '../widgets/primary_button.dart';
 import '../services/auth_service.dart';
-import '../models/user_model.dart';
-import 'university_selection_screen.dart';
 import 'home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -47,39 +45,70 @@ class _OtpScreenState extends State<OtpScreen> {
     
     try {
       final existingUser = await AuthService.loginOtp(widget.phoneNumber);
-      setState(() => _isLoading = false);
       
       if (!mounted) return;
 
       if (existingUser != null) {
-        // Returning user — ask if they want to continue with their last university
-        _showReturningUserDialog(existingUser);
-      } else {
-        // New user — go to university selection
-        Navigator.push(
+        // Returning user — welcome back and go home
+        setState(() => _isLoading = false);
+        CustomToast.showSuccessToast(context, 'Welcome back!');
+        Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (context) => UniversitySelectionScreen(phoneNumber: widget.phoneNumber),
-          ),
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
         );
+      } else {
+        // New user — register directly (backend auto-assigns Ahmedabad University)
+        try {
+          final newUser = await AuthService.registerOtp(
+            phone: widget.phoneNumber,
+          );
+          setState(() => _isLoading = false);
+          
+          if (newUser != null && mounted) {
+            CustomToast.showSuccessToast(context, 'Account created successfully!');
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (route) => false,
+            );
+          }
+        } catch (regError) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            CustomToast.showErrorToast(context, regError.toString().replaceAll('Exception: ', ''));
+          }
+        }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      
       final errorMessage = e.toString().replaceAll('Exception: ', '');
       
-      // "User not found" means new user — not an error
+      // "User not found" means new user — register directly
       if (errorMessage.contains('User not found') || errorMessage.contains('404')) {
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => UniversitySelectionScreen(phoneNumber: widget.phoneNumber),
-            ),
+        try {
+          final newUser = await AuthService.registerOtp(
+            phone: widget.phoneNumber,
           );
+          setState(() => _isLoading = false);
+          
+          if (newUser != null && mounted) {
+            CustomToast.showSuccessToast(context, 'Account created successfully!');
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (route) => false,
+            );
+          }
+        } catch (regError) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            CustomToast.showErrorToast(context, regError.toString().replaceAll('Exception: ', ''));
+          }
         }
         return;
       }
+      
+      setState(() => _isLoading = false);
       
       // Clear OTP so user can retry
       _otpController.clear();
@@ -97,109 +126,6 @@ class _OtpScreenState extends State<OtpScreen> {
         CustomToast.showErrorToast(context, displayMessage);
       }
     }
-  }
-
-  void _showReturningUserDialog(UserModel user) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFFDF0F0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Welcome back!',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: const Color(0xFF4A0E13),
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You were last logged into:',
-              style: GoogleFonts.poppins(
-                color: const Color(0xFF4A0E13).withValues(alpha: 0.7),
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4B3B3).withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF8B1C28).withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.school_rounded, color: Color(0xFF8B1C28)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      user.universityName.isNotEmpty ? user.universityName : 'Your previous campus',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF4A0E13),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Would you like to continue with this university?',
-              style: GoogleFonts.poppins(
-                color: const Color(0xFF4A0E13).withValues(alpha: 0.7),
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              // Choose a different university
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => UniversitySelectionScreen(
-                    phoneNumber: widget.phoneNumber,
-                    isExistingUser: true,
-                  ),
-                ),
-              );
-            },
-            child: Text(
-              'Choose Another',
-              style: GoogleFonts.poppins(color: const Color(0xFF8B1C28)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              CustomToast.showSuccessToast(context, 'Welcome back!');
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B1C28),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(
-              'Continue',
-              style: GoogleFonts.poppins(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override

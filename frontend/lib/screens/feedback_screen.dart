@@ -52,7 +52,7 @@ const _knowledgeBase = <_FAQEntry>[
     answer: 'We support multiple payment methods:\n'
         '\u{2022} UPI (Google Pay, PhonePe, Paytm)\n'
         '\u{2022} Debit/Credit Cards\n'
-        '\u{2022} Scholar Bites Wallet\n\n'
+        '\u{2022} Wallet\n\n'
         'All payments are processed securely through Razorpay. '
         'You can add money to your wallet for faster checkout.',
     keywords: ['pay', 'payment', 'upi', 'card', 'wallet', 'money', 'razorpay'],
@@ -148,7 +148,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     
     // Welcome message
     _messages.add(_ChatMessage(
-      text: 'Hey there! \u{1F44B} I\'m your Scholar Bites assistant.\n\n'
+      text: 'Hey there! \u{1F44B} I\'m your Ahmedabad University Canteen assistant.\n\n'
           'Ask me anything about orders, payments, refunds, or food quality — '
           'or tap a topic below to get started!',
       isBot: true,

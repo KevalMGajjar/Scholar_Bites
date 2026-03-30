@@ -133,14 +133,13 @@ class AuthService {
 
   static Future<UserModel?> registerOtp({
     required String phone,
-    required String universityId,
   }) async {
     try {
       final response = await _dio.post(
         '/auth/register-otp',
         data: {
           'phone': phone,
-          'university_id': universityId,
+          // university_id is auto-assigned by backend (single-university mode)
         },
       );
 

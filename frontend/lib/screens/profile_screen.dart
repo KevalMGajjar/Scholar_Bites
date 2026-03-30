@@ -897,7 +897,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // App version
                   Center(
                     child: Text(
-                      'Scholar Bites v1.0.0',
+                      'Ahmedabad University Canteen v1.0.0',
                       style: TextStyle(
                         fontSize: 12,
                         color: _darkText.withValues(alpha: 0.25),

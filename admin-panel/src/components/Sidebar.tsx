@@ -25,7 +25,7 @@ export default function Sidebar() {
             <img src="/admin/logo.png" alt="Logo" className="w-full h-full object-contain filter brightness-110" />
           </div>
           <div>
-            <h1 className="text-[15px] font-extrabold text-white tracking-[-0.01em] leading-tight">Scholar Bites</h1>
+            <h1 className="text-[13px] font-extrabold text-white tracking-[-0.01em] leading-tight">Ahmedabad University Canteen</h1>
             <p className="text-[11px] font-semibold text-slate-500 tracking-widest uppercase mt-0.5">Admin</p>
           </div>
         </div>

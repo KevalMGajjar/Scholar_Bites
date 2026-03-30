@@ -7,6 +7,7 @@ import { checkBruteForce, recordFailedLogin, clearFailedLogins } from '../middle
 import { auditLog, getRequestIp } from '../services/auditLogger';
 import { sendLoginOtpEmail } from '../services/emailService';
 import { OAuth2Client } from 'google-auth-library';
+import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
 
 const BCRYPT_ROUNDS = 12;
 const OTP_EXPIRY_MINUTES = 5;
@@ -72,7 +73,9 @@ export const loginOtp = async (req: Request, res: Response) => {
 };
 
 export const registerOtp = async (req: Request, res: Response) => {
-    const { phone, university_id } = req.body;
+    const { phone } = req.body;
+    // Single-university mode: always assign to Ahmedabad University
+    const university_id = AHMEDABAD_UNIVERSITY_ID;
 
     try {
         const name = `Student ${phone}`;
@@ -353,11 +356,13 @@ export const googleLogin = async (req: Request, res: Response) => {
 
 // ─── Register Staff (Admin-only) ───
 export const registerStaff = async (req: Request, res: Response) => {
-    const { email, password, name, role, university_id } = req.body;
+    const { email, password, name, role } = req.body;
+    // Single-university mode: always assign to Ahmedabad University
+    const university_id = req.body.university_id || AHMEDABAD_UNIVERSITY_ID;
     const caller = (req as any).user;
     const ip = getRequestIp(req);
 
-    if (!email || !password || !name || !role || !university_id) {
+    if (!email || !password || !name || !role) {
         return res.status(400).json({ message: 'All fields are required' });
     }
 

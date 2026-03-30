@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 import { uploadToS3 } from './uploadController';
+import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
 
 export const createUniversity = async (req: Request, res: Response) => {
     const { name, address } = req.body;
@@ -49,6 +50,19 @@ export const getUniversityById = async (req: Request, res: Response) => {
         res.json(result.rows[0]);
     } catch (error) {
         console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getDefaultUniversity = async (req: Request, res: Response) => {
+    try {
+        const result = await pool.query('SELECT * FROM universities WHERE id = $1', [AHMEDABAD_UNIVERSITY_ID]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Default university not configured' });
+        }
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error fetching default university:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

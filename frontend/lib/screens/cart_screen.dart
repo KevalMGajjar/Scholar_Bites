@@ -230,8 +230,8 @@ class _CartScreenState extends State<CartScreen> {
         amountInPaise: amountInPaise,
         contact: userPhone,
         email: userEmail,
-        name: 'Scholar Bites',
-        description: 'Scholar Bites Order',
+        name: 'Ahmedabad University Canteen',
+        description: 'Ahmedabad University Canteen Order',
         orderId: orderId,
       );
     } catch (e) {

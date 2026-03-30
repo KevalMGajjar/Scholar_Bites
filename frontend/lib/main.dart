@@ -142,7 +142,7 @@ class _FoodTechAppState extends State<FoodTechApp> {
       ],
       child: MaterialApp(
         navigatorKey: FoodTechApp.navigatorKey,
-        title: 'Scholar Bites',
+        title: 'Ahmedabad University Canteen',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
