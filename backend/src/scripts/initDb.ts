@@ -204,6 +204,9 @@ const createTablesQuery = `
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
   CREATE INDEX IF NOT EXISTS idx_staff_otp_staff ON staff_login_otps(staff_id, used);
+
+  -- Migration: Add server-side OTP attempt tracking
+  ALTER TABLE staff_login_otps ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 0;
 `;
 
 const initDb = async () => {

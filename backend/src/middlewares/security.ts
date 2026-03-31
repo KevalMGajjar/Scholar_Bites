@@ -125,6 +125,32 @@ export function clearFailedLogins(identifier: string): void {
     loginAttempts.delete(identifier);
 }
 
+/** Unlock a specific locked account. Returns true if an account was unlocked. */
+export function unlockAccount(identifier: string): boolean {
+    const key = identifier.toLowerCase();
+    if (loginAttempts.has(key)) {
+        loginAttempts.delete(key);
+        return true;
+    }
+    return false;
+}
+
+/** Get all currently locked accounts with their lock expiry times. */
+export function getLockedAccounts(): { email: string; lockedUntil: Date; remainingSeconds: number }[] {
+    const now = Date.now();
+    const locked: { email: string; lockedUntil: Date; remainingSeconds: number }[] = [];
+    for (const [key, val] of loginAttempts.entries()) {
+        if (val.lockedUntil > now) {
+            locked.push({
+                email: key,
+                lockedUntil: new Date(val.lockedUntil),
+                remainingSeconds: Math.ceil((val.lockedUntil - now) / 1000),
+            });
+        }
+    }
+    return locked;
+}
+
 // Clean up expired entries every 30 minutes
 setInterval(() => {
     const now = Date.now();

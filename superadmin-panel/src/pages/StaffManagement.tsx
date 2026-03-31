@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { UserPlus, Activity, LogIn } from 'lucide-react';
+import { UserPlus, Activity, LogIn, ShieldOff, Unlock } from 'lucide-react';
 
 interface Staff {
   id: string;
@@ -23,6 +23,12 @@ interface StaffAnalytics {
   }[];
 }
 
+interface LockedAccount {
+  email: string;
+  lockedUntil: string;
+  remainingSeconds: number;
+}
+
 export default function StaffManagement() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +44,15 @@ export default function StaffManagement() {
   const [analytics, setAnalytics] = useState<StaffAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  // Locked Accounts State
+  const [lockedAccounts, setLockedAccounts] = useState<LockedAccount[]>([]);
+  const [lockedLoading, setLockedLoading] = useState(false);
+  const [unlockingEmail, setUnlockingEmail] = useState<string | null>(null);
+  const [lockMessage, setLockMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     fetchStaff();
+    fetchLockedAccounts();
   }, []);
 
   const fetchStaff = async () => {
@@ -51,6 +64,33 @@ export default function StaffManagement() {
       console.error('Failed to fetch staff:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLockedAccounts = async () => {
+    try {
+      setLockedLoading(true);
+      const { data } = await api.get('/superadmin/locked-accounts');
+      setLockedAccounts(data.lockedAccounts || []);
+    } catch (err) {
+      console.error('Failed to fetch locked accounts:', err);
+    } finally {
+      setLockedLoading(false);
+    }
+  };
+
+  const handleUnlock = async (email: string) => {
+    setUnlockingEmail(email);
+    setLockMessage(null);
+    try {
+      const { data } = await api.post('/superadmin/unlock-account', { email });
+      setLockMessage({ type: 'success', text: data.message });
+      // Remove from local state immediately
+      setLockedAccounts((prev) => prev.filter((a) => a.email !== email));
+    } catch (err: any) {
+      setLockMessage({ type: 'error', text: err.response?.data?.message || 'Failed to unlock account' });
+    } finally {
+      setUnlockingEmail(null);
     }
   };
 
@@ -87,6 +127,13 @@ export default function StaffManagement() {
   const closeSidebar = () => {
     setSelectedStaff(null);
     setAnalytics(null);
+  };
+
+  const formatRemainingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
   };
 
   return (
@@ -154,6 +201,98 @@ export default function StaffManagement() {
              </table>
           </div>
         )}
+
+        {/* ── Account Lockout Management ── */}
+        <div className="mt-12">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#4c0000]/40 border border-[#f0513e]/20 rounded-xl flex items-center justify-center">
+                <ShieldOff size={20} className="text-[#ffb4a8]" />
+              </div>
+              <div>
+                <h2 className="text-xl font-display font-bold text-[#e5e2e1] tracking-tight">Account Lockout Management</h2>
+                <p className="text-[#a38b88] text-xs mt-0.5">Accounts locked due to repeated failed login attempts</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchLockedAccounts}
+              disabled={lockedLoading}
+              className="text-[#ffb4a8] text-sm font-semibold hover:text-[#e5e2e1] transition-colors disabled:opacity-50"
+            >
+              {lockedLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          {/* Feedback message */}
+          {lockMessage && (
+            <div className={`p-4 rounded-xl mb-4 text-sm font-medium ${
+              lockMessage.type === 'success'
+                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                : 'bg-[#93000a]/20 border border-[#93000a]/50 text-[#ffb4ab]'
+            }`}>
+              {lockMessage.text}
+            </div>
+          )}
+
+          {lockedLoading ? (
+            <div className="flex justify-center p-10">
+              <div className="animate-spin w-6 h-6 border-2 border-[#ffb4a8] border-t-transparent rounded-full" />
+            </div>
+          ) : lockedAccounts.length === 0 ? (
+            <div className="bg-[#1c1b1b] border border-[#554240]/15 rounded-2xl p-8 text-center">
+              <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Unlock size={22} className="text-emerald-400" />
+              </div>
+              <p className="text-[#a38b88] text-sm font-medium">No locked accounts</p>
+              <p className="text-[#554240] text-xs mt-1">All accounts are currently accessible</p>
+            </div>
+          ) : (
+            <div className="bg-[#1c1b1b] border border-[#554240]/15 rounded-2xl overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#2a2828] text-[#a38b88] border-b border-[#554240]/20 text-sm font-semibold">
+                    <th className="p-4 font-display">Email</th>
+                    <th className="p-4 font-display">Locked Until</th>
+                    <th className="p-4 font-display">Time Remaining</th>
+                    <th className="p-4 font-display text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#554240]/15">
+                  {lockedAccounts.map((acc) => (
+                    <tr key={acc.email} className="hover:bg-[#201f1f] transition">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-[#93000a]/20 rounded-full flex items-center justify-center">
+                            <ShieldOff size={14} className="text-[#ffb4ab]" />
+                          </div>
+                          <span className="text-[#e5e2e1] text-sm font-semibold">{acc.email}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-[#a38b88] text-sm">
+                        {new Date(acc.lockedUntil).toLocaleTimeString()}
+                      </td>
+                      <td className="p-4">
+                        <span className="text-[#ffb4ab] text-sm font-semibold bg-[#93000a]/15 px-3 py-1 rounded-full">
+                          {formatRemainingTime(acc.remainingSeconds)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => handleUnlock(acc.email)}
+                          disabled={unlockingEmail === acc.email}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold rounded-lg hover:bg-emerald-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Unlock size={14} />
+                          {unlockingEmail === acc.email ? 'Unlocking...' : 'Unlock'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Analytics Slide Over Panel */}

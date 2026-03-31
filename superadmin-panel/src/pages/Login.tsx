@@ -98,25 +98,42 @@ export default function Login() {
       await verifyOtp(otp);
       navigate('/');
     } catch (err: any) {
-      const newAttempts = otpAttempts + 1;
-      setOtpAttempts(newAttempts);
+      const responseData = err.response?.data;
+      const serverLocked = responseData?.locked === true;
+      const serverRemaining = responseData?.attempts_remaining;
 
       setOtpShake(true);
       setTimeout(() => setOtpShake(false), 600);
 
-      if (newAttempts >= MAX_OTP_ATTEMPTS) {
-        setOtpError('Too many failed attempts. Please log in again.');
+      if (serverLocked) {
+        // Server has burned this OTP session — force back to credentials
+        setOtpError('Too many failed attempts. This code has been invalidated.');
         setTimeout(() => {
           cancelOtp();
           setOtpDigits(['', '', '', '', '', '']);
           setOtpError('');
           setOtpAttempts(0);
-          setError('Session expired due to too many failed OTP attempts. Please sign in again.');
+          setError('Verification code invalidated due to too many failed attempts. Please sign in again.');
         }, 2000);
       } else {
-        const remaining = MAX_OTP_ATTEMPTS - newAttempts;
-        const msg = err.response?.data?.message || 'Incorrect verification code';
-        setOtpError(`${msg}. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+        const newAttempts = otpAttempts + 1;
+        setOtpAttempts(newAttempts);
+
+        const remaining = typeof serverRemaining === 'number' ? serverRemaining : (MAX_OTP_ATTEMPTS - newAttempts);
+        const msg = responseData?.message || 'Incorrect verification code';
+
+        if (remaining <= 0) {
+          setOtpError('Too many failed attempts. Please log in again.');
+          setTimeout(() => {
+            cancelOtp();
+            setOtpDigits(['', '', '', '', '', '']);
+            setOtpError('');
+            setOtpAttempts(0);
+            setError('Session expired due to too many failed OTP attempts. Please sign in again.');
+          }, 2000);
+        } else {
+          setOtpError(`${msg}. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+        }
       }
 
       setOtpDigits(['', '', '', '', '', '']);

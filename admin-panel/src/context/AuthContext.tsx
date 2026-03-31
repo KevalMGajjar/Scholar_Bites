@@ -58,6 +58,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const completeLogin = (newToken: string, newUser: User) => {
+    // Defense-in-depth: reject super_admin from admin panel even if backend somehow allows it
+    if (newUser.role === 'super_admin') {
+      throw new Error('Super Admin accounts cannot access the Admin Panel. Please use the Super Admin Panel.');
+    }
     localStorage.setItem('admin_token', newToken);
     localStorage.setItem('admin_user', JSON.stringify(newUser));
     setToken(newToken);
@@ -67,7 +71,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (email: string, password: string) => {
-    const res = await api.post('/admin/login', { email, password });
+    const res = await api.post('/admin/login', { email, password, panel: 'admin' });
 
     if (res.data.requires_otp) {
       setOtpPending({ otp_session_id: res.data.otp_session_id, email });
@@ -93,7 +97,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loginWithGoogle = async (credential: string) => {
-    const res = await api.post('/admin/login/google', { credential });
+    const res = await api.post('/admin/login/google', { credential, panel: 'admin' });
     const { token: newToken, user: newUser } = res.data;
     completeLogin(newToken, newUser);
   };

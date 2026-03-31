@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
-import { getSystemHealth, getStaffMembers, getStaffAnalytics, addStaffMember, getAuditLogs } from '../controllers/superAdminController';
+import { getSystemHealth, getStaffMembers, getStaffAnalytics, addStaffMember, getAuditLogs, getLockedAccountsList, unlockAccountHandler } from '../controllers/superAdminController';
 
 const router = Router();
 
@@ -13,5 +13,9 @@ router.get('/staff', getStaffMembers);
 router.post('/staff', addStaffMember);
 router.get('/staff/:id/analytics', getStaffAnalytics);
 router.get('/audit-logs', getAuditLogs);
+
+// ─── Account Lockout Management ───
+router.get('/locked-accounts', getLockedAccountsList);
+router.post('/unlock-account', unlockAccountHandler);
 
 export default router;

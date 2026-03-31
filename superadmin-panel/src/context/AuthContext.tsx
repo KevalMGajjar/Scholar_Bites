@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (email: string, password: string) => {
-    const res = await api.post('/admin/login', { email, password });
+    const res = await api.post('/admin/login', { email, password, panel: 'superadmin' });
 
     if (res.data.requires_otp) {
       setOtpPending({ otp_session_id: res.data.otp_session_id, email });

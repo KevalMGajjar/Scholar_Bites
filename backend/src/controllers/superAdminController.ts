@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import pool from '../config/db';
 
 import bcrypt from 'bcrypt';
+import { unlockAccount as unlockBruteForce, getLockedAccounts as getBruteForceLocked } from '../middlewares/security';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ─── 1. System Health ───
 export const getSystemHealth = async (req: Request, res: Response) => {
@@ -230,6 +232,51 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error('Error fetching audit logs:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Account Lockout Management ───
+
+/** GET /api/superadmin/locked-accounts — list all currently locked accounts */
+export const getLockedAccountsList = async (_req: Request, res: Response) => {
+    try {
+        const locked = getBruteForceLocked();
+        res.json({ lockedAccounts: locked });
+    } catch (error) {
+        console.error('Error fetching locked accounts:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/** POST /api/superadmin/unlock-account — unlock a brute-force locked account */
+export const unlockAccountHandler = async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const caller = (req as any).user;
+    const ip = getRequestIp(req);
+
+    if (!email) {
+        return res.status(400).json({ message: 'Email is required' });
+    }
+
+    try {
+        const wasLocked = unlockBruteForce(email);
+
+        if (!wasLocked) {
+            return res.status(404).json({ message: 'This account is not currently locked.' });
+        }
+
+        auditLog({
+            userId: caller?.id,
+            action: 'ACCOUNT_UNLOCKED',
+            resource: `email:${email}`,
+            details: `Unlocked by super admin ${caller?.email || caller?.id}`,
+            ip,
+        });
+
+        res.json({ message: `Account ${email} has been unlocked successfully.` });
+    } catch (error) {
+        console.error('Error unlocking account:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

@@ -137,7 +137,7 @@ export const updateUniversity = async (req: Request, res: Response) => {
 
 // ─── Staff Login Step 1: Email + Password → Send OTP ───
 export const staffLogin = async (req: Request, res: Response) => {
-    const { email, password } = req.body;
+    const { email, password, panel } = req.body;
     const ip = getRequestIp(req);
 
     if (!email || !password) {
@@ -174,6 +174,18 @@ export const staffLogin = async (req: Request, res: Response) => {
             const locked = recordFailedLogin(email.toLowerCase());
             auditLog({ userId: staff.id, action: 'LOGIN_FAILED', details: locked ? 'Wrong password → locked' : 'Wrong password', resource: `email:${email}`, ip });
             return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        // ─── Role-based panel isolation ───
+        // Admin panel: only staff/admin can login, NOT super_admin
+        if (panel === 'admin' && staff.role === 'super_admin') {
+            auditLog({ userId: staff.id, action: 'LOGIN_PANEL_DENIED', details: 'Super Admin tried admin panel', resource: `email:${email}`, ip });
+            return res.status(403).json({ message: 'Super Admin accounts cannot log in to the Admin Panel. Please use the Super Admin Panel instead.' });
+        }
+        // Super admin panel: only super_admin can login, NOT staff/admin
+        if (panel === 'superadmin' && staff.role !== 'super_admin') {
+            auditLog({ userId: staff.id, action: 'LOGIN_PANEL_DENIED', details: `${staff.role} tried superadmin panel`, resource: `email:${email}`, ip });
+            return res.status(403).json({ message: 'This account does not have Super Admin access. Please use the Admin Panel instead.' });
         }
 
         // ─── Credentials valid: generate OTP ───
@@ -218,6 +230,8 @@ export const staffLogin = async (req: Request, res: Response) => {
 };
 
 // ─── Staff Login Step 2: Verify OTP → Issue JWT ───
+const MAX_OTP_VERIFY_ATTEMPTS = 5;
+
 export const verifyLoginOtp = async (req: Request, res: Response) => {
     const { otp_session_id, otp } = req.body;
     const ip = getRequestIp(req);
@@ -253,11 +267,39 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
             return res.status(410).json({ message: 'Verification code has expired. Please log in again.' });
         }
 
+        // ─── Server-side attempt limiting ───
+        const currentAttempts = record.attempts || 0;
+        if (currentAttempts >= MAX_OTP_VERIFY_ATTEMPTS) {
+            // Already burned — mark used to prevent further attempts
+            await pool.query("UPDATE staff_login_otps SET used = TRUE WHERE id = $1", [otp_session_id]);
+            auditLog({ userId: record.sid, action: 'LOGIN_OTP_BURNED', details: `Exceeded ${MAX_OTP_VERIFY_ATTEMPTS} attempts`, resource: `email:${record.email}`, ip });
+            return res.status(429).json({ message: 'Too many failed attempts. This verification code has been invalidated. Please log in again.', locked: true });
+        }
+
         // Verify OTP hash
         const otpHash = crypto.createHash('sha256').update(String(otp)).digest('hex');
         if (otpHash !== record.otp_hash) {
-            auditLog({ userId: record.sid, action: 'LOGIN_OTP_FAILED', details: 'Wrong OTP', resource: `email:${record.email}`, ip });
-            return res.status(401).json({ message: 'Incorrect verification code' });
+            // Increment attempt counter in DB
+            const newAttempts = currentAttempts + 1;
+            await pool.query("UPDATE staff_login_otps SET attempts = $1 WHERE id = $2", [newAttempts, otp_session_id]);
+
+            // If this was the last attempt, burn the OTP
+            if (newAttempts >= MAX_OTP_VERIFY_ATTEMPTS) {
+                await pool.query("UPDATE staff_login_otps SET used = TRUE WHERE id = $1", [otp_session_id]);
+                auditLog({ userId: record.sid, action: 'LOGIN_OTP_BURNED', details: `${MAX_OTP_VERIFY_ATTEMPTS} wrong attempts — OTP burned`, resource: `email:${record.email}`, ip });
+                return res.status(429).json({
+                    message: 'Too many failed attempts. This verification code has been invalidated. Please log in again.',
+                    locked: true,
+                    attempts_remaining: 0,
+                });
+            }
+
+            const remaining = MAX_OTP_VERIFY_ATTEMPTS - newAttempts;
+            auditLog({ userId: record.sid, action: 'LOGIN_OTP_FAILED', details: `Wrong OTP (attempt ${newAttempts}/${MAX_OTP_VERIFY_ATTEMPTS})`, resource: `email:${record.email}`, ip });
+            return res.status(401).json({
+                message: 'Incorrect verification code',
+                attempts_remaining: remaining,
+            });
         }
 
         // ─── OTP valid: mark used and issue JWT ───
@@ -287,7 +329,7 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
 
 // ─── Google Sign-In for Admin Panel ───
 export const googleLogin = async (req: Request, res: Response) => {
-    const { credential } = req.body;
+    const { credential, panel } = req.body;
     const ip = getRequestIp(req);
 
     if (!credential) {
@@ -326,6 +368,16 @@ export const googleLogin = async (req: Request, res: Response) => {
         if (!staff) {
             auditLog({ action: 'LOGIN_GOOGLE_FAILED', details: 'No staff account for this Google email', resource: `email:${googleEmail}`, ip });
             return res.status(403).json({ message: 'No admin account found for this Google email. Contact your administrator.' });
+        }
+
+        // ─── Role-based panel isolation (Google) ───
+        if (panel === 'admin' && staff.role === 'super_admin') {
+            auditLog({ userId: staff.id, action: 'LOGIN_PANEL_DENIED', details: 'Super Admin tried admin panel via Google', resource: `email:${googleEmail}`, ip });
+            return res.status(403).json({ message: 'Super Admin accounts cannot log in to the Admin Panel. Please use the Super Admin Panel instead.' });
+        }
+        if (panel === 'superadmin' && staff.role !== 'super_admin') {
+            auditLog({ userId: staff.id, action: 'LOGIN_PANEL_DENIED', details: `${staff.role} tried superadmin panel via Google`, resource: `email:${googleEmail}`, ip });
+            return res.status(403).json({ message: 'This account does not have Super Admin access. Please use the Admin Panel instead.' });
         }
 
         // ─── Google is 2FA by default — issue JWT directly ───
