@@ -116,11 +116,22 @@ class _CartScreenState extends State<CartScreen> {
               (int.tryParse(closeParts[1]) ?? 0);
           final remaining = closeMinutes - currentMinutes;
 
-          if (mounted && remaining > 0 && remaining <= 15) {
-            setState(() {
-              _minutesUntilClose = remaining;
-              _closingRestaurantName = restaurant.name;
-            });
+          if (mounted) {
+            if (remaining <= 5) {
+              // Within 5 minute buffer -> Orders no longer accepted
+              setState(() {
+                _restaurantClosed = true;
+                _closingRestaurantName = restaurant.name;
+                _minutesUntilClose = 0;
+              });
+            } else if (remaining > 5 && remaining <= 15) {
+              // Approaching buffer -> Show warning banner
+              setState(() {
+                _minutesUntilClose = remaining;
+                _closingRestaurantName = restaurant.name;
+                _restaurantClosed = false;
+              });
+            }
           }
         }
       }
@@ -311,16 +322,9 @@ class _CartScreenState extends State<CartScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
-        final errorMsg = e.toString().toLowerCase();
-        String friendlyMsg;
-        if (errorMsg.contains('not available')) {
-          friendlyMsg = 'Some items in your cart are no longer available. Please refresh and try again!';
-        } else if (errorMsg.contains('insufficient stock') || errorMsg.contains('stock')) {
-          friendlyMsg = 'Oops! Some items just sold out. Remove them and try again.';
-        } else if (errorMsg.contains('restaurant') && errorMsg.contains('closed')) {
-          friendlyMsg = 'The restaurant is currently closed. Please try again later!';
-        } else {
-          friendlyMsg = 'Something went wrong. Please check your cart and try again.';
+        String friendlyMsg = e.toString().replaceFirst('Exception: ', '');
+        if (friendlyMsg.trim().isEmpty || friendlyMsg.toLowerCase().contains('server error')) {
+           friendlyMsg = 'Something went wrong. Please check your cart and try again.';
         }
         _showCustomToast(friendlyMsg, isError: true, icon: Icons.remove_shopping_cart_rounded);
       }
@@ -402,16 +406,9 @@ class _CartScreenState extends State<CartScreen> {
       debugPrint('❌ Wallet payment failed: $e');
       if (mounted) {
         setState(() => _isProcessingPayment = false);
-        final errorMsg = e.toString().toLowerCase();
-        String friendlyMsg;
-        if (errorMsg.contains('not available')) {
-          friendlyMsg = 'Some items in your cart are no longer available. Please refresh and try again!';
-        } else if (errorMsg.contains('insufficient stock') || errorMsg.contains('stock')) {
-          friendlyMsg = 'Oops! Some items just sold out. Remove them and try again.';
-        } else if (errorMsg.contains('restaurant') && errorMsg.contains('closed')) {
-          friendlyMsg = 'The restaurant is currently closed. Please try again later!';
-        } else {
-          friendlyMsg = 'Something went wrong. Please check your cart and try again.';
+        String friendlyMsg = e.toString().replaceFirst('Exception: ', '');
+        if (friendlyMsg.trim().isEmpty || friendlyMsg.toLowerCase().contains('server error')) {
+           friendlyMsg = 'Something went wrong. Please check your cart and try again.';
         }
         _showCustomToast(friendlyMsg, isError: true, icon: Icons.account_balance_wallet_rounded);
       }
