@@ -174,7 +174,7 @@ export default function Login() {
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#0c0f18] shadow-[0_0_30px_rgba(240,81,62,0.3)] mb-6 border border-[#f0513e]/20 overflow-hidden">
-            <img src="/logo.png" alt="Ahmedabad University Canteen" className="w-full h-full object-cover" />
+            <img src="/superadmin/logo.png" alt="Ahmedabad University Canteen" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-display font-bold text-[#e5e2e1] mb-2 tracking-tight">
             {otpPending ? 'Verify Your Identity' : 'Super Admin Access'}

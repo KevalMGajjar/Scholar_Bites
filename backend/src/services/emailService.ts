@@ -58,21 +58,21 @@ export const sendLoginOtpEmail = async (to: string, otp: string, name: string): 
         to,
         subject: 'Your Login Verification Code – Ahmedabad University Canteen',
         html: `
-            <div style="font-family: Arial, sans-serif; background-color: #0c0f18; padding: 40px; color: #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto;">
+            <div style="font-family: Arial, sans-serif; background-color: #0c0f18; padding: 20px; color: #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto; box-sizing: border-box;">
                 <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #e5e2e1; font-size: 26px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif; letter-spacing: -0.5px;">Ahmedabad University Canteen</h1>
+                    <h1 style="color: #e5e2e1; font-size: 24px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif; letter-spacing: -0.5px;">Ahmedabad University Canteen</h1>
                     <p style="color: #a38b88; font-size: 13px; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Secure Login Validation</p>
                 </div>
                 
-                <div style="background-color: #1c1b1b; border: 1px solid #554240; border-radius: 16px; padding: 32px 24px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                <div style="background-color: #1c1b1b; border: 1px solid #554240; border-radius: 16px; padding: 32px 16px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); box-sizing: border-box;">
                     <p style="color: #e5e2e1; font-size: 15px; margin: 0 0 8px 0; font-weight: 500;">Hi <strong style="color: #f0513e;">${name}</strong>,</p>
                     <p style="color: #a38b88; font-size: 14px; margin: 0 0 24px 0;">Enter this code to complete your sign-in:</p>
                     
                     <table width="100%" border="0" cellspacing="0" cellpadding="0">
                         <tr>
                             <td align="center">
-                                <div style="background-color: #131313; border: 1px solid rgba(240, 81, 62, 0.4); border-radius: 12px; padding: 20px 16px 20px 28px; display: inline-block;">
-                                    <span style="font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #f0513e; font-family: 'Courier New', Courier, monospace; line-height: 1;">${otp}</span>
+                                <div style="background-color: #131313; border: 1px solid rgba(240, 81, 62, 0.4); border-radius: 12px; padding: 16px 12px 16px 18px; display: inline-block;">
+                                    <span style="font-size: 30px; font-weight: 800; letter-spacing: 6px; color: #f0513e; font-family: 'Courier New', Courier, monospace; line-height: 1;">${otp}</span>
                                 </div>
                             </td>
                         </tr>
