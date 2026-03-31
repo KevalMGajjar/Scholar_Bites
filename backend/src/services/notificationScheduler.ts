@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import pool from '../config/db';
-import { notifyUniversityUsers } from '../controllers/notificationController';
+import { notifyUniversityUsers, triggerRestaurantOpen } from '../controllers/notificationController';
 
 /**
  * The restaurants table stores opening_time / closing_time as raw TIME values
@@ -57,6 +57,49 @@ export const startNotificationScheduler = () => {
             }
         } catch (error) {
             console.error('[Scheduler] Error:', error);
+        }
+    });
+
+    // ─── Auto-Close: Flip is_open → false when closing_time passes ───
+    cron.schedule('* * * * *', async () => {
+        try {
+            const { rows } = await pool.query(`
+                UPDATE restaurants
+                SET is_open = false
+                WHERE is_open = true
+                  AND closing_time IS NOT NULL
+                  AND closing_time <= (timezone('${IST_TIMEZONE}', now()))::time
+                  AND opening_time IS NOT NULL
+                  AND opening_time < closing_time
+                RETURNING id, name
+            `);
+            if (rows.length > 0) {
+                console.log(`[Scheduler] 🔒 Auto-closed ${rows.length} restaurant(s): ${rows.map((r: any) => r.name).join(', ')}`);
+            }
+        } catch (error) {
+            console.error('[Scheduler] Auto-close error:', error);
+        }
+    });
+
+    // ─── Auto-Open: Flip is_open → true when opening_time arrives ───
+    cron.schedule('* * * * *', async () => {
+        try {
+            const { rows } = await pool.query(`
+                UPDATE restaurants
+                SET is_open = true
+                WHERE is_open = false
+                  AND opening_time IS NOT NULL
+                  AND closing_time IS NOT NULL
+                  AND opening_time <= (timezone('${IST_TIMEZONE}', now()))::time
+                  AND closing_time > (timezone('${IST_TIMEZONE}', now()))::time
+                RETURNING id, name, university_id
+            `);
+            for (const r of rows) {
+                triggerRestaurantOpen(r.id).catch(() => {});
+                console.log(`[Scheduler] 🔓 Auto-opened: ${r.name}`);
+            }
+        } catch (error) {
+            console.error('[Scheduler] Auto-open error:', error);
         }
     });
 

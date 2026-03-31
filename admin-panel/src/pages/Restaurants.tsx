@@ -146,6 +146,9 @@ export default function Restaurants() {
                 <div><label className={labelClass}>Opens</label><input type="time" value={form.opening_time} onChange={(e) => setForm({ ...form, opening_time: e.target.value })} className={inputClass} /></div>
                 <div><label className={labelClass}>Closes</label><input type="time" value={form.closing_time} onChange={(e) => setForm({ ...form, closing_time: e.target.value })} className={inputClass} /></div>
               </div>
+              <p className="text-[11px] text-indigo-400/60 font-medium -mt-2 flex items-center gap-1.5">
+                <Clock size={11} /> Restaurant will auto-open at opening time & auto-close at closing time. Orders are blocked 5 min before close.
+              </p>
               <div className="flex gap-3 pt-4 border-t border-white/[0.04] mt-2">
                 <button type="submit" className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-bold text-[14px] hover:shadow-lg hover:shadow-indigo-500/20 transition-all btn-press">
                   {editing ? 'Save Changes' : 'Create Restaurant'}
@@ -191,13 +194,18 @@ export default function Restaurants() {
               </div>
               <div className="mt-6">
                 <h3 className="text-white font-extrabold text-[17px] tracking-[-0.02em] leading-tight">{r.name}</h3>
-                <div className="flex items-center gap-3 mt-2.5">
+                <div className="flex items-center gap-3 mt-2.5 flex-wrap">
                   <span className="flex items-center gap-1 text-amber-400 text-[12px] font-bold bg-amber-500/8 px-2 py-0.5 rounded-lg">
                     <Star size={12} className="fill-amber-400" /> {r.rating}
                   </span>
                   <span className="flex items-center gap-1 text-slate-500 text-[12px] font-medium">
                     <Clock size={12} /> {r.prep_time_minutes} min
                   </span>
+                  {r.opening_time && r.closing_time && (
+                    <span className="flex items-center gap-1 text-indigo-400/60 text-[11px] font-semibold">
+                      {r.opening_time.substring(0, 5)} – {r.closing_time.substring(0, 5)}
+                    </span>
+                  )}
                 </div>
               </div>
               {(r.tags?.length > 0) && (

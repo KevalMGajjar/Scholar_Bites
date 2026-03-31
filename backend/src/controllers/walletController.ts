@@ -5,6 +5,10 @@ import razorpay from '../config/razorpay';
 import pool from '../config/db';
 import { auditLog, getRequestIp } from '../services/auditLogger';
 
+// ─── Restaurant Closing-Time Protection (shared constants) ───
+const ORDER_CUTOFF_MINUTES = 5;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 // 1. Get Wallet Balance and History
 export const getWalletData = async (req: AuthRequest, res: Response) => {
     try {
@@ -206,6 +210,30 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
 
         if (order.status !== 'pending') {
             throw new Error('Order has already been processed');
+        }
+
+        // ── Gate Check: Restaurant must still be open ──
+        const restCheck = await client.query(
+            'SELECT is_open, closing_time, name FROM restaurants WHERE id = $1',
+            [order.restaurant_id]
+        );
+        const rest = restCheck.rows[0];
+        if (rest && !rest.is_open) {
+            throw new Error(`${rest.name} is currently closed`);
+        }
+        if (rest?.closing_time) {
+            const nowUTC = Date.now();
+            const nowIST = new Date(nowUTC + IST_OFFSET_MS);
+            const nowMin = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+            const closeParts = rest.closing_time.toString().split(':');
+            const closeMin = parseInt(closeParts[0], 10) * 60 + parseInt(closeParts[1], 10);
+            const minutesLeft = closeMin - nowMin;
+            if (minutesLeft <= 0) {
+                throw new Error(`${rest.name} has closed for today`);
+            }
+            if (minutesLeft <= ORDER_CUTOFF_MINUTES) {
+                throw new Error(`${rest.name} closes in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}. Orders are no longer accepted.`);
+            }
         }
 
         const orderAmount = Number(order.total_amount);

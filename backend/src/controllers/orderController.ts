@@ -7,6 +7,59 @@ import { emitNewOrder, emitStatusUpdate } from '../services/socketService';
 import { createAndPush } from './notificationController';
 import { auditLog, getRequestIp } from '../services/auditLogger';
 
+// ─── Restaurant Closing-Time Protection ───
+const ORDER_CUTOFF_MINUTES = 5; // Block orders within 5 min of closing
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // UTC+5:30
+
+/**
+ * Server-side gate check: is the restaurant currently accepting orders?
+ * Checks both the is_open flag AND the closing_time with cutoff buffer.
+ * Returns { accepting: true } or { accepting: false, reason: string }.
+ */
+const checkRestaurantAcceptingOrders = async (
+    client: any,
+    restaurantId: string
+): Promise<{ accepting: boolean; reason?: string; minutesLeft?: number }> => {
+    const result = await client.query(
+        'SELECT is_open, opening_time, closing_time, name FROM restaurants WHERE id = $1',
+        [restaurantId]
+    );
+    if (result.rows.length === 0) {
+        return { accepting: false, reason: 'Restaurant not found' };
+    }
+    const rest = result.rows[0];
+
+    if (!rest.is_open) {
+        return { accepting: false, reason: `${rest.name} is currently closed` };
+    }
+
+    if (rest.closing_time) {
+        // Parse closing_time (stored as HH:mm:ss TIME) and compare with IST now
+        const nowUTC = Date.now();
+        const nowIST = new Date(nowUTC + IST_OFFSET_MS);
+        const nowMin = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+
+        const closeParts = rest.closing_time.toString().split(':');
+        const closeMin = parseInt(closeParts[0], 10) * 60 + parseInt(closeParts[1], 10);
+
+        const minutesLeft = closeMin - nowMin;
+
+        // If past closing time or within cutoff buffer
+        if (minutesLeft <= 0) {
+            return { accepting: false, reason: `${rest.name} has closed for today`, minutesLeft: 0 };
+        }
+        if (minutesLeft <= ORDER_CUTOFF_MINUTES) {
+            return {
+                accepting: false,
+                reason: `${rest.name} closes in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}. Orders are no longer accepted.`,
+                minutesLeft,
+            };
+        }
+    }
+
+    return { accepting: true };
+};
+
 // ─── Generate a unique 4-char alphanumeric order token ───
 const generateOrderToken = async (client: any): Promise<string> => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No 0/O/1/I to avoid confusion
@@ -75,6 +128,12 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
         if (!restaurantId) {
             throw new Error('Could not determine restaurant for order');
+        }
+
+        // ── Gate Check: Restaurant must be open and within operating hours ──
+        const gateCheck = await checkRestaurantAcceptingOrders(client, restaurantId);
+        if (!gateCheck.accepting) {
+            throw new Error(gateCheck.reason || 'Restaurant is not accepting orders');
         }
 
         const amountInPaise = Math.round(totalAmount * 100);
@@ -179,6 +238,36 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                 }
 
                 const order = orderRes.rows[0];
+
+                // ── Gate Check: Re-verify restaurant is still open ──
+                // Catches the race condition where user opened Razorpay before close and paid after.
+                const gateCheck = await checkRestaurantAcceptingOrders(client, order.restaurant_id);
+                if (!gateCheck.accepting) {
+                    // Cancel the order
+                    await client.query(
+                        "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
+                        [order.id]
+                    );
+                    // Auto-refund to wallet
+                    const refundAmount = Number(order.total_amount);
+                    await client.query(
+                        'UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+                        [refundAmount, order.user_id]
+                    );
+                    await client.query(
+                        `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
+                         VALUES ($1, $2, 'refund', $3, $4)`,
+                        [order.user_id, refundAmount, `Auto-refund: ${gateCheck.reason}`, order.id]
+                    );
+                    await client.query('COMMIT');
+                    console.log(`🔒 Order ${order.id} auto-cancelled & refunded ₹${refundAmount}: ${gateCheck.reason}`);
+                    return res.status(409).json({
+                        status: 'failure',
+                        message: gateCheck.reason,
+                        refunded: true,
+                        refund_amount: refundAmount,
+                    });
+                }
 
                 // 2. Fetch order items and decrement stock
                 const itemsRes = await client.query(

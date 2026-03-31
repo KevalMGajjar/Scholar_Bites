@@ -8,8 +8,10 @@ import '../models/cart_model.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
 import '../services/wallet_service.dart';
+import '../services/restaurant_service.dart';
 import '../utils/token_storage.dart';
 import '../services/menu_service.dart';
+import '../models/restaurant_model.dart';
 import 'detail_screen.dart';
 import 'order_success_screen.dart';
 
@@ -33,6 +35,11 @@ class _CartScreenState extends State<CartScreen> {
   bool _isLoadingBalance = true;
   
   Map<String, dynamic> _availabilityMap = {};
+  
+  // Restaurant closing-soon detection
+  int? _minutesUntilClose; // null = no closing_time set
+  String? _closingRestaurantName;
+  bool _restaurantClosed = false;
 
   @override
   void initState() {
@@ -44,9 +51,10 @@ class _CartScreenState extends State<CartScreen> {
     );
     _fetchWalletBalance();
     
-    // Fetch availability after the first frame
+    // Fetch availability and restaurant closing status after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAvailability();
+      _checkRestaurantClosingStatus();
     });
   }
 
@@ -61,6 +69,63 @@ class _CartScreenState extends State<CartScreen> {
       setState(() {
         _availabilityMap = availMap;
       });
+    }
+  }
+
+  /// Check if the restaurant (from cart items) is closing soon
+  Future<void> _checkRestaurantClosingStatus() async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    if (cart.items.isEmpty) return;
+
+    // Get restaurantId from first cart item
+    final firstItem = cart.items.values.first;
+    final restaurantId = firstItem.food.restaurantId;
+    if (restaurantId == null) return;
+
+    try {
+      final universityId = await TokenStorage.getUniversityId();
+      if (universityId == null) return;
+
+      final restaurants = await RestaurantService().getRestaurantsByUniversity(universityId);
+      final restaurant = restaurants.cast<Restaurant?>().firstWhere(
+        (r) => r!.id == restaurantId,
+        orElse: () => null,
+      );
+
+      if (restaurant == null || !mounted) return;
+
+      // Check if restaurant is currently open
+      if (!restaurant.isCurrentlyOpen) {
+        setState(() {
+          _restaurantClosed = true;
+          _closingRestaurantName = restaurant.name;
+          _minutesUntilClose = 0;
+        });
+        return;
+      }
+
+      // Calculate minutes until close
+      if (restaurant.closingTime != null) {
+        final utcNow = DateTime.now().toUtc();
+        final istNow = utcNow.add(const Duration(hours: 5, minutes: 30));
+        final currentMinutes = istNow.hour * 60 + istNow.minute;
+
+        final closeParts = restaurant.closingTime!.split(':');
+        if (closeParts.length >= 2) {
+          final closeMinutes = (int.tryParse(closeParts[0]) ?? 0) * 60 +
+              (int.tryParse(closeParts[1]) ?? 0);
+          final remaining = closeMinutes - currentMinutes;
+
+          if (mounted && remaining > 0 && remaining <= 15) {
+            setState(() {
+              _minutesUntilClose = remaining;
+              _closingRestaurantName = restaurant.name;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to check restaurant closing status: $e');
     }
   }
 
@@ -172,6 +237,15 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _startCheckoutFlow(CartProvider cart) async {
     if (cart.totalAmount <= 0) return;
 
+    // Block if restaurant is closed
+    if (_restaurantClosed) {
+      _showCustomToast(
+        '${_closingRestaurantName ?? "Restaurant"} is closed. Orders are no longer accepted.',
+        isError: true, icon: Icons.store_rounded,
+      );
+      return;
+    }
+
     // Check if there are any unavailable items
     final hasUnavailable = cart.items.keys.any((id) {
       final info = _availabilityMap[id];
@@ -255,6 +329,15 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _startWalletPayment(CartProvider cart) async {
     if (cart.totalAmount <= 0) return;
+
+    // Block if restaurant is closed
+    if (_restaurantClosed) {
+      _showCustomToast(
+        '${_closingRestaurantName ?? "Restaurant"} is closed. Orders are no longer accepted.',
+        isError: true, icon: Icons.store_rounded,
+      );
+      return;
+    }
 
     // Check if there are any unavailable items
     final hasUnavailable = cart.items.keys.any((id) {
@@ -423,6 +506,73 @@ class _CartScreenState extends State<CartScreen> {
                   },
                 ),
               ),
+
+              // ── Restaurant CLOSED banner ──
+              if (_restaurantClosed)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFD32F2F), Color(0xFFC62828)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.store_rounded, color: Colors.white, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_closingRestaurantName ?? "Restaurant"} is closed',
+                              style: const TextStyle(
+                                color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Orders are no longer being accepted.',
+                              style: TextStyle(
+                                color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1),
+
+              // ── Restaurant CLOSING SOON banner ──
+              if (!_restaurantClosed && _minutesUntilClose != null && _minutesUntilClose! > 0)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.amber.shade700, Colors.orange.shade700],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded, color: Colors.white, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${_closingRestaurantName ?? "Restaurant"} closes in $_minutesUntilClose min — order now!',
+                          style: const TextStyle(
+                            color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate(onPlay: (c) => c.repeat(reverse: true))
+                  .shimmer(duration: 2000.ms, color: Colors.white24),
 
               // Availability warning banner if needed
               if (cart.items.keys.any((id) {
