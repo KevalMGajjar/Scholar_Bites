@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ArrowLeft, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -13,6 +13,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // OTP state
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
@@ -339,14 +340,24 @@ export default function Login() {
                     <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                       <Lock size={11} className="text-slate-500" /> Password
                     </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="w-full px-5 py-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[15px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all duration-300"
-                      placeholder="••••••••"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="w-full px-5 py-3.5 pr-12 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[15px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all duration-300"
+                        placeholder="••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </div>
                   <button
                     type="submit"

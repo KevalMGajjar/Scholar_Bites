@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { unlockAccount as unlockBruteForce, getLockedAccounts as getBruteForceLocked } from '../middlewares/security';
 import { auditLog, getRequestIp } from '../services/auditLogger';
 
+
 // ─── 1. System Health ───
 export const getSystemHealth = async (req: Request, res: Response) => {
     try {
@@ -73,33 +74,79 @@ export const getStaffMembers = async (req: Request, res: Response) => {
 };
 
 export const addStaffMember = async (req: Request, res: Response) => {
-    const { name, email, password, role, phone } = req.body;
+    const { name, email, password, role } = req.body;
     try {
+        if (!name || !email || !password || !role) {
+            return res.status(400).json({ message: 'Name, email, password, and role are all required.' });
+        }
         if (!['staff', 'admin', 'super_admin'].includes(role)) {
             return res.status(400).json({ message: 'Invalid role provided.' });
         }
-        
-        let passwordHash = null;
-        if (password) {
-            passwordHash = await bcrypt.hash(password, 10);
-        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
 
         // We assume single university so we fetch the AU id
         const uniId = '453dcc78-486d-4d80-b59a-b5c578260bc4';
 
         const newStaff = await pool.query(`
-            INSERT INTO staff (university_id, name, email, password_hash, role, phone)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, name, email, role, phone, created_at
-        `, [uniId, name, email, passwordHash, role, phone]);
+            INSERT INTO staff (university_id, name, email, password_hash, role)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, name, email, role, created_at
+        `, [uniId, name, email, passwordHash, role]);
+
+        const caller = (req as any).user;
+        auditLog({
+            userId: caller?.id,
+            action: 'STAFF_CREATED',
+            resource: `staff:${newStaff.rows[0].id}`,
+            details: `Created ${role} account for ${email}`,
+            ip: getRequestIp(req),
+        });
 
         res.status(201).json(newStaff.rows[0]);
     } catch (err: any) {
         if (err.code === '23505') {
-            return res.status(409).json({ message: 'Email or phone already exists.' });
+            return res.status(409).json({ message: 'Email already exists.' });
         }
         console.error('Error adding staff member:', err);
         res.status(500).json({ message: 'Server error adding staff.' });
+    }
+};
+
+// ─── Delete Staff Member ───
+export const deleteStaffMember = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const caller = (req as any).user;
+    const ip = getRequestIp(req);
+
+    try {
+        // Prevent self-deletion
+        if (caller?.id === id) {
+            return res.status(403).json({ message: 'You cannot delete your own account.' });
+        }
+
+        // Fetch target to verify existence and prevent deleting other super admins
+        const target = await pool.query('SELECT id, name, email, role FROM staff WHERE id = $1', [id]);
+        if (target.rows.length === 0) {
+            return res.status(404).json({ message: 'Staff member not found.' });
+        }
+
+        const staff = target.rows[0];
+
+        await pool.query('DELETE FROM staff WHERE id = $1', [id]);
+
+        auditLog({
+            userId: caller?.id,
+            action: 'STAFF_DELETED',
+            resource: `staff:${id}`,
+            details: `Deleted ${staff.role} account: ${staff.name} (${staff.email})`,
+            ip,
+        });
+
+        res.json({ message: `${staff.name} has been permanently deleted.` });
+    } catch (err) {
+        console.error('Error deleting staff member:', err);
+        res.status(500).json({ message: 'Server error deleting staff.' });
     }
 };
 

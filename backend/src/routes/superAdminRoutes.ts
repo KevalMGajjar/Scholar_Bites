@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
-import { getSystemHealth, getStaffMembers, getStaffAnalytics, addStaffMember, getAuditLogs, getLockedAccountsList, unlockAccountHandler } from '../controllers/superAdminController';
+import { getSystemHealth, getStaffMembers, getStaffAnalytics, addStaffMember, deleteStaffMember, getAuditLogs, getLockedAccountsList, unlockAccountHandler } from '../controllers/superAdminController';
 
 const router = Router();
 
@@ -11,6 +11,7 @@ router.use(authorizeRole(['super_admin']));
 router.get('/system-health', getSystemHealth);
 router.get('/staff', getStaffMembers);
 router.post('/staff', addStaffMember);
+router.delete('/staff/:id', deleteStaffMember);
 router.get('/staff/:id/analytics', getStaffAnalytics);
 router.get('/audit-logs', getAuditLogs);
 

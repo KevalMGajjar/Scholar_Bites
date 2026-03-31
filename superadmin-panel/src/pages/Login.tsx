@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ArrowLeft, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const { login, verifyOtp, resendOtp, cancelOtp, otpPending } = useAuth();
@@ -10,6 +10,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // OTP state
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
@@ -281,14 +282,22 @@ export default function Login() {
                 <label className="block label-premium mb-2">Password</label>
                 <div className="relative group">
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-[#1c1b1b]/50 border-0 border-b-2 border-[#554240] text-[#e5e2e1] rounded-t-lg rounded-b-none pl-12 pr-4 py-3 focus:outline-none focus:border-[#f0513e] focus:bg-[#2a2a2a] transition-all"
+                    className="w-full bg-[#1c1b1b]/50 border-0 border-b-2 border-[#554240] text-[#e5e2e1] rounded-t-lg rounded-b-none pl-12 pr-12 py-3 focus:outline-none focus:border-[#f0513e] focus:bg-[#2a2a2a] transition-all"
                     placeholder="••••••••"
                   />
                   <Lock className="absolute left-4 top-3.5 text-[#a38b88] group-focus-within:text-[#ffb4a8] transition-colors" size={20} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-3.5 text-[#554240] hover:text-[#a38b88] transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
 

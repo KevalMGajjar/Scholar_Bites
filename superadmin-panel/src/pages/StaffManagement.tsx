@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { UserPlus, Activity, LogIn, ShieldOff, Unlock } from 'lucide-react';
+import { UserPlus, Activity, LogIn, ShieldOff, Unlock, Trash2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 interface Staff {
   id: string;
   name: string;
   email: string | null;
-  phone: string | null;
   role: string;
   created_at: string;
 }
@@ -35,9 +34,16 @@ export default function StaffManagement() {
   
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'staff', phone: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'staff' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+
+  // Delete State — two-step confirmation
+  const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [showModalPassword, setShowModalPassword] = useState(false);
 
   // Analytics Slide-over State
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
@@ -50,10 +56,20 @@ export default function StaffManagement() {
   const [unlockingEmail, setUnlockingEmail] = useState<string | null>(null);
   const [lockMessage, setLockMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Success toast
+  const [successMsg, setSuccessMsg] = useState('');
+
   useEffect(() => {
     fetchStaff();
     fetchLockedAccounts();
   }, []);
+
+  useEffect(() => {
+    if (successMsg) {
+      const t = setTimeout(() => setSuccessMsg(''), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [successMsg]);
 
   const fetchStaff = async () => {
     try {
@@ -85,7 +101,6 @@ export default function StaffManagement() {
     try {
       const { data } = await api.post('/superadmin/unlock-account', { email });
       setLockMessage({ type: 'success', text: data.message });
-      // Remove from local state immediately
       setLockedAccounts((prev) => prev.filter((a) => a.email !== email));
     } catch (err: any) {
       setLockMessage({ type: 'error', text: err.response?.data?.message || 'Failed to unlock account' });
@@ -115,12 +130,44 @@ export default function StaffManagement() {
     try {
       await api.post('/superadmin/staff', formData);
       setShowAddModal(false);
-      setFormData({ name: '', email: '', password: '', role: 'staff', phone: '' });
+      setFormData({ name: '', email: '', password: '', role: 'staff' });
+      setShowModalPassword(false);
+      setSuccessMsg('Account created successfully.');
       fetchStaff();
     } catch (err: any) {
       setModalError(err.response?.data?.message || 'Failed to create user');
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  // ── Delete: step 1 opens the modal, step 2 confirms ──
+  const openDeleteModal = (staff: Staff) => {
+    setDeleteTarget(staff);
+    setDeleteConfirmed(false);
+    setDeleteError('');
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    if (!deleteConfirmed) {
+      // First click → reveal the final confirmation
+      setDeleteConfirmed(true);
+      return;
+    }
+    // Second click → actually delete
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/superadmin/staff/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      setDeleteConfirmed(false);
+      setSuccessMsg(`${deleteTarget.name} has been permanently deleted.`);
+      fetchStaff();
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message || 'Failed to delete account');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -153,6 +200,13 @@ export default function StaffManagement() {
           </button>
         </div>
 
+        {/* Success toast */}
+        {successMsg && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium animate-fade-up">
+            {successMsg}
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center p-20">
              <div className="animate-spin w-8 h-8 flex border-2 border-indigo-500 border-t-transparent rounded-full" />
@@ -164,15 +218,15 @@ export default function StaffManagement() {
                   <tr className="bg-[#2a2828] text-[#a38b88] border-b border-[#554240]/20 text-sm font-semibold">
                      <th className="p-5 font-display">Name</th>
                      <th className="p-5 font-display">Role</th>
-                     <th className="p-5 font-display">Contact</th>
-                     <th className="p-5 font-display text-right">Analytics</th>
+                     <th className="p-5 font-display">Email</th>
+                     <th className="p-5 font-display text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#554240]/15">
                    {staffList.map((st) => (
-                      <tr key={st.id} className="hover:bg-[#201f1f] transition cursor-pointer" onClick={() => loadAnalytics(st)}>
+                      <tr key={st.id} className="hover:bg-[#201f1f] transition group">
                          <td className="p-5">
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 cursor-pointer" onClick={() => loadAnalytics(st)}>
                                <div className="w-10 h-10 bg-[#131313] border border-[#554240]/30 rounded-full flex items-center justify-center text-[#ffb4a8] font-bold">
                                   {st.name.charAt(0)}
                                </div>
@@ -188,12 +242,20 @@ export default function StaffManagement() {
                                {st.role.toUpperCase().replace('_', ' ')}
                             </span>
                          </td>
-                         <td className="p-5 text-[#a38b88] text-sm flex flex-col gap-1">
-                            <span>{st.email || 'No email'}</span>
-                            <span>{st.phone || 'No phone'}</span>
+                         <td className="p-5 text-[#a38b88] text-sm">
+                            {st.email || 'No email'}
                          </td>
                          <td className="p-5 text-right">
-                            <button className="text-[#ffb4a8] text-sm font-semibold hover:underline">View Log</button>
+                            <div className="flex items-center justify-end gap-3">
+                               <button onClick={() => loadAnalytics(st)} className="text-[#ffb4a8] text-sm font-semibold hover:underline">View Log</button>
+                               <button
+                                 onClick={(e) => { e.stopPropagation(); openDeleteModal(st); }}
+                                 className="p-2 rounded-lg text-[#554240] hover:text-[#ffb4ab] hover:bg-[#93000a]/15 opacity-0 group-hover:opacity-100 transition-all"
+                                 title="Delete account"
+                               >
+                                 <Trash2 size={15} />
+                               </button>
+                            </div>
                          </td>
                       </tr>
                    ))}
@@ -223,7 +285,6 @@ export default function StaffManagement() {
             </button>
           </div>
 
-          {/* Feedback message */}
           {lockMessage && (
             <div className={`p-4 rounded-xl mb-4 text-sm font-medium ${
               lockMessage.type === 'success'
@@ -312,7 +373,6 @@ export default function StaffManagement() {
                     <div className="flex justify-center mt-20"><div className="animate-spin w-6 h-6 border-2 border-[#ffb4a8] border-t-transparent rounded-full" /></div>
                  ) : analytics ? (
                     <>
-                       {/* Metrics Grid */}
                        <div className="grid grid-cols-2 gap-4">
                           <div className="bg-[#1c1b1b] p-4 rounded-xl border border-[#554240]/15">
                              <p className="text-[#a38b88] text-xs font-semibold mb-1">Orders Handled</p>
@@ -333,7 +393,6 @@ export default function StaffManagement() {
                           </div>
                        </div>
 
-                       {/* Feed */}
                        <div>
                           <h3 className="text-[#e5e2e1] font-display font-bold mb-4 flex items-center gap-2">
                              <Activity size={16} className="text-[#ffb4a8]" /> Recent Activity
@@ -362,6 +421,7 @@ export default function StaffManagement() {
          )}
       </div>
 
+      {/* ── Add Account Modal ── */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <form className="bg-[#1c1b1b] border border-[#554240]/20 w-full max-w-md rounded-2xl p-8" onSubmit={handleAddStaff}>
@@ -370,24 +430,25 @@ export default function StaffManagement() {
             
             <div className="space-y-4">
                <div>
-                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Full Name</label>
-                  <input required type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]" />
+                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Full Name <span className="text-[#f0513e]">*</span></label>
+                  <input required type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]" placeholder="John Doe" />
                </div>
                <div>
-                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Email (Optional)</label>
-                  <input type="email" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]" />
+                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Email <span className="text-[#f0513e]">*</span></label>
+                  <input required type="email" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]" placeholder="staff@university.edu" />
                </div>
                <div>
-                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Phone (Optional)</label>
-                  <input type="tel" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]" />
+                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Password <span className="text-[#f0513e]">*</span></label>
+                  <div className="relative">
+                    <input required minLength={6} type={showModalPassword ? 'text' : 'password'} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 pr-11 text-sm focus:outline-none focus:border-[#ffb4a8]" placeholder="Min 6 characters" />
+                    <button type="button" onClick={() => setShowModalPassword(!showModalPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#554240] hover:text-[#a38b88] transition-colors" tabIndex={-1}>
+                      {showModalPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                </div>
                <div>
-                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Password</label>
-                  <input required minLength={6} type="password" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]" />
-               </div>
-               <div>
-                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Role</label>
-                  <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]">
+                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Role <span className="text-[#f0513e]">*</span></label>
+                  <select required value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]">
                      <option value="staff">Staff (Kitchen/Scanner)</option>
                      <option value="admin">Admin (Manager)</option>
                      <option value="super_admin">Super Admin (Global Head)</option>
@@ -400,6 +461,75 @@ export default function StaffManagement() {
                <button type="submit" disabled={modalLoading} className="flex-1 bg-[#ffb4a8] text-[#410000] py-3 rounded-lg font-bold text-sm shadow-[0_0_15px_rgba(255,180,168,0.2)] disabled:opacity-50">{modalLoading ? 'Creating...' : 'Create Account'}</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal (Two-Step) ── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1c1b1b] border border-[#554240]/20 w-full max-w-md rounded-2xl p-8 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-[#93000a]/20 rounded-xl flex items-center justify-center shrink-0">
+                <AlertTriangle size={22} className="text-[#ffb4ab]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-display font-bold text-[#e5e2e1]">
+                  {deleteConfirmed ? 'Are you absolutely sure?' : 'Delete Account'}
+                </h2>
+                <p className="text-[#a38b88] text-xs mt-0.5">
+                  {deleteConfirmed ? 'This action is permanent and cannot be undone.' : 'This will permanently remove the account.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#131313] border border-[#554240]/20 rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#a38b88]">Name</span>
+                <span className="text-[#e5e2e1] font-semibold">{deleteTarget.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#a38b88]">Email</span>
+                <span className="text-[#e5e2e1] font-semibold">{deleteTarget.email || '—'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#a38b88]">Role</span>
+                <span className="text-[#e5e2e1] font-semibold">{deleteTarget.role.toUpperCase().replace('_', ' ')}</span>
+              </div>
+            </div>
+
+            {deleteConfirmed && (
+              <div className="p-3 rounded-xl bg-[#93000a]/15 border border-[#93000a]/30 text-[#ffb4ab] text-sm font-medium flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                <span>All associated data, audit logs references, and login sessions for <strong>{deleteTarget.name}</strong> will be permanently lost.</span>
+              </div>
+            )}
+
+            {deleteError && (
+              <p className="text-[#ffb4a8] bg-[#4c0000]/30 p-3 rounded-lg text-sm">{deleteError}</p>
+            )}
+
+            <div className="flex gap-4 pt-2">
+              <button
+                type="button"
+                onClick={() => { setDeleteTarget(null); setDeleteConfirmed(false); setDeleteError(''); }}
+                className="flex-1 py-3 text-[#a38b88] hover:text-[#e5e2e1] font-semibold text-sm transition rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteLoading}
+                className={`flex-1 py-3 rounded-lg font-bold text-sm transition disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  deleteConfirmed
+                    ? 'bg-[#93000a] text-white hover:bg-[#b31217]'
+                    : 'bg-[#93000a]/20 text-[#ffb4ab] border border-[#93000a]/30 hover:bg-[#93000a]/40'
+                }`}
+              >
+                <Trash2 size={14} />
+                {deleteLoading ? 'Deleting...' : deleteConfirmed ? 'Yes, Delete Permanently' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
