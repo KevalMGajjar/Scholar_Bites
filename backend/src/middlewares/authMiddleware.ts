@@ -11,13 +11,13 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-        console.error(`[Auth] 401: No authorization header for ${req.method} ${req.path}`);
+        console.warn(`[Auth] 401: No authorization header for ${req.method} ${req.path}`);
         return res.sendStatus(401);
     }
 
     const parts = authHeader.split(' ');
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
-        console.error(`[Auth] 401: Malformed authorization header for ${req.path}: "${authHeader.substring(0, 20)}..."`);
+        console.warn(`[Auth] 401: Malformed authorization header for ${req.path}`);
         return res.sendStatus(401);
     }
 
@@ -25,14 +25,14 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
 
     // Guard against empty/null strings from the client
     if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
-        console.error(`[Auth] 401: Empty or null token string for ${req.path}`);
+        console.warn(`[Auth] 401: Empty or null token string for ${req.path}`);
         return res.sendStatus(401);
     }
 
     const decoded = verifyToken(token) as any;
 
     if (!decoded) {
-        console.error(`[Auth] 403: Failed to decode token for ${req.path}`);
+        console.warn(`[Auth] 403: Failed to decode token for ${req.path}`);
         return res.sendStatus(403);
     }
 
@@ -51,7 +51,7 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
             const storedHash = result.rows[0].active_token;
             // If a stored hash exists and doesn't match, this token was superseded
             if (storedHash && storedHash !== tokenHash) {
-                console.error(`[Auth] 401: Device conflict for user ${decoded.id} on ${req.path}`);
+                console.warn(`[Auth] 401: Device conflict for user ${decoded.id} on ${req.path}`);
                 return res.status(401).json({
                     message: 'Session expired. You have been logged in on another device.',
                     code: 'DEVICE_CONFLICT',

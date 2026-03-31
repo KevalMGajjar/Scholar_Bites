@@ -66,8 +66,8 @@ export const loginOtp = async (req: Request, res: Response) => {
         await saveActiveToken(user.id, token, table);
 
         res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, university_id: user.university_id, university_name: user.university_name, role } });
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Auth] loginOtp error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -98,7 +98,7 @@ export const registerOtp = async (req: Request, res: Response) => {
 
         res.status(201).json({ token, user: { ...user, university_name: universityName, role: 'student' } });
     } catch (error: any) {
-        console.error(error);
+        console.error('[Auth] register error:', error.message);
         if (error.code === '23505') {
             return res.status(409).json({ message: 'Phone number already registered' });
         }
@@ -129,8 +129,8 @@ export const updateUniversity = async (req: Request, res: Response) => {
         await saveActiveToken(user.id, token);
 
         res.json({ token, user: { ...user, university_name: universityName, role: 'student' } });
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Auth] updateUniversity error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -211,8 +211,8 @@ export const staffLogin = async (req: Request, res: Response) => {
         // Send OTP email (fire and don't block on failure)
         try {
             await sendLoginOtpEmail(staff.email, otp, staff.name);
-        } catch (emailErr) {
-            console.error('Failed to send login OTP email:', emailErr);
+        } catch (emailErr: any) {
+            console.warn('[Auth] Failed to send login OTP email:', emailErr.message);
             return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
         }
 
@@ -223,8 +223,8 @@ export const staffLogin = async (req: Request, res: Response) => {
             otp_session_id: otpResult.rows[0].id,
             message: 'Verification code sent to your email',
         });
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Auth] staffLogin error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -321,8 +321,8 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
                 university_name: record.university_name,
             },
         });
-    } catch (error) {
-        console.error('verifyLoginOtp error:', error);
+    } catch (error: any) {
+        console.error('[Auth] verifyLoginOtp error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -398,7 +398,7 @@ export const googleLogin = async (req: Request, res: Response) => {
             },
         });
     } catch (error: any) {
-        console.error('googleLogin error:', error);
+        console.error('[Auth] googleLogin error:', error.message);
         if (error.message?.includes('Token used too late') || error.message?.includes('Invalid token')) {
             return res.status(401).json({ message: 'Google token is invalid or expired. Please try again.' });
         }
@@ -441,7 +441,7 @@ export const registerStaff = async (req: Request, res: Response) => {
         if (error.code === '23505') {
             return res.status(409).json({ message: 'Email already registered' });
         }
-        console.error(error);
+        console.error('[Auth] registerStaff error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -456,8 +456,8 @@ export const logout = async (req: Request, res: Response) => {
         const table = user.role === 'student' ? 'users' : 'staff';
         await pool.query(`UPDATE ${table} SET active_token = NULL WHERE id = $1`, [user.id]);
         res.json({ message: 'Logged out successfully' });
-    } catch (error) {
-        console.error('Logout error:', error);
+    } catch (error: any) {
+        console.warn('[Auth] Logout error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -596,8 +596,8 @@ export const getStaffByUniversity = async (req: Request, res: Response) => {
             [university_id]
         );
         res.json(result.rows);
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Auth] getStaffByUniversity error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -626,8 +626,8 @@ export const deleteStaff = async (req: Request, res: Response) => {
         await pool.query('DELETE FROM staff WHERE id = $1', [id]);
         auditLog({ userId: user.id, action: 'STAFF_DELETED', resource: `staff:${id}`, ip });
         res.json({ message: 'Staff member removed' });
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Auth] deleteStaff error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };

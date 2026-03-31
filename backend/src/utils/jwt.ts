@@ -29,7 +29,7 @@ export const generateToken = (payload: object) => {
 
 export const verifyToken = (token: string) => {
     if (!token || token === 'null' || token === 'undefined') {
-        console.error('[JWT] Received empty/null token string');
+        console.warn('[JWT] Received empty/null token string');
         return null;
     }
 
@@ -51,7 +51,7 @@ export const verifyToken = (token: string) => {
             const reason = fallbackError.name === 'TokenExpiredError'
                 ? `expired at ${fallbackError.expiredAt}`
                 : fallbackError.message;
-            console.error(`[JWT] Token verification failed: ${reason}`);
+            console.warn(`[JWT] Token verification failed: ${reason}`);
             return null;
         }
     }

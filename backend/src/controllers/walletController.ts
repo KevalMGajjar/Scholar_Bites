@@ -35,9 +35,9 @@ export const getWalletData = async (req: AuthRequest, res: Response) => {
                 amount: Number(tx.amount)
             }))
         });
-    } catch (error) {
-        console.error('getWalletData Error:', error);
-        res.status(500).json({ message: 'Server error retrieving wallet data' });
+    } catch (error: any) {
+        console.error('[Wallet] getWalletData error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };
 
@@ -89,8 +89,8 @@ export const createTopUpOrder = async (req: AuthRequest, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error('createTopUpOrder Error:', error);
-        res.status(500).json({ message: error.message || 'Error generating top-up order' });
+        console.error('[Wallet] createTopUpOrder error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };
 
@@ -174,8 +174,14 @@ export const verifyTopUp = async (req: AuthRequest, res: Response) => {
             res.status(400).json({ status: 'failure', message: 'Invalid signature' });
         }
     } catch (error: any) {
-        console.error('verifyTopUp Error:', error);
-        res.status(500).json({ status: 'failure', message: error.message || 'Payment verification failed' });
+        const msg = error.message || 'Payment verification failed';
+        const isClientError = msg.includes('already processed') || msg.includes('User not found');
+        if (isClientError) {
+            console.warn(`[Wallet] verifyTopUp rejected: ${msg}`);
+            return res.status(400).json({ status: 'failure', message: msg });
+        }
+        console.error('[Wallet] verifyTopUp error:', msg);
+        res.status(500).json({ status: 'failure', message: 'Payment verification failed' });
     }
 };
 
@@ -358,9 +364,24 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
 
     } catch (err: any) {
         await client.query('ROLLBACK');
-        console.error('payOrderWithWallet Error:', err);
-        const statusCode = err.message?.includes('Insufficient') ? 400 : 500;
-        res.status(statusCode).json({ status: 'failure', message: err.message || 'Wallet payment failed' });
+        const msg = err.message || 'Wallet payment failed';
+
+        // Business-logic errors — expected client mistakes
+        const isClientError = msg.includes('Insufficient')
+            || msg.includes('closed')
+            || msg.includes('no longer accepted')
+            || msg.includes('not available')
+            || msg.includes('Unauthorized')
+            || msg.includes('already been processed')
+            || msg.includes('not found');
+
+        if (isClientError) {
+            console.warn(`[Wallet] Rejected: ${msg}`);
+            return res.status(400).json({ status: 'failure', message: msg });
+        }
+
+        console.error('[Wallet] payOrderWithWallet error:', err);
+        res.status(500).json({ status: 'failure', message: 'Wallet payment failed' });
     } finally {
         client.release();
     }

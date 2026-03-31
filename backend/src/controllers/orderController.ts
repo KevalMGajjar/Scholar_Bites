@@ -195,8 +195,23 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
     } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error(error);
-        res.status(500).json({ message: error.message || 'Server error' });
+        const msg = error.message || 'Server error';
+
+        // Business-logic errors — these are expected client mistakes, NOT server bugs
+        const isClientError = msg.includes('not available')
+            || msg.includes('Insufficient stock')
+            || msg.includes('closed')
+            || msg.includes('no longer accepted')
+            || msg.includes('Could not determine restaurant');
+
+        if (isClientError) {
+            console.warn(`[Order] Rejected: ${msg}`);
+            return res.status(400).json({ message: msg });
+        }
+
+        // Genuine server error — log full stack for debugging
+        console.error('[Order] createOrder error:', error);
+        res.status(500).json({ message: 'Server error' });
     } finally {
         client.release();
     }
@@ -348,7 +363,7 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                 res.json({ status: 'success', order: { ...order, status: 'preparing' } });
             } catch (stockError: any) {
                 await client.query('ROLLBACK');
-                console.error('verifyPayment stock error:', stockError);
+                console.warn(`[Order] verifyPayment stock conflict: ${stockError.message}`);
                 // Payment was valid but stock check failed — order stays pending
                 // TODO: Initiate Razorpay refund here in production
                 res.status(409).json({ status: 'failure', message: stockError.message || 'Stock unavailable after payment' });
@@ -358,8 +373,8 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
         } else {
             res.status(400).json({ status: 'failure', message: 'Invalid signature' });
         }
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Order] verifyPayment error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -412,8 +427,8 @@ export const cancelPendingOrder = async (req: AuthRequest, res: Response) => {
         res.json({ message: 'Order cancelled' });
     } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error('cancelPendingOrder error:', error);
-        res.status(500).json({ message: error.message || 'Server error' });
+        console.error('[Order] cancelPendingOrder error:', error.message);
+        res.status(500).json({ message: 'Failed to cancel order' });
     } finally {
         client.release();
     }
@@ -460,8 +475,8 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
         `, [req.user.id]);
 
         res.json(result.rows);
-    } catch (error) {
-        console.error('getMyOrders error:', error);
+    } catch (error: any) {
+        console.error('[Order] getMyOrders error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -535,7 +550,7 @@ export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
         res.json({ ...order, is_scanned: true, scanned_at: new Date().toISOString() });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('scanOrderByToken error:', error);
+        console.error('[Order] scanOrderByToken error:', (error as any).message);
         res.status(500).json({ message: 'Server error' });
     } finally {
         client.release();
@@ -575,8 +590,8 @@ export const getPendingOrders = async (req: AuthRequest, res: Response) => {
         `, [uniId]);
 
         res.json(result.rows);
-    } catch (error) {
-        console.error('getPendingOrders error:', error);
+    } catch (error: any) {
+        console.error('[Order] getPendingOrders error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -747,8 +762,8 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
             page: parseInt(page as string),
             limit: parseInt(limit as string),
         });
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Order] getAllOrders error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -782,8 +797,8 @@ export const getOrderDetails = async (req: AuthRequest, res: Response) => {
 
         if (result.rows.length === 0) return res.status(404).json({ message: 'Order not found' });
         res.json(result.rows[0]);
-    } catch (error) {
-        console.error(error);
+    } catch (error: any) {
+        console.error('[Order] getOrderDetails error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -830,8 +845,8 @@ export const requestRefund = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json({ message: 'Refund request submitted for approval', request: result.rows[0] });
     } catch (error: any) {
-        console.error('requestRefund error:', error);
-        res.status(500).json({ message: error.message || 'Server error' });
+        console.error('[Order] requestRefund error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };
 
@@ -882,8 +897,8 @@ export const getRefundRequests = async (req: AuthRequest, res: Response) => {
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error: any) {
-        console.error('getRefundRequests error:', error);
-        res.status(500).json({ message: error.message || 'Server error' });
+        console.error('[Order] getRefundRequests error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };
 
@@ -963,8 +978,8 @@ export const approveRefund = async (req: AuthRequest, res: Response) => {
         res.json({ message: `₹${refundAmount.toFixed(0)} refunded to student's wallet`, refund_request_id: id });
     } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error('approveRefund error:', error);
-        res.status(500).json({ message: error.message || 'Server error' });
+        console.error('[Order] approveRefund error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     } finally {
         client.release();
     }
@@ -990,8 +1005,8 @@ export const rejectRefund = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: 'Refund request rejected', request: result.rows[0] });
     } catch (error: any) {
-        console.error('rejectRefund error:', error);
-        res.status(500).json({ message: error.message || 'Server error' });
+        console.error('[Order] rejectRefund error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };
 
