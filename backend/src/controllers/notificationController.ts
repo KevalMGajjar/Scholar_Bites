@@ -109,6 +109,8 @@ export const createAndPush = async (
 };
 
 // ─── Bulk: Notify all users in a university ───
+// Deduplicates by FCM token so the same physical device only gets ONE push,
+// even if multiple user accounts share the same phone.
 export const notifyUniversityUsers = async (
     universityId: string,
     type: string,
@@ -119,15 +121,47 @@ export const notifyUniversityUsers = async (
 ) => {
     try {
         const usersRes = await pool.query(
-            'SELECT id FROM users WHERE university_id = $1',
+            'SELECT id, fcm_token FROM users WHERE university_id = $1',
             [universityId]
         );
 
+        const pushedTokens = new Set<string>(); // Track tokens we've already sent to
+
         for (const user of usersRes.rows) {
             const notifData = dedupeKey ? { ...data, dedupe_key: dedupeKey } : data;
-            // Broadcast notifications use a 24-hour dedup window to prevent
-            // the same "restaurant open" / "closing soon" firing repeatedly.
-            await createAndPush(user.id, type, title, body, notifData, '24 hours');
+
+            // Always insert to DB (each user gets their own notification row)
+            const dedupeKeyFinal = notifData.dedupe_key
+                || `${type}_${data.restaurant_id || data.item_id || user.id}`;
+            const dbData = { ...notifData, dedupe_key: dedupeKeyFinal };
+
+            const insertQuery = `
+                INSERT INTO notifications (user_id, type, title, body, data)
+                SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM notifications
+                    WHERE user_id = $1::uuid 
+                      AND data->>'dedupe_key' = $6::text
+                      AND created_at > NOW() - INTERVAL '24 hours'
+                )
+                RETURNING id;
+            `;
+            const result = await pool.query(insertQuery, [
+                user.id, type, title, body, JSON.stringify(dbData), dedupeKeyFinal
+            ]);
+
+            // Only send FCM push if:
+            // 1. The DB row was actually inserted (not deduped)
+            // 2. We haven't already pushed to this FCM token (same device)
+            if (result.rows.length > 0 && user.fcm_token && !pushedTokens.has(user.fcm_token)) {
+                pushedTokens.add(user.fcm_token);
+                const stringData: Record<string, string> = {};
+                for (const [k, v] of Object.entries(dbData)) {
+                    stringData[k] = String(v);
+                }
+                stringData['type'] = type;
+                await sendPush(user.fcm_token, title, body, stringData);
+            }
         }
     } catch (error) {
         console.error('notifyUniversityUsers error:', error);
