@@ -266,49 +266,76 @@ export const registerFcmToken = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// ─── Trigger: Favorited item becomes available ───
-// Only notifies users who have actually favorited this item
-// (via the user_favorites table synced from the Flutter app).
+// ─── Trigger: Item becomes available ───
+// 1. Tries targeted delivery to users who favorited this item.
+// 2. Falls back to university-wide broadcast if nobody has favorited it
+//    (or if user_favorites isn't populated yet).
 export const triggerItemAvailable = async (itemId: string, itemName: string) => {
     try {
-        // 1. Resolve the item name if not provided
+        // 1. Resolve item details — LEFT JOIN because restaurant_id may be NULL
+        //    on legacy items that only have university_id directly.
         const itemRes = await pool.query(
-            `SELECT mi.id, mi.name, r.university_id 
-             FROM menu_items mi 
-             JOIN restaurants r ON mi.restaurant_id = r.id 
+            `SELECT mi.id,
+                    mi.name,
+                    COALESCE(r.university_id, mi.university_id) AS university_id
+             FROM menu_items mi
+             LEFT JOIN restaurants r ON mi.restaurant_id = r.id
              WHERE mi.id = $1`,
             [itemId]
         );
-        if (itemRes.rows.length === 0) return;
 
-        const name = itemName || itemRes.rows[0].name;
-
-        // 2. Find all users who favorited this specific item
-        const favUsersRes = await pool.query(
-            `SELECT uf.user_id, u.fcm_token
-             FROM user_favorites uf
-             JOIN users u ON uf.user_id = u.id
-             WHERE uf.menu_item_id = $1`,
-            [itemId]
-        );
-
-        if (favUsersRes.rows.length === 0) {
-            console.log(`[Notif] Item "${name}" became available but no users have favorited it — skipping.`);
+        if (itemRes.rows.length === 0) {
+            console.warn(`[Notif] triggerItemAvailable: item ${itemId} not found in DB — skipping.`);
             return;
         }
 
-        console.log(`[Notif] Item "${name}" is back — notifying ${favUsersRes.rows.length} fan(s).`);
+        const { university_id } = itemRes.rows[0];
+        const name = itemName || itemRes.rows[0].name;
 
-        // 3. Send targeted notification to each user who favorited the item
-        for (const user of favUsersRes.rows) {
-            await createAndPush(
-                user.user_id,
+        // 2. Try targeted: find users who favorited this specific item
+        let favUsersRows: any[] = [];
+        try {
+            const favUsersRes = await pool.query(
+                `SELECT uf.user_id, u.fcm_token
+                 FROM user_favorites uf
+                 JOIN users u ON uf.user_id = u.id
+                 WHERE uf.menu_item_id = $1`,
+                [itemId]
+            );
+            favUsersRows = favUsersRes.rows;
+        } catch (favError: any) {
+            // user_favorites table may not exist on older deployments — fall through to broadcast
+            console.warn(`[Notif] user_favorites query failed (table may not exist): ${favError.message}`);
+        }
+
+        if (favUsersRows.length > 0) {
+            // ─── Targeted path: notify only fans ───
+            console.log(`[Notif] 🔔 Item "${name}" is back → notifying ${favUsersRows.length} fan(s).`);
+
+            for (const user of favUsersRows) {
+                await createAndPush(
+                    user.user_id,
+                    NOTIF_TYPES.ITEM_AVAILABLE,
+                    NOTIF_COPY.item_available.title,
+                    NOTIF_COPY.item_available.body(name),
+                    { item_id: itemId, item_name: name },
+                    '24 hours'
+                );
+            }
+        } else if (university_id) {
+            // ─── Fallback: broadcast to all users in the university ───
+            console.log(`[Notif] 🔔 Item "${name}" is back — no specific fans, broadcasting to university.`);
+
+            await notifyUniversityUsers(
+                university_id,
                 NOTIF_TYPES.ITEM_AVAILABLE,
                 NOTIF_COPY.item_available.title,
                 NOTIF_COPY.item_available.body(name),
                 { item_id: itemId, item_name: name },
-                '24 hours'  // dedupe interval — don't re-notify within 24h
+                `item_available_${itemId}`
             );
+        } else {
+            console.warn(`[Notif] Item "${name}" has no university_id — cannot send notification.`);
         }
     } catch (error) {
         console.error('triggerItemAvailable error:', error);
