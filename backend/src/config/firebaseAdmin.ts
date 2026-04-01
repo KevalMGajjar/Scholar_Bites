@@ -2,22 +2,30 @@ import * as admin from 'firebase-admin';
 import path from 'path';
 import fs from 'fs';
 
-// Initialize Firebase Admin SDK
+// ─── Initialize Firebase Admin SDK ───
 const serviceAccountPath = path.resolve(__dirname, '../../firebase-service-account.json');
 
+console.log(`[Firebase] Looking for service account at: ${serviceAccountPath}`);
+
 if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-    });
-    console.log('✅ Firebase Admin initialized');
+    try {
+        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+        console.log(`✅ Firebase Admin initialized (project: ${serviceAccount.project_id})`);
+    } catch (error: any) {
+        console.error('❌ Firebase Admin initialization FAILED:', error.message);
+    }
 } else {
-    console.warn('⚠️  firebase-service-account.json not found — push notifications disabled');
+    console.warn('⚠️  firebase-service-account.json NOT FOUND — push notifications DISABLED');
+    console.warn(`    Resolved path: ${serviceAccountPath}`);
+    console.warn('    To fix: copy the file to the backend root directory on the server');
 }
 
 /**
  * Send a push notification via FCM.
- * Silently fails if Firebase is not initialized or token is invalid.
+ * Returns true on success, false on failure.
  */
 export const sendPush = async (
     fcmToken: string,
@@ -25,10 +33,17 @@ export const sendPush = async (
     body: string,
     data?: Record<string, string>
 ): Promise<boolean> => {
-    if (!admin.apps.length || !fcmToken) return false;
+    if (!admin.apps.length) {
+        console.warn('[FCM] Cannot send push — Firebase Admin not initialized');
+        return false;
+    }
+    if (!fcmToken) {
+        console.warn('[FCM] Cannot send push — no FCM token provided');
+        return false;
+    }
 
     try {
-        await admin.messaging().send({
+        const messageId = await admin.messaging().send({
             token: fcmToken,
             notification: { title, body },
             data: data || {},
@@ -50,13 +65,15 @@ export const sendPush = async (
                 },
             },
         });
+        console.log(`[FCM] ✅ Push sent (messageId: ${messageId})`);
         return true;
     } catch (error: any) {
-        // Token is stale/invalid — don't crash
         if (error.code === 'messaging/registration-token-not-registered') {
-            console.log(`FCM token expired for a user, skipping`);
+            console.warn(`[FCM] Token expired/invalid — skipping`);
+        } else if (error.code === 'messaging/invalid-argument') {
+            console.error(`[FCM] Invalid argument:`, error.message);
         } else {
-            console.error('FCM send error:', error.message);
+            console.error(`[FCM] ❌ Send failed:`, error.code, error.message);
         }
         return false;
     }
