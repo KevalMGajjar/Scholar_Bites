@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import pool from '../config/db';
-import { notifyUniversityUsers, triggerRestaurantOpen } from '../controllers/notificationController';
+import { notifyUniversityUsers, triggerRestaurantOpen, triggerRestaurantClosingSoon } from '../controllers/notificationController';
 
 /**
  * The restaurants table stores opening_time / closing_time as raw TIME values
@@ -39,16 +39,11 @@ export const startNotificationScheduler = () => {
 
             for (const restaurant of restaurants) {
                 console.log(`[Scheduler] Notifying for "${restaurant.name}" (closing at ${restaurant.closing_time})`);
-                
-                const dedupeKey = `closing_soon_${restaurant.id}`;
-
-                await notifyUniversityUsers(
+                await triggerRestaurantClosingSoon(
+                    restaurant.id,
+                    restaurant.name,
                     restaurant.university_id,
-                    'restaurant_closing_soon',
-                    'LAST CALL 💨',
-                    `${restaurant.name} closes in 15 mins!! don't be the one who missed out`,
-                    { restaurant_id: restaurant.id },
-                    dedupeKey
+                    15
                 );
             }
 

@@ -80,12 +80,18 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     if (type == 'all') return _notifications;
     if (type == 'food') {
       return _notifications
-          .where((n) => n['type'] == 'item_available' || n['type'] == 'cart_reminder')
+          .where((n) =>
+              n['type'] == 'item_available' ||
+              n['type'] == 'cart_reminder' ||
+              n['type'] == 'order_ready' ||
+              n['type'] == 'refund')
           .toList();
     }
     if (type == 'restaurant') {
       return _notifications
-          .where((n) => n['type'] == 'restaurant_open' || n['type'] == 'restaurant_closing')
+          .where((n) =>
+              n['type'] == 'restaurant_open' ||
+              n['type'] == 'restaurant_closing_soon')
           .toList();
     }
     return _notifications;
@@ -97,10 +103,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         return Icons.fastfood_rounded;
       case 'restaurant_open':
         return Icons.store_rounded;
-      case 'restaurant_closing':
+      case 'restaurant_closing_soon':
         return Icons.schedule_rounded;
       case 'cart_reminder':
         return Icons.shopping_cart_rounded;
+      case 'order_ready':
+        return Icons.check_circle_rounded;
+      case 'refund':
+        return Icons.account_balance_wallet_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -112,10 +122,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         return const Color(0xFF2E7D32);
       case 'restaurant_open':
         return _maroon;
-      case 'restaurant_closing':
+      case 'restaurant_closing_soon':
         return const Color(0xFFE65100);
       case 'cart_reminder':
         return const Color(0xFF1565C0);
+      case 'order_ready':
+        return const Color(0xFF2E7D32);
+      case 'refund':
+        return const Color(0xFF6A1B9A);
       default:
         return _maroon;
     }

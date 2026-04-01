@@ -71,6 +71,12 @@ class _FoodTechAppState extends State<FoodTechApp> {
     // Initialize notification service (FCM token, permissions, etc.)
     final notifService = NotificationService();
     notifService.init();
+
+    // Register FCM token on every app startup.
+    // Returning users who auto-login via Hive cache never re-register their
+    // FCM token, causing push notifications to silently fail. This ensures
+    // the backend always has a fresh token.
+    notifService.registerCurrentToken();
     
     // Listen for 'order_ready' pushes globally
     notifService.onOrderReady = (data) {

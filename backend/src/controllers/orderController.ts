@@ -4,7 +4,7 @@ import razorpay from '../config/razorpay';
 import crypto from 'crypto';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { emitNewOrder, emitStatusUpdate } from '../services/socketService';
-import { createAndPush } from './notificationController';
+import { triggerOrderReady, triggerRefund } from './notificationController';
 import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ─── Restaurant Closing-Time Protection ───
@@ -647,18 +647,12 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         
         // If the order just became ready, send an instant Push Notification
         if (currentOrder.status !== 'ready' && status === 'ready') {
-            await createAndPush(
+            triggerOrderReady(
                 currentOrder.user_id,
-                'order_ready',
-                'Your Order is Ready! 🍔',
-                `Your order #${order.order_token || String(id).split('-')[0]} is freshly prepared and ready for pickup at the counter!`,
-                { 
-                  order_id: String(id), 
-                  type: 'order_ready',
-                  order_token: String(order.order_token || ''),
-                  amount: String(order.total_amount || '0')
-                }
-            );
+                String(id),
+                String(order.order_token || String(id).split('-')[0]),
+                String(order.total_amount || '0')
+            ).catch(err => console.error('triggerOrderReady failed:', err));
         }
 
         auditLog({ userId: req.user?.id, action: 'ORDER_STATUS_CHANGED', resource: `order:${id}`, details: `status=${status}`, ip: getRequestIp(req) });
@@ -965,13 +959,12 @@ export const approveRefund = async (req: AuthRequest, res: Response) => {
         // 7. Notify user via socket + push
         emitStatusUpdate(order.user_id, { ...order, status: 'cancelled', refund_amount: refundAmount });
 
-        await createAndPush(
+        triggerRefund(
             order.user_id,
-            'refund',
-            'Refund Credited! 💰',
-            `₹${refundAmount.toFixed(0)} has been refunded to your wallet for Order #${order.order_token || orderId.toString().substring(0, 6)}.`,
-            { order_id: String(orderId), type: 'refund', amount: String(refundAmount) }
-        );
+            String(orderId),
+            String(order.order_token || orderId.toString().substring(0, 6)),
+            refundAmount
+        ).catch(err => console.error('triggerRefund failed:', err));
 
         auditLog({ userId: superAdminId, action: 'REFUND_APPROVED', resource: `order:${orderId}`, details: `amount:${refundAmount}`, ip: getRequestIp(req) });
 

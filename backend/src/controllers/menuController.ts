@@ -157,8 +157,8 @@ export const updateStock = async (req: Request, res: Response) => {
 
         // Trigger notification if item just became available
         const updatedItem = result.rows[0];
-        if (is_available === true) {
-            // Check if it was previously unavailable — fire async, don't block response
+        if (is_available === true || is_available === 'true') {
+            // Fire async, don't block response
             triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
         }
 

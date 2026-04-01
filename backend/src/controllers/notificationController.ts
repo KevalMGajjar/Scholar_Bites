@@ -3,6 +3,17 @@ import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { sendPush } from '../config/firebaseAdmin';
 
+// ─── Canonical Notification Type Constants ───
+// Keep these in sync with frontend filter types in notifications_screen.dart
+export const NOTIF_TYPES = {
+    ITEM_AVAILABLE: 'item_available',
+    RESTAURANT_OPEN: 'restaurant_open',
+    RESTAURANT_CLOSING_SOON: 'restaurant_closing_soon',
+    CART_REMINDER: 'cart_reminder',
+    ORDER_READY: 'order_ready',
+    REFUND: 'refund',
+} as const;
+
 // ─── Gen-Z Notification Copy Templates ───
 const NOTIF_COPY = {
     item_available: {
@@ -14,15 +25,25 @@ const NOTIF_COPY = {
         title: (restaurantName: string) => `${restaurantName} is OPEN 🤌`,
         body: `the vibes are immaculate rn, get your order in bestie`,
     },
-    restaurant_closing: {
+    restaurant_closing_soon: {
         title: 'LAST CALL 💨',
         body: (restaurantName: string) =>
-            `${restaurantName} closes in 30 mins!! don't be the one who missed out`,
+            `${restaurantName} closes in 15 mins!! don't be the one who missed out`,
     },
     cart_reminder: {
         title: 'your cart misses you 😭',
         body: (itemName: string) =>
             `${itemName} and the squad have been waiting — they might sell out ngl`,
+    },
+    order_ready: {
+        title: 'Your Order is Ready! 🍔',
+        body: (orderToken: string) =>
+            `Your order #${orderToken} is freshly prepared and ready for pickup at the counter!`,
+    },
+    refund: {
+        title: 'Refund Credited! 💰',
+        body: (amount: string, orderToken: string) =>
+            `₹${amount} has been refunded to your wallet for Order #${orderToken}.`,
     },
 };
 
@@ -197,7 +218,6 @@ export const registerFcmToken = async (req: AuthRequest, res: Response) => {
 // ─── Trigger: Item becomes available ───
 export const triggerItemAvailable = async (itemId: string, itemName: string) => {
     try {
-        // Find the university for this item
         const itemRes = await pool.query(
             `SELECT mi.id, mi.name, r.university_id 
              FROM menu_items mi 
@@ -212,7 +232,7 @@ export const triggerItemAvailable = async (itemId: string, itemName: string) => 
 
         await notifyUniversityUsers(
             university_id,
-            'item_available',
+            NOTIF_TYPES.ITEM_AVAILABLE,
             NOTIF_COPY.item_available.title,
             NOTIF_COPY.item_available.body(name),
             { item_id: itemId, item_name: name },
@@ -236,7 +256,7 @@ export const triggerRestaurantOpen = async (restaurantId: string) => {
 
         await notifyUniversityUsers(
             university_id,
-            'restaurant_open',
+            NOTIF_TYPES.RESTAURANT_OPEN,
             NOTIF_COPY.restaurant_open.title(name),
             NOTIF_COPY.restaurant_open.body,
             { restaurant_id: restaurantId, restaurant_name: name },
@@ -244,6 +264,73 @@ export const triggerRestaurantOpen = async (restaurantId: string) => {
         );
     } catch (error) {
         console.error('triggerRestaurantOpen error:', error);
+    }
+};
+
+// ─── Trigger: Restaurant closing soon ───
+export const triggerRestaurantClosingSoon = async (
+    restaurantId: string,
+    restaurantName: string,
+    universityId: string,
+    minutesLeft: number = 15
+) => {
+    try {
+        const dedupeKey = `closing_soon_${restaurantId}`;
+        await notifyUniversityUsers(
+            universityId,
+            NOTIF_TYPES.RESTAURANT_CLOSING_SOON,
+            NOTIF_COPY.restaurant_closing_soon.title,
+            NOTIF_COPY.restaurant_closing_soon.body(restaurantName),
+            { restaurant_id: restaurantId, restaurant_name: restaurantName },
+            dedupeKey
+        );
+    } catch (error) {
+        console.error('triggerRestaurantClosingSoon error:', error);
+    }
+};
+
+// ─── Trigger: Order ready for pickup ───
+export const triggerOrderReady = async (
+    userId: string,
+    orderId: string,
+    orderToken: string,
+    totalAmount: string
+) => {
+    try {
+        await createAndPush(
+            userId,
+            NOTIF_TYPES.ORDER_READY,
+            NOTIF_COPY.order_ready.title,
+            NOTIF_COPY.order_ready.body(orderToken),
+            {
+                order_id: orderId,
+                type: NOTIF_TYPES.ORDER_READY,
+                order_token: orderToken,
+                amount: totalAmount,
+            }
+        );
+    } catch (error) {
+        console.error('triggerOrderReady error:', error);
+    }
+};
+
+// ─── Trigger: Refund credited ───
+export const triggerRefund = async (
+    userId: string,
+    orderId: string,
+    orderToken: string,
+    refundAmount: number
+) => {
+    try {
+        await createAndPush(
+            userId,
+            NOTIF_TYPES.REFUND,
+            NOTIF_COPY.refund.title,
+            NOTIF_COPY.refund.body(refundAmount.toFixed(0), orderToken),
+            { order_id: orderId, type: NOTIF_TYPES.REFUND, amount: String(refundAmount) }
+        );
+    } catch (error) {
+        console.error('triggerRefund error:', error);
     }
 };
 
