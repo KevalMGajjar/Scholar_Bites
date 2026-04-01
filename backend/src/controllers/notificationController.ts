@@ -48,66 +48,60 @@ const NOTIF_COPY = {
 };
 
 // ─── Internal: Create notification + push ───
+// ALL notifications are deduplicated atomically via INSERT ... WHERE NOT EXISTS.
+// If no dedupe_key is provided, one is auto-generated from type + context data.
 export const createAndPush = async (
     userId: string,
     type: string,
     title: string,
     body: string,
     data: Record<string, any> = {},
-    dedupeInterval?: string // e.g. '24 hours'
+    dedupeInterval: string = '5 minutes' // default: suppress exact-same notification for 5 min
 ) => {
     try {
-        let insertedId: string | null = null;
-        
+        // Auto-generate dedupe_key if not explicitly provided.
+        // Uses type + any identifying field (order_id, restaurant_id, item_id) as the key.
+        const dedupeKey = data.dedupe_key
+            || `${type}_${data.order_id || data.restaurant_id || data.item_id || userId}`;
+
+        const notifData = { ...data, dedupe_key: dedupeKey };
+
         // ─── Atomic Deduplication ───
-        // If a dedupe_key is provided along with an interval, we do an atomic
-        // INSERT ... SELECT ... WHERE NOT EXISTS to guarantee thread safety.
-        if (data.dedupe_key && dedupeInterval) {
-            const insertQuery = `
-                INSERT INTO notifications (user_id, type, title, body, data)
-                SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM notifications
-                    WHERE user_id = $1::uuid 
-                      AND data->>'dedupe_key' = $6::text
-                      AND created_at > NOW() - INTERVAL '${dedupeInterval}'
-                )
-                RETURNING id;
-            `;
-            const result = await pool.query(insertQuery, [
-                userId, type, title, body, JSON.stringify(data), data.dedupe_key
-            ]);
-            
-            if (result.rows.length === 0) {
-                // Was not inserted because a duplicate already exists in the time window
-                return;
-            }
-            insertedId = result.rows[0].id;
-        } else {
-            // Standard unconditional insert
-            const result = await pool.query(
-                `INSERT INTO notifications (user_id, type, title, body, data)
-                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-                [userId, type, title, body, JSON.stringify(data)]
-            );
-            insertedId = result.rows[0].id;
+        // INSERT only if no matching dedupe_key exists within the interval.
+        // This is race-condition-proof even with PM2 cluster mode.
+        const insertQuery = `
+            INSERT INTO notifications (user_id, type, title, body, data)
+            SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
+            WHERE NOT EXISTS (
+                SELECT 1 FROM notifications
+                WHERE user_id = $1::uuid 
+                  AND data->>'dedupe_key' = $6::text
+                  AND created_at > NOW() - INTERVAL '${dedupeInterval}'
+            )
+            RETURNING id;
+        `;
+        const result = await pool.query(insertQuery, [
+            userId, type, title, body, JSON.stringify(notifData), dedupeKey
+        ]);
+
+        if (result.rows.length === 0) {
+            // Duplicate within the interval — skip silently
+            return;
         }
 
         // Send FCM push only if successfully inserted (wasn't deduped)
-        if (insertedId) {
-            const tokenRes = await pool.query(
-                'SELECT fcm_token FROM users WHERE id = $1',
-                [userId]
-            );
-            const fcmToken = tokenRes.rows[0]?.fcm_token;
-            if (fcmToken) {
-                const stringData: Record<string, string> = {};
-                for (const [k, v] of Object.entries(data)) {
-                    stringData[k] = String(v);
-                }
-                stringData['type'] = type;
-                await sendPush(fcmToken, title, body, stringData);
+        const tokenRes = await pool.query(
+            'SELECT fcm_token FROM users WHERE id = $1',
+            [userId]
+        );
+        const fcmToken = tokenRes.rows[0]?.fcm_token;
+        if (fcmToken) {
+            const stringData: Record<string, string> = {};
+            for (const [k, v] of Object.entries(notifData)) {
+                stringData[k] = String(v);
             }
+            stringData['type'] = type;
+            await sendPush(fcmToken, title, body, stringData);
         }
     } catch (error) {
         console.error('createAndPush error:', error);
@@ -131,17 +125,9 @@ export const notifyUniversityUsers = async (
 
         for (const user of usersRes.rows) {
             const notifData = dedupeKey ? { ...data, dedupe_key: dedupeKey } : data;
-            
-            // Due to the new Atomic Deduplication in createAndPush, we no longer need a 
-            // separate, race-condition-vulnerable SELECT query here!
-            await createAndPush(
-                user.id, 
-                type, 
-                title, 
-                body, 
-                notifData, 
-                dedupeKey ? '24 hours' : undefined
-            );
+            // Broadcast notifications use a 24-hour dedup window to prevent
+            // the same "restaurant open" / "closing soon" firing repeatedly.
+            await createAndPush(user.id, type, title, body, notifData, '24 hours');
         }
     } catch (error) {
         console.error('notifyUniversityUsers error:', error);
