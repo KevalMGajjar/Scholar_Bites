@@ -106,5 +106,24 @@ export const startNotificationScheduler = () => {
         }
     });
 
+    // ─── Auto-Delete Stale Notifications (30+ days old) ───
+    // Runs daily at 03:00 AM server time to purge expired notifications.
+    // Uses a batch DELETE with a cap to avoid long-running transactions.
+    cron.schedule('0 3 * * *', async () => {
+        try {
+            const RETENTION_DAYS = 30;
+            const result = await pool.query(
+                `DELETE FROM notifications
+                 WHERE created_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
+            );
+            const deleted = result.rowCount ?? 0;
+            if (deleted > 0) {
+                console.log(`[Scheduler] 🗑️  Purged ${deleted} stale notification(s) older than ${RETENTION_DAYS} days.`);
+            }
+        } catch (error) {
+            console.error('[Scheduler] Stale notification cleanup error:', error);
+        }
+    });
+
     console.log('[Scheduler] Notification scheduler started (IST timezone).');
 };

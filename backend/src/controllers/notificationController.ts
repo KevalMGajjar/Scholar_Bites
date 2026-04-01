@@ -266,9 +266,12 @@ export const registerFcmToken = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// ─── Trigger: Item becomes available ───
+// ─── Trigger: Favorited item becomes available ───
+// Only notifies users who have actually favorited this item
+// (via the user_favorites table synced from the Flutter app).
 export const triggerItemAvailable = async (itemId: string, itemName: string) => {
     try {
+        // 1. Resolve the item name if not provided
         const itemRes = await pool.query(
             `SELECT mi.id, mi.name, r.university_id 
              FROM menu_items mi 
@@ -278,17 +281,35 @@ export const triggerItemAvailable = async (itemId: string, itemName: string) => 
         );
         if (itemRes.rows.length === 0) return;
 
-        const { university_id } = itemRes.rows[0];
         const name = itemName || itemRes.rows[0].name;
 
-        await notifyUniversityUsers(
-            university_id,
-            NOTIF_TYPES.ITEM_AVAILABLE,
-            NOTIF_COPY.item_available.title,
-            NOTIF_COPY.item_available.body(name),
-            { item_id: itemId, item_name: name },
-            `item_available_${itemId}`
+        // 2. Find all users who favorited this specific item
+        const favUsersRes = await pool.query(
+            `SELECT uf.user_id, u.fcm_token
+             FROM user_favorites uf
+             JOIN users u ON uf.user_id = u.id
+             WHERE uf.menu_item_id = $1`,
+            [itemId]
         );
+
+        if (favUsersRes.rows.length === 0) {
+            console.log(`[Notif] Item "${name}" became available but no users have favorited it — skipping.`);
+            return;
+        }
+
+        console.log(`[Notif] Item "${name}" is back — notifying ${favUsersRes.rows.length} fan(s).`);
+
+        // 3. Send targeted notification to each user who favorited the item
+        for (const user of favUsersRes.rows) {
+            await createAndPush(
+                user.user_id,
+                NOTIF_TYPES.ITEM_AVAILABLE,
+                NOTIF_COPY.item_available.title,
+                NOTIF_COPY.item_available.body(name),
+                { item_id: itemId, item_name: name },
+                '24 hours'  // dedupe interval — don't re-notify within 24h
+            );
+        }
     } catch (error) {
         console.error('triggerItemAvailable error:', error);
     }

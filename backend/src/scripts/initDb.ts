@@ -207,6 +207,21 @@ const createTablesQuery = `
 
   -- Migration: Add server-side OTP attempt tracking
   ALTER TABLE staff_login_otps ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 0;
+
+  -- 13. User Favorites Table (synced from Flutter app for targeted notifications)
+  CREATE TABLE IF NOT EXISTS user_favorites (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    menu_item_id UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, menu_item_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_fav_item ON user_favorites(menu_item_id);
+
+  -- Migration: Add restaurant_id to menu_items if missing
+  ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE;
+
+  -- Index for stale notification cleanup
+  CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at);
 `;
 
 const initDb = async () => {

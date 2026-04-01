@@ -14,6 +14,7 @@ import adminRoutes from './routes/adminRoutes';
 import walletRoutes from './routes/walletRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import superAdminRoutes from './routes/superAdminRoutes';
+import userRoutes from './routes/userRoutes';
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/user', userRoutes);
 
 app.get('/api', (req, res) => {
     res.send('University Canteen API is running');

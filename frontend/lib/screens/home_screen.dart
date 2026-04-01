@@ -34,6 +34,7 @@ import 'cart_screen.dart';
 import 'profile_screen.dart';
 import 'favorites_screen.dart';
 import 'notifications_screen.dart';
+import '../models/favorites_model.dart';
 import '../services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -75,6 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchHomeData();
     _startAutoScroll();
     _checkActiveGroup();
+
+    // Sync favorites with backend (fire-and-forget)
+    // This ensures the server knows which items the user likes,
+    // so targeted item_available notifications can be sent.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<FavoritesProvider>(context, listen: false).syncWithBackend();
+    });
   }
 
   /// Check if user is stuck in an active locked group and redirect
