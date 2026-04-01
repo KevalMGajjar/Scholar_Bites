@@ -44,11 +44,11 @@ export const createAndPush = async (
         if (data.dedupe_key && dedupeInterval) {
             const insertQuery = `
                 INSERT INTO notifications (user_id, type, title, body, data)
-                SELECT $1, $2, $3, $4, $5
+                SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
                 WHERE NOT EXISTS (
                     SELECT 1 FROM notifications
-                    WHERE user_id = $1 
-                      AND data->>'dedupe_key' = $6
+                    WHERE user_id = $1::uuid 
+                      AND data->>'dedupe_key' = $6::text
                       AND created_at > NOW() - INTERVAL '${dedupeInterval}'
                 )
                 RETURNING id;
