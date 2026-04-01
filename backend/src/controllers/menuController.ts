@@ -129,37 +129,72 @@ export const updateStock = async (req: Request, res: Response) => {
     const { stock_quantity, is_available } = req.body; // allow updating availability too
 
     try {
-        // Should verify if item belongs to staff's university? 
-        // Ideally yes, but for MVP just update.
+        // 1. Fetch current state so we can detect transitions
+        const currentRes = await pool.query(
+            'SELECT stock_quantity, is_available, name FROM menu_items WHERE id = $1',
+            [id]
+        );
+        if (currentRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Item not found' });
+        }
+        const current = currentRes.rows[0];
+        const wasAvailable = current.is_available;
+        const hadStock = current.stock_quantity > 0;
 
-        // Construct dynamic query
-        let updates = [];
-        let params = [];
+        // 2. Build the update query dynamically
+        let updates: string[] = [];
+        let params: any[] = [];
         let idx = 1;
+
+        const newStockQty = stock_quantity !== undefined ? Number(stock_quantity) : current.stock_quantity;
 
         if (stock_quantity !== undefined) {
             updates.push(`stock_quantity = $${idx++}`);
-            params.push(stock_quantity);
+            params.push(newStockQty);
         }
+
+        // Determine final is_available value:
+        // - If explicitly provided, use it
+        // - If stock is being set to 0, auto-disable
+        // - If stock is being raised from 0, auto-enable
+        let finalIsAvailable: boolean | undefined;
         if (is_available !== undefined) {
+            finalIsAvailable = is_available === true || is_available === 'true';
+        } else if (stock_quantity !== undefined) {
+            if (newStockQty <= 0 && current.is_available) {
+                // Auto-disable: stock just hit 0
+                finalIsAvailable = false;
+            } else if (newStockQty > 0 && !current.is_available && !hadStock) {
+                // Auto-enable: stock was 0 and is now being replenished
+                finalIsAvailable = true;
+            }
+        }
+
+        if (finalIsAvailable !== undefined) {
             updates.push(`is_available = $${idx++}`);
-            params.push(is_available);
+            params.push(finalIsAvailable);
         }
 
         if (updates.length === 0) return res.sendStatus(400);
 
         params.push(id);
         const query = `UPDATE menu_items SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
-
         const result = await pool.query(query, params);
 
-        if (result.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
-
-        // Trigger notification if item just became available
         const updatedItem = result.rows[0];
-        if (is_available === true || is_available === 'true') {
-            // Fire async, don't block response
+
+        // 3. Trigger "item available" notification if item just transitioned to available
+        const isNowAvailable = updatedItem.is_available && updatedItem.stock_quantity > 0;
+        const wasUnavailable = !wasAvailable || !hadStock;
+
+        if (isNowAvailable && wasUnavailable) {
+            console.log(`[Menu] 📦 "${updatedItem.name}" restocked → triggering favorite notifications`);
             triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
+        }
+
+        // Log auto-disable
+        if (finalIsAvailable === false && current.is_available) {
+            console.log(`[Menu] 📦 Auto-disabled "${updatedItem.name}" (stock set to ${newStockQty})`);
         }
 
         res.json(updatedItem);
@@ -179,12 +214,17 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         // ─── IDOR: verify menu item belongs to staff's university ───
         const user = (req as any).user;
         const ownerCheck = await pool.query(
-            `SELECT r.university_id FROM menu_items mi JOIN restaurants r ON mi.restaurant_id = r.id WHERE mi.id = $1`, [id]
+            `SELECT mi.stock_quantity, mi.is_available, mi.name, r.university_id
+             FROM menu_items mi JOIN restaurants r ON mi.restaurant_id = r.id WHERE mi.id = $1`, [id]
         );
         if (ownerCheck.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
         if (user?.university_id && ownerCheck.rows[0].university_id !== user.university_id) {
             return res.status(403).json({ message: 'Forbidden' });
         }
+
+        const current = ownerCheck.rows[0];
+        const wasAvailable = current.is_available;
+        const hadStock = current.stock_quantity > 0;
 
         if (req.file) {
             const ext = req.file.mimetype.split('/')[1] || 'jpg';
@@ -202,9 +242,23 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         if (category !== undefined) { updates.push(`category = $${idx++}`); params.push(category); }
         if (image_url !== undefined) { updates.push(`image_url = $${idx++}`); params.push(image_url); }
         if (nutritional_info !== undefined) { updates.push(`nutritional_info = $${idx++}`); params.push(typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info); }
-        if (stock_quantity !== undefined) { updates.push(`stock_quantity = $${idx++}`); params.push(stock_quantity); }
-        if (is_available !== undefined) { updates.push(`is_available = $${idx++}`); params.push(is_available); }
         if (is_veg !== undefined) { updates.push(`is_veg = $${idx++}`); params.push(is_veg === 'true' || is_veg === true); }
+
+        // ─── Smart stock → availability sync ───
+        const newStockQty = stock_quantity !== undefined ? Number(stock_quantity) : current.stock_quantity;
+        if (stock_quantity !== undefined) { updates.push(`stock_quantity = $${idx++}`); params.push(newStockQty); }
+
+        let finalIsAvailable: boolean | undefined;
+        if (is_available !== undefined) {
+            finalIsAvailable = is_available === true || is_available === 'true';
+        } else if (stock_quantity !== undefined) {
+            if (newStockQty <= 0 && current.is_available) {
+                finalIsAvailable = false;
+            } else if (newStockQty > 0 && !current.is_available && !hadStock) {
+                finalIsAvailable = true;
+            }
+        }
+        if (finalIsAvailable !== undefined) { updates.push(`is_available = $${idx++}`); params.push(finalIsAvailable); }
 
         if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
 
@@ -217,8 +271,11 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         
         const updatedItem = result.rows[0];
 
-        // Trigger notification if item just became available
-        if (is_available === true || is_available === 'true') {
+        // Trigger notification if item just transitioned to available
+        const isNowAvailable = updatedItem.is_available && updatedItem.stock_quantity > 0;
+        const wasUnavailable = !wasAvailable || !hadStock;
+        if (isNowAvailable && wasUnavailable) {
+            console.log(`[Menu] 📦 "${updatedItem.name}" restocked → triggering favorite notifications`);
             triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
         }
 
