@@ -281,7 +281,7 @@ export const triggerItemAvailable = async (itemId: string, itemName: string) => 
         const itemRes = await pool.query(
             `SELECT mi.id,
                     mi.name,
-                    COALESCE(r.university_id, mi.university_id) AS university_id
+                    r.university_id
              FROM menu_items mi
              LEFT JOIN restaurants r ON mi.restaurant_id = r.id
              WHERE mi.id = $1`,

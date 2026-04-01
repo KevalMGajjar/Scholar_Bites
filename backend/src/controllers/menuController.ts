@@ -215,7 +215,7 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         // ─── IDOR check — LEFT JOIN so items without restaurant_id still work ───
         const ownerCheck = await pool.query(
             `SELECT mi.stock_quantity, mi.is_available, mi.name,
-                    COALESCE(r.university_id, mi.university_id) AS university_id
+                    r.university_id
              FROM menu_items mi
              LEFT JOIN restaurants r ON mi.restaurant_id = r.id
              WHERE mi.id = $1`, [id]
