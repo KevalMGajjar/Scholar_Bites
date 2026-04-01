@@ -10,6 +10,14 @@ import { notifyUniversityUsers, triggerRestaurantOpen, triggerRestaurantClosingS
 const IST_TIMEZONE = 'Asia/Kolkata';
 
 export const startNotificationScheduler = () => {
+    // ─── PM2 Cluster Worker Isolation ───
+    // Only run the scheduler on the primary instance (instance 0)
+    // to prevent duplicate API requests and DB race conditions
+    if (process.env.NODE_APP_INSTANCE !== undefined && process.env.NODE_APP_INSTANCE !== '0') {
+        console.log(`[Scheduler] Skipping on PM2 worker ${process.env.NODE_APP_INSTANCE} (cron only runs on master)`);
+        return;
+    }
+
     // Run exactly every minute to catch the precise 15-minute mark
     cron.schedule('* * * * *', async () => {
         try {

@@ -53,29 +53,61 @@ export const createAndPush = async (
     type: string,
     title: string,
     body: string,
-    data: Record<string, any> = {}
+    data: Record<string, any> = {},
+    dedupeInterval?: string // e.g. '24 hours'
 ) => {
     try {
-        // Insert notification row
-        await pool.query(
-            `INSERT INTO notifications (user_id, type, title, body, data)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [userId, type, title, body, JSON.stringify(data)]
-        );
-
-        // Send FCM push
-        const tokenRes = await pool.query(
-            'SELECT fcm_token FROM users WHERE id = $1',
-            [userId]
-        );
-        const fcmToken = tokenRes.rows[0]?.fcm_token;
-        if (fcmToken) {
-            const stringData: Record<string, string> = {};
-            for (const [k, v] of Object.entries(data)) {
-                stringData[k] = String(v);
+        let insertedId: string | null = null;
+        
+        // ─── Atomic Deduplication ───
+        // If a dedupe_key is provided along with an interval, we do an atomic
+        // INSERT ... SELECT ... WHERE NOT EXISTS to guarantee thread safety.
+        if (data.dedupe_key && dedupeInterval) {
+            const insertQuery = `
+                INSERT INTO notifications (user_id, type, title, body, data)
+                SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM notifications
+                    WHERE user_id = $1::uuid 
+                      AND data->>'dedupe_key' = $6::text
+                      AND created_at > NOW() - INTERVAL '${dedupeInterval}'
+                )
+                RETURNING id;
+            `;
+            const result = await pool.query(insertQuery, [
+                userId, type, title, body, JSON.stringify(data), data.dedupe_key
+            ]);
+            
+            if (result.rows.length === 0) {
+                // Was not inserted because a duplicate already exists in the time window
+                return;
             }
-            stringData['type'] = type;
-            await sendPush(fcmToken, title, body, stringData);
+            insertedId = result.rows[0].id;
+        } else {
+            // Standard unconditional insert
+            const result = await pool.query(
+                `INSERT INTO notifications (user_id, type, title, body, data)
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [userId, type, title, body, JSON.stringify(data)]
+            );
+            insertedId = result.rows[0].id;
+        }
+
+        // Send FCM push only if successfully inserted (wasn't deduped)
+        if (insertedId) {
+            const tokenRes = await pool.query(
+                'SELECT fcm_token FROM users WHERE id = $1',
+                [userId]
+            );
+            const fcmToken = tokenRes.rows[0]?.fcm_token;
+            if (fcmToken) {
+                const stringData: Record<string, string> = {};
+                for (const [k, v] of Object.entries(data)) {
+                    stringData[k] = String(v);
+                }
+                stringData['type'] = type;
+                await sendPush(fcmToken, title, body, stringData);
+            }
         }
     } catch (error) {
         console.error('createAndPush error:', error);
@@ -93,24 +125,23 @@ export const notifyUniversityUsers = async (
 ) => {
     try {
         const usersRes = await pool.query(
-            'SELECT id, fcm_token FROM users WHERE university_id = $1',
+            'SELECT id FROM users WHERE university_id = $1',
             [universityId]
         );
 
         for (const user of usersRes.rows) {
-            // Deduplicate: skip if user already has this notification today
-            if (dedupeKey) {
-                const existing = await pool.query(
-                    `SELECT id FROM notifications 
-                     WHERE user_id = $1 AND data->>'dedupe_key' = $2 
-                     AND created_at > NOW() - INTERVAL '24 hours'`,
-                    [user.id, dedupeKey]
-                );
-                if (existing.rows.length > 0) continue;
-            }
-
-            const notifData = { ...data, dedupe_key: dedupeKey || '' };
-            await createAndPush(user.id, type, title, body, notifData);
+            const notifData = dedupeKey ? { ...data, dedupe_key: dedupeKey } : data;
+            
+            // Due to the new Atomic Deduplication in createAndPush, we no longer need a 
+            // separate, race-condition-vulnerable SELECT query here!
+            await createAndPush(
+                user.id, 
+                type, 
+                title, 
+                body, 
+                notifData, 
+                dedupeKey ? '24 hours' : undefined
+            );
         }
     } catch (error) {
         console.error('notifyUniversityUsers error:', error);
