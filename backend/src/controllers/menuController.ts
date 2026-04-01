@@ -126,22 +126,25 @@ export const addMenuItem = async (req: AuthRequest, res: Response) => {
 
 export const updateStock = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { stock_quantity, is_available } = req.body; // allow updating availability too
+    const { stock_quantity, is_available } = req.body;
+
+    console.log(`[DEBUG updateStock] id=${id}, body=`, JSON.stringify(req.body));
 
     try {
-        // 1. Fetch current state so we can detect transitions
         const currentRes = await pool.query(
             'SELECT stock_quantity, is_available, name FROM menu_items WHERE id = $1',
             [id]
         );
         if (currentRes.rows.length === 0) {
+            console.log(`[DEBUG updateStock] ❌ Item ${id} not found`);
             return res.status(404).json({ message: 'Item not found' });
         }
         const current = currentRes.rows[0];
         const wasAvailable = current.is_available;
         const hadStock = current.stock_quantity > 0;
 
-        // 2. Build the update query dynamically
+        console.log(`[DEBUG updateStock] Current state: name="${current.name}", is_available=${wasAvailable}, stock=${current.stock_quantity}`);
+
         let updates: string[] = [];
         let params: any[] = [];
         let idx = 1;
@@ -153,19 +156,13 @@ export const updateStock = async (req: Request, res: Response) => {
             params.push(newStockQty);
         }
 
-        // Determine final is_available value:
-        // - If explicitly provided, use it
-        // - If stock is being set to 0, auto-disable
-        // - If stock is being raised from 0, auto-enable
         let finalIsAvailable: boolean | undefined;
         if (is_available !== undefined) {
             finalIsAvailable = is_available === true || is_available === 'true';
         } else if (stock_quantity !== undefined) {
             if (newStockQty <= 0 && current.is_available) {
-                // Auto-disable: stock just hit 0
                 finalIsAvailable = false;
             } else if (newStockQty > 0 && !current.is_available && !hadStock) {
-                // Auto-enable: stock was 0 and is now being replenished
                 finalIsAvailable = true;
             }
         }
@@ -180,26 +177,26 @@ export const updateStock = async (req: Request, res: Response) => {
         params.push(id);
         const query = `UPDATE menu_items SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
         const result = await pool.query(query, params);
-
         const updatedItem = result.rows[0];
 
-        // 3. Trigger "item available" notification if item just transitioned to available
         const isNowAvailable = updatedItem.is_available && updatedItem.stock_quantity > 0;
         const wasUnavailable = !wasAvailable || !hadStock;
 
+        console.log(`[DEBUG updateStock] After update: is_available=${updatedItem.is_available}, stock=${updatedItem.stock_quantity}`);
+        console.log(`[DEBUG updateStock] Transition check: isNowAvailable=${isNowAvailable}, wasUnavailable=${wasUnavailable}, willNotify=${isNowAvailable && wasUnavailable}`);
+
         if (isNowAvailable && wasUnavailable) {
-            console.log(`[Menu] 📦 "${updatedItem.name}" restocked → triggering favorite notifications`);
-            triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
+            console.log(`[Menu] 📦 "${updatedItem.name}" restocked → triggering item_available notification`);
+            triggerItemAvailable(id as string, updatedItem.name).catch((err) => console.error('[Menu] triggerItemAvailable failed:', err));
         }
 
-        // Log auto-disable
         if (finalIsAvailable === false && current.is_available) {
             console.log(`[Menu] 📦 Auto-disabled "${updatedItem.name}" (stock set to ${newStockQty})`);
         }
 
         res.json(updatedItem);
     } catch (error) {
-        console.error(error);
+        console.error('[updateStock] error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -210,21 +207,33 @@ export const updateMenuItem = async (req: Request, res: Response) => {
     const { name, description, price, category, nutritional_info, stock_quantity, is_available, is_veg } = req.body;
     let { image_url } = req.body;
 
+    console.log(`[DEBUG updateMenuItem] id=${id}, body keys=[${Object.keys(req.body).join(', ')}], is_available=${is_available}, stock_quantity=${stock_quantity}`);
+
     try {
-        // ─── IDOR: verify menu item belongs to staff's university ───
         const user = (req as any).user;
+
+        // ─── IDOR check — LEFT JOIN so items without restaurant_id still work ───
         const ownerCheck = await pool.query(
-            `SELECT mi.stock_quantity, mi.is_available, mi.name, r.university_id
-             FROM menu_items mi JOIN restaurants r ON mi.restaurant_id = r.id WHERE mi.id = $1`, [id]
+            `SELECT mi.stock_quantity, mi.is_available, mi.name,
+                    COALESCE(r.university_id, mi.university_id) AS university_id
+             FROM menu_items mi
+             LEFT JOIN restaurants r ON mi.restaurant_id = r.id
+             WHERE mi.id = $1`, [id]
         );
-        if (ownerCheck.rows.length === 0) return res.status(404).json({ message: 'Menu item not found' });
+        if (ownerCheck.rows.length === 0) {
+            console.log(`[DEBUG updateMenuItem] ❌ Item ${id} not found in DB`);
+            return res.status(404).json({ message: 'Menu item not found' });
+        }
         if (user?.university_id && ownerCheck.rows[0].university_id !== user.university_id) {
+            console.log(`[DEBUG updateMenuItem] ❌ IDOR block: user uni=${user.university_id}, item uni=${ownerCheck.rows[0].university_id}`);
             return res.status(403).json({ message: 'Forbidden' });
         }
 
         const current = ownerCheck.rows[0];
         const wasAvailable = current.is_available;
         const hadStock = current.stock_quantity > 0;
+
+        console.log(`[DEBUG updateMenuItem] Current state: name="${current.name}", is_available=${wasAvailable}, stock=${current.stock_quantity}`);
 
         if (req.file) {
             const ext = req.file.mimetype.split('/')[1] || 'jpg';
@@ -260,6 +269,8 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         }
         if (finalIsAvailable !== undefined) { updates.push(`is_available = $${idx++}`); params.push(finalIsAvailable); }
 
+        console.log(`[DEBUG updateMenuItem] finalIsAvailable=${finalIsAvailable}, updates=[${updates.join(', ')}]`);
+
         if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
 
         params.push(id);
@@ -271,18 +282,24 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         
         const updatedItem = result.rows[0];
 
-        // Trigger notification if item just transitioned to available
+        // ─── Notification transition detection ───
         const isNowAvailable = updatedItem.is_available && updatedItem.stock_quantity > 0;
         const wasUnavailable = !wasAvailable || !hadStock;
+
+        console.log(`[DEBUG updateMenuItem] After update: is_available=${updatedItem.is_available}, stock=${updatedItem.stock_quantity}`);
+        console.log(`[DEBUG updateMenuItem] Transition: isNowAvailable=${isNowAvailable}, wasUnavailable=${wasUnavailable}, willNotify=${isNowAvailable && wasUnavailable}`);
+
         if (isNowAvailable && wasUnavailable) {
-            console.log(`[Menu] 📦 "${updatedItem.name}" restocked → triggering favorite notifications`);
-            triggerItemAvailable(id as string, updatedItem.name).catch(() => {});
+            console.log(`[Menu] 🔔 "${updatedItem.name}" became available → calling triggerItemAvailable`);
+            triggerItemAvailable(id as string, updatedItem.name).catch((err) => console.error('[Menu] triggerItemAvailable failed:', err));
+        } else {
+            console.log(`[DEBUG updateMenuItem] ⏭️ Notification skipped (no unavailable→available transition)`);
         }
 
         auditLog({ userId: user?.id, action: 'MENU_UPDATED', resource: `menu:${id}`, ip: getRequestIp(req) });
         res.json(updatedItem);
     } catch (error) {
-        console.error(error);
+        console.error('[updateMenuItem] error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

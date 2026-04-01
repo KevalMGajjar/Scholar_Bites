@@ -58,17 +58,15 @@ export const createAndPush = async (
     data: Record<string, any> = {},
     dedupeInterval: string = '5 minutes' // default: suppress exact-same notification for 5 min
 ) => {
+    console.log(`[DEBUG createAndPush] userId=${userId}, type=${type}, title="${title}"`);
     try {
-        // Auto-generate dedupe_key if not explicitly provided.
-        // Uses type + any identifying field (order_id, restaurant_id, item_id) as the key.
         const dedupeKey = data.dedupe_key
             || `${type}_${data.order_id || data.restaurant_id || data.item_id || userId}`;
 
         const notifData = { ...data, dedupe_key: dedupeKey };
 
-        // ─── Atomic Deduplication ───
-        // INSERT only if no matching dedupe_key exists within the interval.
-        // This is race-condition-proof even with PM2 cluster mode.
+        console.log(`[DEBUG createAndPush] dedupeKey="${dedupeKey}", interval=${dedupeInterval}`);
+
         const insertQuery = `
             INSERT INTO notifications (user_id, type, title, body, data)
             SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
@@ -85,9 +83,11 @@ export const createAndPush = async (
         ]);
 
         if (result.rows.length === 0) {
-            // Duplicate within the interval — skip silently
+            console.log(`[DEBUG createAndPush] ⏭️ Deduped — same key "${dedupeKey}" sent within ${dedupeInterval}`);
             return;
         }
+
+        console.log(`[DEBUG createAndPush] ✅ Notification inserted id=${result.rows[0].id}`);
 
         // Send FCM push only if successfully inserted (wasn't deduped)
         const tokenRes = await pool.query(
@@ -96,15 +96,19 @@ export const createAndPush = async (
         );
         const fcmToken = tokenRes.rows[0]?.fcm_token;
         if (fcmToken) {
+            console.log(`[DEBUG createAndPush] 📱 Sending FCM push to token=${fcmToken.substring(0, 20)}...`);
             const stringData: Record<string, string> = {};
             for (const [k, v] of Object.entries(notifData)) {
                 stringData[k] = String(v);
             }
             stringData['type'] = type;
             await sendPush(fcmToken, title, body, stringData);
+            console.log(`[DEBUG createAndPush] ✅ FCM push sent`);
+        } else {
+            console.log(`[DEBUG createAndPush] ⚠️ No FCM token for user ${userId} — notification saved in DB only`);
         }
     } catch (error) {
-        console.error('createAndPush error:', error);
+        console.error('[createAndPush] error:', error);
     }
 };
 
