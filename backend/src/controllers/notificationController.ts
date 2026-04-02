@@ -323,7 +323,7 @@ export const triggerItemAvailable = async (itemId: string, itemName: string) => 
                     NOTIF_COPY.item_available.title,
                     NOTIF_COPY.item_available.body(name),
                     { item_id: itemId, item_name: name },
-                    '24 hours'
+                    '30 minutes'
                 );
             }
         } else if (university_id) {
