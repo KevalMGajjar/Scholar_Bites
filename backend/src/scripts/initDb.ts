@@ -146,7 +146,7 @@ const createTablesQuery = `
     price_at_time DECIMAL(10, 2) NOT NULL
   );
 
-  -- 9. Notifications Table
+  -- 9. Notifications Table (Personal 1-to-1)
   CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -158,6 +158,26 @@ const createTablesQuery = `
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
   CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
+
+  -- 9.5 Global Notifications Table (Mass Broadcasts O(1) storage)
+  CREATE TABLE IF NOT EXISTS global_notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    university_id UUID REFERENCES universities(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    data JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_global_notif_uni ON global_notifications(university_id, created_at DESC);
+
+  -- 9.6 Global Notification Reads (Tracks which users have read/dismissed broadcasts)
+  CREATE TABLE IF NOT EXISTS global_notification_reads (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    global_notification_id UUID REFERENCES global_notifications(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, global_notification_id)
+  );
 
   -- 10. Audit Logs Table (Security)
   CREATE TABLE IF NOT EXISTS audit_logs (

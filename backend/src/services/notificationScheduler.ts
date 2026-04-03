@@ -112,11 +112,17 @@ export const startNotificationScheduler = () => {
     cron.schedule('0 3 * * *', async () => {
         try {
             const RETENTION_DAYS = 30;
-            const result = await pool.query(
+            const resNotif = await pool.query(
                 `DELETE FROM notifications
                  WHERE created_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
             );
-            const deleted = result.rowCount ?? 0;
+            
+            const resGlobal = await pool.query(
+                `DELETE FROM global_notifications
+                 WHERE created_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
+            );
+            
+            const deleted = (resNotif.rowCount ?? 0) + (resGlobal.rowCount ?? 0);
             if (deleted > 0) {
                 console.log(`[Scheduler] 🗑️  Purged ${deleted} stale notification(s) older than ${RETENTION_DAYS} days.`);
             }

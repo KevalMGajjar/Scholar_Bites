@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
-import { sendPush } from '../config/firebaseAdmin';
+import { sendPush, sendPushToTopic, subscribeToTopic } from '../config/firebaseAdmin';
 
 // ─── Canonical Notification Type Constants ───
 // Keep these in sync with frontend filter types in notifications_screen.dart
@@ -113,8 +113,7 @@ export const createAndPush = async (
 };
 
 // ─── Bulk: Notify all users in a university ───
-// Deduplicates by FCM token so the same physical device only gets ONE push,
-// even if multiple user accounts share the same phone.
+// Now uses O(1) storage via global_notifications and O(1) Firebase Topic Broadcast!
 export const notifyUniversityUsers = async (
     universityId: string,
     type: string,
@@ -124,48 +123,38 @@ export const notifyUniversityUsers = async (
     dedupeKey?: string
 ) => {
     try {
-        const usersRes = await pool.query(
-            'SELECT id, fcm_token FROM users WHERE university_id = $1',
-            [universityId]
-        );
+        const dedupeKeyFinal = dedupeKey || `${type}_${data.restaurant_id || data.item_id || universityId}`;
+        const dbData = { ...data, dedupe_key: dedupeKeyFinal };
 
-        const pushedTokens = new Set<string>(); // Track tokens we've already sent to
+        // 1. O(1) Database Insertion into global_notifications
+        const insertQuery = `
+            INSERT INTO global_notifications (university_id, type, title, body, data)
+            SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
+            WHERE NOT EXISTS (
+                SELECT 1 FROM global_notifications
+                WHERE university_id = $1::uuid 
+                  AND data->>'dedupe_key' = $6::text
+                  AND created_at > NOW() - INTERVAL '24 hours'
+            )
+            RETURNING id;
+        `;
+        const result = await pool.query(insertQuery, [
+            universityId, type, title, body, JSON.stringify(dbData), dedupeKeyFinal
+        ]);
 
-        for (const user of usersRes.rows) {
-            const notifData = dedupeKey ? { ...data, dedupe_key: dedupeKey } : data;
-
-            // Always insert to DB (each user gets their own notification row)
-            const dedupeKeyFinal = notifData.dedupe_key
-                || `${type}_${data.restaurant_id || data.item_id || user.id}`;
-            const dbData = { ...notifData, dedupe_key: dedupeKeyFinal };
-
-            const insertQuery = `
-                INSERT INTO notifications (user_id, type, title, body, data)
-                SELECT $1::uuid, $2::varchar, $3::varchar, $4::text, $5::jsonb
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM notifications
-                    WHERE user_id = $1::uuid 
-                      AND data->>'dedupe_key' = $6::text
-                      AND created_at > NOW() - INTERVAL '24 hours'
-                )
-                RETURNING id;
-            `;
-            const result = await pool.query(insertQuery, [
-                user.id, type, title, body, JSON.stringify(dbData), dedupeKeyFinal
-            ]);
-
-            // Only send FCM push if:
-            // 1. The DB row was actually inserted (not deduped)
-            // 2. We haven't already pushed to this FCM token (same device)
-            if (result.rows.length > 0 && user.fcm_token && !pushedTokens.has(user.fcm_token)) {
-                pushedTokens.add(user.fcm_token);
-                const stringData: Record<string, string> = {};
-                for (const [k, v] of Object.entries(dbData)) {
-                    stringData[k] = String(v);
-                }
-                stringData['type'] = type;
-                await sendPush(user.fcm_token, title, body, stringData);
+        // If the query returned a row, it wasn't deduped, so we blast the push!
+        if (result.rows.length > 0) {
+            const topicName = `university_${universityId}`;
+            const stringData: Record<string, string> = {};
+            for (const [k, v] of Object.entries(dbData)) {
+                stringData[k] = String(v);
             }
+            stringData['type'] = type;
+            
+            console.log(`[Notif] 📣 Broadcasting global notification to topic: ${topicName}`);
+            await sendPushToTopic(topicName, title, body, stringData);
+        } else {
+            console.log(`[Notif] ⏭️ Deduped global notification for ${universityId} with key ${dedupeKeyFinal}`);
         }
     } catch (error) {
         console.error('notifyUniversityUsers error:', error);
@@ -180,28 +169,39 @@ export const getNotifications = async (req: AuthRequest, res: Response) => {
     const offset = (page - 1) * limit;
 
     try {
-        const result = await pool.query(
-            `SELECT id, type, title, body, data, is_read, created_at
-             FROM notifications
-             WHERE user_id = $1
-             ORDER BY created_at DESC
-             LIMIT $2 OFFSET $3`,
-            [userId, limit, offset]
-        );
+        const result = await pool.query(`
+            SELECT id, type, title, body, data, is_read, created_at
+            FROM notifications
+            WHERE user_id = $1
+            
+            UNION ALL
+            
+            SELECT g.id, g.type, g.title, g.body, g.data, 
+                   CASE WHEN r.user_id IS NOT NULL THEN true ELSE false END as is_read,
+                   g.created_at
+            FROM global_notifications g
+            JOIN users u ON u.university_id = g.university_id AND u.id = $1
+            LEFT JOIN global_notification_reads r ON r.global_notification_id = g.id AND r.user_id = $1
+            
+            ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3
+        `, [userId, limit, offset]);
 
-        const countRes = await pool.query(
-            'SELECT COUNT(*) FROM notifications WHERE user_id = $1',
-            [userId]
-        );
+        const countRes = await pool.query(`
+            SELECT 
+                (SELECT COUNT(*) FROM notifications WHERE user_id = $1) +
+                (SELECT COUNT(*) FROM global_notifications g JOIN users u ON u.university_id = g.university_id WHERE u.id = $1)
+            AS total
+        `, [userId]);
 
         res.json({
             notifications: result.rows,
-            total: parseInt(countRes.rows[0].count),
+            total: parseInt(countRes.rows[0].total),
             page,
             limit,
         });
     } catch (error) {
-        console.error(error);
+        console.error('getNotifications error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -211,12 +211,18 @@ export const getUnreadCount = async (req: AuthRequest, res: Response) => {
     const userId = req.user.id;
 
     try {
-        const result = await pool.query(
-            'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false',
-            [userId]
-        );
-        res.json({ count: parseInt(result.rows[0].count) });
+        const result = await pool.query(`
+            SELECT 
+                (SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false) + 
+                (SELECT COUNT(*) FROM global_notifications g
+                 JOIN users u ON u.university_id = g.university_id AND u.id = $1
+                 LEFT JOIN global_notification_reads r ON r.global_notification_id = g.id AND r.user_id = $1
+                 WHERE r.user_id IS NULL) AS total_unread
+        `, [userId]);
+        
+        res.json({ count: parseInt(result.rows[0].total_unread) });
     } catch (error) {
+        console.error('getUnreadCount error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -227,12 +233,21 @@ export const markAsRead = async (req: AuthRequest, res: Response) => {
     const userId = req.user.id;
 
     try {
-        await pool.query(
-            'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2',
+        const personalRes = await pool.query(
+            'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2 RETURNING id',
             [id, userId]
         );
+        
+        // If it wasn't a personal notification, it must be global
+        if (personalRes.rows.length === 0) {
+            await pool.query(
+                'INSERT INTO global_notification_reads (user_id, global_notification_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [userId, id]
+            );
+        }
         res.json({ message: 'Marked as read' });
     } catch (error) {
+        console.error('markAsRead error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -246,8 +261,18 @@ export const markAllAsRead = async (req: AuthRequest, res: Response) => {
             'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
             [userId]
         );
+        
+        await pool.query(`
+            INSERT INTO global_notification_reads (user_id, global_notification_id)
+            SELECT $1, g.id
+            FROM global_notifications g
+            JOIN users u ON u.university_id = g.university_id AND u.id = $1
+            ON CONFLICT DO NOTHING
+        `, [userId]);
+        
         res.json({ message: 'All marked as read' });
     } catch (error) {
+        console.error('markAllAsRead error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -264,8 +289,17 @@ export const registerFcmToken = async (req: AuthRequest, res: Response) => {
             'UPDATE users SET fcm_token = $1 WHERE id = $2',
             [fcm_token, userId]
         );
+        
+        // Auto-subscribe the device to the user's university topic for O(1) global broadcasts
+        const userRes = await pool.query('SELECT university_id FROM users WHERE id = $1', [userId]);
+        if (userRes.rows.length > 0) {
+            const uniId = userRes.rows[0].university_id;
+            await subscribeToTopic(fcm_token, `university_${uniId}`);
+        }
+        
         res.json({ message: 'Token registered' });
     } catch (error) {
+        console.error('registerFcmToken error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

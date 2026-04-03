@@ -79,4 +79,68 @@ export const sendPush = async (
     }
 };
 
+/**
+ * Broadcasts a push notification to a specific FCM Topic.
+ * Returns true on success, false on failure.
+ */
+export const sendPushToTopic = async (
+    topicName: string,
+    title: string,
+    body: string,
+    data?: Record<string, string>
+): Promise<boolean> => {
+    if (!admin.apps.length) {
+        console.warn('[FCM] Cannot send to topic — Firebase Admin not initialized');
+        return false;
+    }
+    if (!topicName) {
+        console.warn('[FCM] Cannot send to topic — no topic name provided');
+        return false;
+    }
+
+    try {
+        const messageId = await admin.messaging().send({
+            topic: topicName,
+            notification: { title, body },
+            data: data || {},
+            android: {
+                priority: 'high',
+                notification: {
+                    channelId: 'scholar_bites_notifications',
+                    priority: 'high',
+                    defaultSound: true,
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        alert: { title, body },
+                        sound: 'default',
+                    },
+                },
+            },
+        });
+        console.log(`[FCM] ✅ Topic Broadcast sent to "${topicName}" (messageId: ${messageId})`);
+        return true;
+    } catch (error: any) {
+        console.error(`[FCM] ❌ Topic Send failed:`, error.code, error.message);
+        return false;
+    }
+};
+
+/**
+ * Subscribes a specific FCM token to a Firebase topic.
+ */
+export const subscribeToTopic = async (fcmToken: string | string[], topicName: string): Promise<boolean> => {
+    if (!admin.apps.length) return false;
+    try {
+        await admin.messaging().subscribeToTopic(fcmToken, topicName);
+        console.log(`[FCM] ✅ Subscribed to "${topicName}" successfully.`);
+        return true;
+    } catch (error: any) {
+        console.error(`[FCM] ❌ Subscribe failed:`, error.message);
+        return false;
+    }
+};
+
 export default admin;
