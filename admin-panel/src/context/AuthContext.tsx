@@ -9,6 +9,8 @@ interface User {
   role: 'staff' | 'admin' | 'super_admin';
   university_id: string;
   university_name: string;
+  restaurant_id?: string | null;
+  restaurant_name?: string | null;
 }
 
 interface OtpPending {

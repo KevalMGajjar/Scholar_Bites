@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useRestaurant } from '../context/RestaurantContext';
 import api from '../services/api';
-import { Camera, Building2, MapPin, UserPlus, Shield, Trash2, Lock, Eye, EyeOff, Users, Mail, KeyRound, Send, Phone } from 'lucide-react';
+import { Camera, Building2, MapPin, UserPlus, Shield, Trash2, Lock, Eye, EyeOff, Users, Mail, KeyRound, Send, Phone, Store } from 'lucide-react';
 
 interface University {
   id: string;
@@ -17,11 +18,14 @@ interface StaffMember {
   name: string;
   email: string;
   role: string;
+  restaurant_id?: string | null;
+  restaurant_name?: string | null;
   created_at: string;
 }
 
 export default function Settings() {
   const { user } = useAuth();
+  const { restaurants } = useRestaurant();
 
   // ── University state ──
   const [university, setUniversity] = useState<University | null>(null);
@@ -40,7 +44,7 @@ export default function Settings() {
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
   const [showAddStaff, setShowAddStaff] = useState(false);
-  const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '', role: 'staff' });
+  const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '', role: 'staff', restaurant_id: '' });
   const [staffSaving, setStaffSaving] = useState(false);
   const [staffError, setStaffError] = useState('');
   const [staffSuccess, setStaffSuccess] = useState('');
@@ -96,7 +100,15 @@ export default function Settings() {
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setStaffSaving(true); setStaffError(''); setStaffSuccess('');
-    try { await api.post('/admin/staff', { ...newStaff, university_id: user?.university_id }); setStaffSuccess('Staff member added successfully!'); setNewStaff({ name: '', email: '', password: '', role: 'staff' }); setShowAddStaff(false); fetchStaff(); }
+    try {
+      const payload: any = { ...newStaff, university_id: user?.university_id };
+      if (newStaff.role !== 'staff') delete payload.restaurant_id;
+      await api.post('/admin/staff', payload);
+      setStaffSuccess('Staff member added successfully!');
+      setNewStaff({ name: '', email: '', password: '', role: 'staff', restaurant_id: '' });
+      setShowAddStaff(false);
+      fetchStaff();
+    }
     catch (err: any) { setStaffError(err.response?.data?.message || 'Failed to add staff'); }
     finally { setStaffSaving(false); }
   };
@@ -220,6 +232,21 @@ export default function Settings() {
                   <select value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })} className={`${inputClass} appearance-none`}>
                     <option value="staff" className="bg-[#0c0f18]">Staff</option><option value="admin" className="bg-[#0c0f18]">Admin</option>
                   </select></div>
+                {newStaff.role === 'staff' && (
+                  <div><label className={labelClass}><Store size={10} className="text-emerald-400" /> Assigned Restaurant</label>
+                    <select
+                      value={newStaff.restaurant_id}
+                      onChange={(e) => setNewStaff({ ...newStaff, restaurant_id: e.target.value })}
+                      required
+                      className={`${inputClass} appearance-none`}
+                    >
+                      <option value="" className="bg-[#0c0f18]">Select restaurant…</option>
+                      {restaurants.map((r) => (
+                        <option key={r.id} value={r.id} className="bg-[#0c0f18]">{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2.5 pt-2">
                 <button type="button" onClick={() => setShowAddStaff(false)} className="px-5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-slate-400 text-[12px] font-bold hover:bg-white/[0.06] transition-all btn-press">Cancel</button>
@@ -249,6 +276,11 @@ export default function Settings() {
                 <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold tracking-widest uppercase border ${ROLE_BADGES[s.role] || 'bg-white/[0.04] text-slate-400 border-white/[0.06]'}`}>
                   {s.role.replace('_', ' ')}
                 </span>
+                {s.restaurant_name && (
+                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-500/8 text-emerald-400 border border-emerald-500/12 flex items-center gap-1">
+                    <Store size={9} /> {s.restaurant_name}
+                  </span>
+                )}
                 <span className="text-slate-700 text-[10px] font-medium hidden md:block">
                   {new Date(s.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </span>

@@ -243,11 +243,12 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
     try {
         // Fetch OTP record with staff details
         const result = await pool.query(
-            `SELECT lo.*, s.id as sid, s.email, s.name, s.role, s.university_id,
-                    uni.name as university_name
+            `SELECT lo.*, s.id as sid, s.email, s.name, s.role, s.university_id, s.restaurant_id,
+                    uni.name as university_name, r.name as restaurant_name
              FROM staff_login_otps lo
              JOIN staff s ON lo.staff_id = s.id
              LEFT JOIN universities uni ON s.university_id = uni.id
+             LEFT JOIN restaurants r ON s.restaurant_id = r.id
              WHERE lo.id = $1`,
             [otp_session_id]
         );
@@ -305,7 +306,7 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
         // ─── OTP valid: mark used and issue JWT ───
         await pool.query("UPDATE staff_login_otps SET used = TRUE WHERE id = $1", [otp_session_id]);
 
-        const token = generateToken({ id: record.sid, email: record.email, role: record.role, university_id: record.university_id });
+        const token = generateToken({ id: record.sid, email: record.email, role: record.role, university_id: record.university_id, restaurant_id: record.restaurant_id || null });
         await saveActiveToken(record.sid, token, 'staff');
 
         auditLog({ userId: record.sid, action: 'LOGIN_OTP_VERIFIED', resource: `email:${record.email}`, ip });
@@ -319,6 +320,8 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
                 role: record.role,
                 university_id: record.university_id,
                 university_name: record.university_name,
+                restaurant_id: record.restaurant_id || null,
+                restaurant_name: record.restaurant_name || null,
             },
         });
     } catch (error: any) {
@@ -356,9 +359,10 @@ export const googleLogin = async (req: Request, res: Response) => {
 
         // Look up staff by email
         const result = await pool.query(
-            `SELECT s.*, uni.name as university_name
+            `SELECT s.*, uni.name as university_name, r.name as restaurant_name
              FROM staff s
              LEFT JOIN universities uni ON s.university_id = uni.id
+             LEFT JOIN restaurants r ON s.restaurant_id = r.id
              WHERE LOWER(s.email) = $1`,
             [googleEmail]
         );
@@ -381,7 +385,7 @@ export const googleLogin = async (req: Request, res: Response) => {
         }
 
         // ─── Google is 2FA by default — issue JWT directly ───
-        const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id });
+        const token = generateToken({ id: staff.id, email: staff.email, role: staff.role, university_id: staff.university_id, restaurant_id: staff.restaurant_id || null });
         await saveActiveToken(staff.id, token, 'staff');
 
         auditLog({ userId: staff.id, action: 'LOGIN_GOOGLE_SUCCESS', resource: `email:${googleEmail}`, ip });
@@ -395,6 +399,8 @@ export const googleLogin = async (req: Request, res: Response) => {
                 role: staff.role,
                 university_id: staff.university_id,
                 university_name: staff.university_name,
+                restaurant_id: staff.restaurant_id || null,
+                restaurant_name: staff.restaurant_name || null,
             },
         });
     } catch (error: any) {
@@ -408,7 +414,7 @@ export const googleLogin = async (req: Request, res: Response) => {
 
 // ─── Register Staff (Admin-only) ───
 export const registerStaff = async (req: Request, res: Response) => {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role, restaurant_id } = req.body;
     // Single-university mode: always assign to Ahmedabad University
     const university_id = req.body.university_id || AHMEDABAD_UNIVERSITY_ID;
     const caller = (req as any).user;
@@ -427,15 +433,20 @@ export const registerStaff = async (req: Request, res: Response) => {
         return res.status(403).json({ message: 'Only super admins can create admin accounts' });
     }
 
+    // Staff role requires restaurant assignment
+    if (role === 'staff' && !restaurant_id) {
+        return res.status(400).json({ message: 'Staff members must be assigned to a restaurant' });
+    }
+
     try {
         const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
         const result = await pool.query(
-            `INSERT INTO staff (email, password_hash, name, role, university_id)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, university_id`,
-            [email, hashedPassword, name, role, university_id]
+            `INSERT INTO staff (email, password_hash, name, role, university_id, restaurant_id)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, university_id, restaurant_id`,
+            [email, hashedPassword, name, role, university_id, restaurant_id || null]
         );
 
-        auditLog({ userId: caller?.id, action: 'STAFF_CREATED', resource: `staff:${result.rows[0].id}`, details: `role=${role}`, ip });
+        auditLog({ userId: caller?.id, action: 'STAFF_CREATED', resource: `staff:${result.rows[0].id}`, details: `role=${role}, restaurant=${restaurant_id || 'all'}`, ip });
         res.status(201).json(result.rows[0]);
     } catch (error: any) {
         if (error.code === '23505') {
@@ -592,7 +603,11 @@ export const getStaffByUniversity = async (req: Request, res: Response) => {
     const { university_id } = req.params;
     try {
         const result = await pool.query(
-            `SELECT id, name, email, role, created_at FROM staff WHERE university_id = $1 ORDER BY created_at DESC`,
+            `SELECT s.id, s.name, s.email, s.role, s.restaurant_id, s.created_at, r.name as restaurant_name
+             FROM staff s
+             LEFT JOIN restaurants r ON s.restaurant_id = r.id
+             WHERE s.university_id = $1
+             ORDER BY s.created_at DESC`,
             [university_id]
         );
         res.json(result.rows);

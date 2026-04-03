@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
-import { ChevronLeft, ChevronRight, RotateCcw, Clock, X, AlertTriangle, Search } from 'lucide-react';
+import { useRestaurant } from '../context/RestaurantContext';
+import RestaurantFilter from '../components/RestaurantFilter';
+import { ChevronLeft, ChevronRight, RotateCcw, Clock, X, AlertTriangle, Search, FileText } from 'lucide-react';
 
 interface OrderItem {
   item_name: string;
@@ -40,6 +42,7 @@ export default function OrderHistory() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const { selectedRestaurantId } = useRestaurant();
 
   // Refund request modal
   const [refundModalOrder, setRefundModalOrder] = useState<Order | null>(null);
@@ -65,6 +68,7 @@ export default function OrderHistory() {
       const params: Record<string, string> = { page: String(page), limit: String(PAGE_SIZE) };
       if (statusFilter) params.status = statusFilter;
       if (debouncedSearch) params.search = debouncedSearch;
+      if (selectedRestaurantId) params.restaurant_id = selectedRestaurantId;
       const res = await api.get('/admin/orders', { params });
       setOrders(res.data.orders);
       setTotal(res.data.total);
@@ -73,7 +77,7 @@ export default function OrderHistory() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, debouncedSearch]);
+  }, [page, statusFilter, debouncedSearch, selectedRestaurantId]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -136,6 +140,7 @@ export default function OrderHistory() {
             {hasActiveSearch && <span className="text-indigo-400 ml-1">matching "{debouncedSearch}"</span>}
           </p>
         </div>
+        <RestaurantFilter />
       </div>
 
       {/* ── Search + Filters Row ── */}
@@ -251,12 +256,34 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-6 py-4 text-slate-600 text-[12px] font-medium whitespace-nowrap">{formatDate(order.created_at)}</td>
                     <td className="px-6 py-4">
-                      {order.status === 'completed' && (
-                        <button onClick={() => { setRefundModalOrder(order); setRefundReason(''); }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[11px] font-bold hover:bg-red-500/15 transition-all opacity-0 group-hover:opacity-100 btn-press">
-                          <RotateCcw size={11} /> Request Refund
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await api.get(`/admin/orders/${order.id}/invoice`);
+                              const invoiceData = res.data;
+                              // Open invoice in a new window
+                              const w = window.open('', '_blank', 'width=800,height=1000');
+                              if (w) {
+                                w.document.write(generateInvoiceHtml(invoiceData));
+                                w.document.close();
+                              }
+                            } catch (err) {
+                              console.error('Failed to generate invoice:', err);
+                              setToast({ msg: 'Failed to generate invoice', type: 'error' });
+                            }
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/6 border border-indigo-500/12 text-indigo-400 text-[11px] font-bold hover:bg-indigo-500/15 transition-all btn-press"
+                        >
+                          <FileText size={11} /> Invoice
                         </button>
-                      )}
+                        {order.status === 'completed' && (
+                          <button onClick={() => { setRefundModalOrder(order); setRefundReason(''); }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[11px] font-bold hover:bg-red-500/15 transition-all btn-press">
+                            <RotateCcw size={11} /> Refund
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -347,4 +374,159 @@ export default function OrderHistory() {
       )}
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════
+// Professional Invoice HTML Generator
+// ═══════════════════════════════════════════════════════════
+
+function generateInvoiceHtml(data: any): string {
+  const date = new Date(data.created_at).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
+  const itemRows = (data.items || []).map((item: any) => `
+    <tr>
+      <td style="padding:12px 16px;border-bottom:1px solid #f0ebe5;font-size:14px;color:#4A0E13;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${item.is_veg ? '<span style="color:#22c55e;font-weight:700;">●</span>' : '<span style="color:#ef4444;font-weight:700;">●</span>'}
+          ${item.name}
+        </div>
+      </td>
+      <td style="padding:12px 16px;border-bottom:1px solid #f0ebe5;text-align:center;font-size:14px;color:#6b5c52;">${item.quantity}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #f0ebe5;text-align:right;font-size:14px;color:#6b5c52;">₹${item.unit_price.toFixed(2)}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #f0ebe5;text-align:right;font-size:14px;font-weight:700;color:#4A0E13;">₹${item.total.toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice ${data.invoice_number}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f7f3ee; padding: 40px; }
+    .invoice-container { max-width: 680px; margin: 0 auto; background: #FCF9F5; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 40px rgba(74,14,19,0.08); }
+    .header { background: linear-gradient(135deg, #8B1C28, #6B1420); padding: 40px; color: white; position: relative; overflow: hidden; }
+    .header::after { content: ''; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,0.04); }
+    .header-content { display: flex; justify-content: space-between; align-items: flex-start; }
+    .brand h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+    .brand p { font-size: 11px; opacity: 0.7; margin-top: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .invoice-badge { background: rgba(255,255,255,0.15); padding: 8px 16px; border-radius: 10px; text-align: right; backdrop-filter: blur(10px); }
+    .invoice-badge .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.6; }
+    .invoice-badge .number { font-size: 14px; font-weight: 700; margin-top: 2px; }
+    .body { padding: 36px 40px; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+    .meta-card { background: #f5efe8; border-radius: 12px; padding: 16px; }
+    .meta-card .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: #8B1C28; font-weight: 700; margin-bottom: 6px; }
+    .meta-card .value { font-size: 14px; color: #4A0E13; font-weight: 600; }
+    .meta-card .sub { font-size: 12px; color: #8a7d75; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    thead th { padding: 12px 16px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: #8B1C28; font-weight: 700; border-bottom: 2px solid #8B1C28; text-align: left; }
+    thead th:nth-child(2) { text-align: center; }
+    thead th:nth-child(3), thead th:nth-child(4) { text-align: right; }
+    .total-section { border-top: 2px solid #8B1C28; padding-top: 16px; margin-top: 8px; }
+    .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+    .total-row.final { font-size: 20px; font-weight: 800; color: #8B1C28; padding-top: 12px; margin-top: 8px; border-top: 1px solid #e8e0d8; }
+    .footer { background: #f5efe8; padding: 24px 40px; display: flex; justify-content: space-between; align-items: center; }
+    .footer .thanks { font-size: 14px; font-weight: 700; color: #8B1C28; }
+    .footer .legal { font-size: 10px; color: #a89d95; max-width: 280px; text-align: right; line-height: 1.5; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-completed { background: #dcfce7; color: #166534; }
+    .status-preparing { background: #e0e7ff; color: #3730a3; }
+    .status-ready { background: #d1fae5; color: #065f46; }
+    .status-cancelled { background: #fecaca; color: #991b1b; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    @media print {
+      body { padding: 0; background: white; }
+      .invoice-container { box-shadow: none; border-radius: 0; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div style="text-align:center;margin-bottom:20px;" class="no-print">
+    <button onclick="window.print()" style="padding:12px 32px;background:#8B1C28;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">
+      🖨 Print / Save as PDF
+    </button>
+  </div>
+
+  <div class="invoice-container">
+    <div class="header">
+      <div class="header-content">
+        <div class="brand">
+          <h2>Ahmedabad University Canteen</h2>
+          <p>${data.university || 'Ahmedabad University'}</p>
+        </div>
+        <div class="invoice-badge">
+          <div class="label">Tax Invoice</div>
+          <div class="number">${data.invoice_number}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="label">Customer</div>
+          <div class="value">${data.customer?.name || 'N/A'}</div>
+          <div class="sub">${data.customer?.phone || ''}</div>
+        </div>
+        <div class="meta-card">
+          <div class="label">Restaurant</div>
+          <div class="value">${data.restaurant?.name || 'N/A'}</div>
+          <div class="sub">Token: <strong>${data.order_token || 'N/A'}</strong></div>
+        </div>
+        <div class="meta-card">
+          <div class="label">Date & Time</div>
+          <div class="value">${date}</div>
+          <div class="sub">Order ID: ${data.order_id?.slice(0, 8).toUpperCase()}</div>
+        </div>
+        <div class="meta-card">
+          <div class="label">Payment</div>
+          <div class="value">${data.payment_method || 'Online'}</div>
+          <div class="sub">
+            <span class="status-badge status-${data.status || 'pending'}">${data.status || 'pending'}</span>
+          </div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows}
+        </tbody>
+      </table>
+
+      <div class="total-section">
+        <div class="total-row">
+          <span style="color:#6b5c52;">Subtotal</span>
+          <span style="font-weight:600;color:#4A0E13;">₹${data.subtotal?.toFixed(2) || '0.00'}</span>
+        </div>
+        <div class="total-row final">
+          <span>Total</span>
+          <span>₹${data.total?.toFixed(2) || '0.00'}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="thanks">Thank you for your order! 🎉</div>
+      <div class="legal">
+        This is a computer-generated invoice.<br/>
+        No signature is required.
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
 }

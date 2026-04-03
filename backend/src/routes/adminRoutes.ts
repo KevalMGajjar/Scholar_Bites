@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 import { staffLogin, verifyLoginOtp, googleLogin, registerStaff, requestPasswordOtp, verifyOtpAndChangePassword, getStaffByUniversity, deleteStaff } from '../controllers/authController';
-import { getAllOrders, getOrderDetails, requestRefund, getRefundRequests, approveRefund, rejectRefund, getPendingOrders, updateOrderStatus, scanOrderByToken } from '../controllers/orderController';
+import { getAllOrders, getOrderDetails, requestRefund, getRefundRequests, approveRefund, rejectRefund, getPendingOrders, updateOrderStatus, scanOrderByToken, generateInvoice } from '../controllers/orderController';
 import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant } from '../controllers/restaurantController';
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
 import { upload } from '../controllers/uploadController';
@@ -25,6 +25,7 @@ router.patch('/orders/:id/status', authorizeRole(['staff', 'admin', 'super_admin
 // ─── Orders (Admin only) ───
 router.get('/orders', authorizeRole(['admin', 'super_admin']), getAllOrders);
 router.get('/orders/:id', authorizeRole(['admin', 'super_admin']), getOrderDetails);
+router.get('/orders/:id/invoice', authorizeRole(['staff', 'admin', 'super_admin']), generateInvoice);
 
 // ─── Refund Workflow ───
 router.post('/orders/:id/request-refund', authorizeRole(['staff', 'admin', 'super_admin']), requestRefund);
@@ -44,7 +45,7 @@ router.patch('/menu/:id', authorizeRole(['admin', 'super_admin']), upload.single
 router.delete('/menu/:id', authorizeRole(['admin', 'super_admin']), deleteMenuItem);
 
 // ─── Statistics (Admin only) ───
-router.get('/statistics', authorizeRole(['admin', 'super_admin']), getStatistics);
+router.get('/statistics', authorizeRole(['staff', 'admin', 'super_admin']), getStatistics);
 
 // ─── Staff Management (Admin + Super Admin) ───
 router.get('/staff/:university_id', authorizeRole(['admin', 'super_admin']), getStaffByUniversity);

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { RestaurantProvider } from './context/RestaurantContext';
 import Login from './pages/Login';
 import LiveOrders from './pages/LiveOrders';
 import OrderHistory from './pages/OrderHistory';
@@ -30,16 +31,18 @@ function ProtectedLayout() {
 
   return (
     <SocketProvider>
-      <div className="flex min-h-screen bg-[#060810] text-slate-200 selection:bg-indigo-500/30 overflow-hidden relative">
-        {/* Ambient light effects – deep, subtle */}
-        <div className="fixed top-[-30%] left-[-15%] w-[60%] h-[60%] bg-indigo-500/[0.04] rounded-full blur-[160px] pointer-events-none" />
-        <div className="fixed bottom-[-30%] right-[-15%] w-[60%] h-[60%] bg-purple-500/[0.03] rounded-full blur-[160px] pointer-events-none" />
+      <RestaurantProvider>
+        <div className="flex min-h-screen bg-[#060810] text-slate-200 selection:bg-indigo-500/30 overflow-hidden relative">
+          {/* Ambient light effects – deep, subtle */}
+          <div className="fixed top-[-30%] left-[-15%] w-[60%] h-[60%] bg-indigo-500/[0.04] rounded-full blur-[160px] pointer-events-none" />
+          <div className="fixed bottom-[-30%] right-[-15%] w-[60%] h-[60%] bg-purple-500/[0.03] rounded-full blur-[160px] pointer-events-none" />
 
-        <Sidebar />
-        <main className="flex-1 ml-[260px] min-h-screen relative z-10 overflow-y-auto">
-          <Outlet />
-        </main>
-      </div>
+          <Sidebar />
+          <main className="flex-1 ml-[260px] min-h-screen relative z-10 overflow-y-auto">
+            <Outlet />
+          </main>
+        </div>
+      </RestaurantProvider>
     </SocketProvider>
   );
 }

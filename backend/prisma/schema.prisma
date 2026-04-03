@@ -43,6 +43,7 @@ model Restaurant {
   university    University  @relation(fields: [university_id], references: [id])
   menuItems     MenuItem[]
   orders        Order[]
+  staff         Staff[]
 
   @@unique([university_id, name])
   @@map("restaurants")
@@ -99,6 +100,7 @@ enum Role {
 model Staff {
   id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   university_id String   @db.Uuid
+  restaurant_id String?  @db.Uuid   // NULL = all restaurants (admin), Non-null = locked to one (staff)
   email         String?  @unique @db.VarChar(255)
   password_hash String?  @db.VarChar(255)
   phone         String?  @unique @db.VarChar(15)
@@ -107,7 +109,8 @@ model Staff {
   permissions   Json     @default("{}")
   created_at    DateTime @default(now()) @db.Timestamptz
 
-  university    University @relation(fields: [university_id], references: [id])
+  university    University  @relation(fields: [university_id], references: [id])
+  restaurant    Restaurant? @relation(fields: [restaurant_id], references: [id])
 
   @@map("staff")
 }
@@ -209,6 +212,9 @@ model Order {
   total_amount     Decimal     @db.Decimal(10, 2)
   payment_id       String      @unique @db.VarChar(255)
   order_token      String?     @db.VarChar(10)
+  qr_secret        String?     @db.VarChar(64)    // HMAC secret for rotating QR codes
+  qr_rotated_at    DateTime?   @db.Timestamptz
+  batch_id         String?     @db.VarChar(64)    // Groups sub-orders from a multi-restaurant checkout
   group_order_id   String?     @db.Uuid
   created_at       DateTime    @default(now()) @db.Timestamptz
   updated_at       DateTime    @default(now()) @updatedAt @db.Timestamptz

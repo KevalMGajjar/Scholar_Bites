@@ -39,6 +39,10 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       setIsConnected(true);
       // Join the staff room for this university
       newSocket.emit('join_room', `staff_${user.university_id}`);
+      // Also join restaurant-specific room if staff is assigned
+      if ((user as any).restaurant_id) {
+        newSocket.emit('join_room', `restaurant_${(user as any).restaurant_id}`);
+      }
     });
 
     newSocket.on('disconnect', () => setIsConnected(false));

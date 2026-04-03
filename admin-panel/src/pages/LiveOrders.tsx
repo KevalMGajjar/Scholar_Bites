@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
+import { useRestaurant } from '../context/RestaurantContext';
 import api from '../services/api';
 import QrScannerModal from '../components/QrScannerModal';
+import RestaurantFilter from '../components/RestaurantFilter';
 import { Bell, ChefHat, CheckCircle2, Search, QrCode, RefreshCcw, X, Clock, ShieldAlert } from 'lucide-react';
 
 interface OrderItem {
@@ -45,6 +47,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 export default function LiveOrders() {
   const { socket } = useSocket();
+  const { selectedRestaurantId } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tokenSearch, setTokenSearch] = useState('');
@@ -55,20 +58,24 @@ export default function LiveOrders() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await api.get('/admin/orders/pending');
+      const params: any = {};
+      if (selectedRestaurantId) params.restaurant_id = selectedRestaurantId;
+      const res = await api.get('/admin/orders/pending', { params });
       setOrders(res.data);
     } catch (err) {
       console.error('Failed to fetch orders', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedRestaurantId]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   useEffect(() => {
     if (!socket) return;
-    const handleNewOrder = (order: Order) => {
+    const handleNewOrder = (order: any) => {
+      // Filter by selected restaurant if applicable
+      if (selectedRestaurantId && order.restaurant_id && order.restaurant_id !== selectedRestaurantId) return;
       setOrders((prev) => {
         if (prev.find((o) => o.id === order.id)) return prev;
         return [order, ...prev];
@@ -76,7 +83,7 @@ export default function LiveOrders() {
     };
     socket.on('new_order', handleNewOrder);
     return () => { socket.off('new_order', handleNewOrder); };
-  }, [socket]);
+  }, [socket, selectedRestaurantId]);
 
   const updateStatus = async (orderId: string, currentStatus: string) => {
     const nextStatus = STATUS_FLOW[currentStatus];
@@ -124,6 +131,7 @@ export default function LiveOrders() {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
+          <RestaurantFilter />
           <div className="relative group">
             <input
               type="text"

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { useRestaurant } from '../context/RestaurantContext';
+import RestaurantFilter from '../components/RestaurantFilter';
 import { Package, IndianRupee, LineChart, Users, Trophy, Utensils, Clock, TrendingUp } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Filler, Legend,
@@ -25,12 +27,18 @@ interface Stats {
 export default function Statistics() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const { selectedRestaurantId } = useRestaurant();
 
   const fetchStats = useCallback(async () => {
-    try { const res = await api.get('/admin/statistics'); setStats(res.data); }
+    try {
+      const params: any = {};
+      if (selectedRestaurantId) params.restaurant_id = selectedRestaurantId;
+      const res = await api.get('/admin/statistics', { params });
+      setStats(res.data);
+    }
     catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedRestaurantId]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
@@ -43,9 +51,12 @@ export default function Statistics() {
   return (
     <div className="p-8 space-y-8 animate-fade-in">
       {/* ── Header ── */}
-      <div className="animate-fade-up">
-        <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Dashboard</h1>
-        <p className="text-slate-500 text-[14px] font-medium mt-1">Overview of your business performance</p>
+      <div className="animate-fade-up flex items-end justify-between">
+        <div>
+          <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Dashboard</h1>
+          <p className="text-slate-500 text-[14px] font-medium mt-1">Overview of your business performance</p>
+        </div>
+        <RestaurantFilter />
       </div>
 
       {/* ── Summary Cards ── */}

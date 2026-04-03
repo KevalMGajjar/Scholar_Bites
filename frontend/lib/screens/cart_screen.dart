@@ -14,6 +14,7 @@ import '../services/menu_service.dart';
 import '../models/restaurant_model.dart';
 import 'detail_screen.dart';
 import 'order_success_screen.dart';
+import 'multi_qr_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -35,6 +36,11 @@ class _CartScreenState extends State<CartScreen> {
   bool _isLoadingBalance = true;
   
   Map<String, dynamic> _availabilityMap = {};
+  
+  // Multi-restaurant order state
+  String? _batchId;
+  List<Map<String, dynamic>>? _subOrders;
+  bool get _isMultiRestaurantOrder => _batchId != null && _subOrders != null;
   
   // Restaurant closing-soon detection
   int? _minutesUntilClose; // null = no closing_time set
@@ -189,24 +195,44 @@ class _CartScreenState extends State<CartScreen> {
       final cart = Provider.of<CartProvider>(context, listen: false);
       final totalAmount = cart.totalAmount;
 
-      await OrderService().verifyPayment(orderId, paymentId, signature);
-      debugPrint('✅ Payment verification succeeded!');
+      if (_isMultiRestaurantOrder) {
+        // Batch payment verification for multi-restaurant orders
+        await OrderService().verifyBatchPayment(orderId, paymentId, signature, _batchId!);
+        debugPrint('✅ Batch payment verification succeeded!');
 
-      if (mounted) {
-        setState(() => _isProcessingPayment = false);
-        await cart.clear();
+        if (mounted) {
+          setState(() => _isProcessingPayment = false);
+          await cart.clear();
 
-        // Navigate to success screen
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => OrderSuccessScreen(
-              orderId: _currentDbOrderId ?? orderId,
-              amount: totalAmount,
-              orderToken: _currentOrderToken ?? '',
-              restaurantName: _currentRestaurantName,
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => MultiQrScreen(
+                batchId: _batchId!,
+                subOrders: _subOrders!,
+              ),
             ),
-          ),
-        );
+          );
+        }
+      } else {
+        // Single-restaurant order
+        await OrderService().verifyPayment(orderId, paymentId, signature);
+        debugPrint('✅ Payment verification succeeded!');
+
+        if (mounted) {
+          setState(() => _isProcessingPayment = false);
+          await cart.clear();
+
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => OrderSuccessScreen(
+                orderId: _currentDbOrderId ?? orderId,
+                amount: totalAmount,
+                orderToken: _currentOrderToken ?? '',
+                restaurantName: _currentRestaurantName,
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       debugPrint('❌ Payment verification FAILED: $e');
@@ -283,21 +309,41 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isProcessingPayment = true);
     
     try {
-      // Create order backend first to generate a valid Razorpay Order ID
-      debugPrint('🛒 Creating order with ${cart.items.length} items, universityId=$universityId');
-      final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+      // Detect multi-restaurant cart
+      final restaurantIds = cart.items.values
+          .map((item) => item.food.restaurantId)
+          .where((id) => id != null)
+          .toSet();
+      final isMultiRestaurant = restaurantIds.length > 1;
+
+      debugPrint('🛒 Creating order with ${cart.items.length} items, universityId=$universityId, restaurants=${restaurantIds.length}');
+      
+      Map<String, dynamic> orderResponse;
+      if (isMultiRestaurant) {
+        orderResponse = await OrderService().createMultiRestaurantOrder(cart.items.values.toList(), universityId);
+        _batchId = orderResponse['batch_id'];
+        _subOrders = (orderResponse['sub_orders'] as List).cast<Map<String, dynamic>>();
+        _currentOrderToken = null; // No single token for multi-order
+        _currentDbOrderId = null;
+        debugPrint('✅ Multi-restaurant order created: batch=$_batchId, subOrders=${_subOrders!.length}');
+      } else {
+        orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+        _currentOrderToken = orderResponse['order_token'];
+        _currentDbOrderId = orderResponse['id'];
+        _currentRestaurantName = orderResponse['restaurant_name'] ?? 'the counter';
+        _batchId = null;
+        _subOrders = null;
+      }
+
       final String orderId = orderResponse['payment_id']; // The Razorpay order ID
-      _currentOrderToken = orderResponse['order_token'];
-      _currentDbOrderId = orderResponse['id'];
-      _currentRestaurantName = orderResponse['restaurant_name'] ?? 'the counter';
       // Use exact paise from backend if available, otherwise calculate from amount
       final int amountInPaise;
       if (orderResponse['amount_in_paise'] != null) {
         amountInPaise = int.parse(orderResponse['amount_in_paise'].toString());
       } else {
-        amountInPaise = (double.parse(orderResponse['amount'].toString()) * 100).round();
+        amountInPaise = (double.parse(orderResponse['total_amount']?.toString() ?? orderResponse['amount'].toString()) * 100).round();
       }
-      debugPrint('✅ Order created: razorpayOrderId=$orderId, token=$_currentOrderToken, paise=$amountInPaise');
+      debugPrint('✅ Order created: razorpayOrderId=$orderId, paise=$amountInPaise');
 
       // Get user details for Razorpay prefill
       String userEmail = await TokenStorage.getUserEmail() ?? 'student@example.com';
@@ -367,10 +413,27 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isProcessingPayment = true);
 
     try {
-      // 1. Create the order on the backend (same as Razorpay flow)
-      debugPrint('💰 Creating order for wallet payment...');
-      final orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
-      final String dbOrderId = orderResponse['id'];
+      // Detect multi-restaurant cart
+      final restaurantIds = cart.items.values
+          .map((item) => item.food.restaurantId)
+          .where((id) => id != null)
+          .toSet();
+      final isMultiRestaurant = restaurantIds.length > 1;
+
+      Map<String, dynamic> orderResponse;
+      if (isMultiRestaurant) {
+        debugPrint('💰 Creating multi-restaurant order for wallet payment...');
+        orderResponse = await OrderService().createMultiRestaurantOrder(cart.items.values.toList(), universityId);
+        _batchId = orderResponse['batch_id'];
+        _subOrders = (orderResponse['sub_orders'] as List).cast<Map<String, dynamic>>();
+      } else {
+        debugPrint('💰 Creating order for wallet payment...');
+        orderResponse = await OrderService().createOrder(cart.items.values.toList(), universityId);
+        _batchId = null;
+        _subOrders = null;
+      }
+
+      final String dbOrderId = orderResponse['id'] ?? _subOrders?.first['id'] ?? '';
       final String orderToken = orderResponse['order_token'] ?? '';
 
       // 2. Pay using wallet balance
@@ -388,16 +451,27 @@ class _CartScreenState extends State<CartScreen> {
           });
           await cart.clear();
 
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => OrderSuccessScreen(
-                orderId: dbOrderId,
-                amount: paidAmount,
-                orderToken: walletResult['order_token'] ?? orderToken,
-                restaurantName: orderResponse['restaurant_name'] ?? 'the counter',
+          if (isMultiRestaurant && _subOrders != null) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => MultiQrScreen(
+                  batchId: _batchId!,
+                  subOrders: _subOrders!,
+                ),
               ),
-            ),
-          );
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => OrderSuccessScreen(
+                  orderId: dbOrderId,
+                  amount: paidAmount,
+                  orderToken: walletResult['order_token'] ?? orderToken,
+                  restaurantName: orderResponse['restaurant_name'] ?? 'the counter',
+                ),
+              ),
+            );
+          }
         }
       } else {
         throw Exception(walletResult['message'] ?? 'Wallet payment failed');

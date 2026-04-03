@@ -159,12 +159,15 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         // Generate unique pickup token
         const orderToken = await generateOrderToken(client);
 
+        // Generate QR secret for rotating QR codes
+        const qrSecret = crypto.randomBytes(32).toString('hex');
+
         const insertOrderQuery = `
-            INSERT INTO orders (user_id, university_id, restaurant_id, status, total_amount, payment_id, order_token)
-            VALUES ($1, $2, $3, 'pending', $4, $5, $6)
+            INSERT INTO orders (user_id, university_id, restaurant_id, status, total_amount, payment_id, order_token, qr_secret, qr_rotated_at)
+            VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, NOW())
             RETURNING id, order_token
         `;
-        const orderResult = await client.query(insertOrderQuery, [user_id, university_id, restaurantId, totalAmount, orderId, orderToken]);
+        const orderResult = await client.query(insertOrderQuery, [user_id, university_id, restaurantId, totalAmount, orderId, orderToken, qrSecret]);
         const dbOrderId = orderResult.rows[0].id;
         const dbOrderToken = orderResult.rows[0].order_token;
 
@@ -485,7 +488,16 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
 // Security: QR can only be scanned ONCE. After the first scan, subsequent
 // scans return 409 Conflict with the original scan timestamp.
 export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
-    const { token } = req.params;
+    const rawToken = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
+
+    // Parse rotating QR: format is "TOKEN:HMAC" or plain "TOKEN"
+    let orderToken = rawToken;
+    let hmacFromQr: string | null = null;
+    if (rawToken.includes(':')) {
+        const parts = rawToken.split(':');
+        orderToken = parts[0];
+        hmacFromQr = parts[1];
+    }
 
     const client = await pool.connect();
     try {
@@ -495,6 +507,7 @@ export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
         const result = await client.query(`
             SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
                    o.created_at, o.updated_at, o.is_scanned, o.scanned_at,
+                   o.qr_secret, o.restaurant_id,
                    u.name as user_name, u.phone as user_phone,
                    r.name as restaurant_name,
                    COALESCE(json_agg(
@@ -516,7 +529,7 @@ export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
               AND o.status NOT IN ('pending', 'cancelled')
             GROUP BY o.id, u.name, u.phone, r.name
             FOR UPDATE OF o
-        `, [token]);
+        `, [orderToken]);
 
         if (result.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -534,6 +547,36 @@ export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
                 scanned_at: order.scanned_at,
                 order_token: order.order_token,
             });
+        }
+
+        // ─── Verify rotating QR HMAC if the order has a qr_secret ───
+        if (order.qr_secret && hmacFromQr) {
+            const timeBucket = Math.floor(Date.now() / 15000);
+            let verified = false;
+
+            // Check current bucket and ±1 for clock skew tolerance
+            for (const bucket of [timeBucket, timeBucket - 1, timeBucket + 1]) {
+                const payload = `${order.order_token}:${bucket}`;
+                const expectedHmac = crypto.createHmac('sha256', order.qr_secret)
+                    .update(payload)
+                    .digest('hex')
+                    .substring(0, 16);
+                if (expectedHmac === hmacFromQr) {
+                    verified = true;
+                    break;
+                }
+            }
+
+            if (!verified) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: 'Invalid or expired QR code. Please refresh and try again.' });
+            }
+        }
+
+        // ─── Restaurant IDOR check for staff ───
+        if (req.user?.restaurant_id && order.restaurant_id && order.restaurant_id !== req.user.restaurant_id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ message: 'This order belongs to a different restaurant' });
         }
 
         // ─── First scan — mark as scanned ───
@@ -559,13 +602,31 @@ export const scanOrderByToken = async (req: AuthRequest, res: Response) => {
 
 export const getPendingOrders = async (req: AuthRequest, res: Response) => {
     try {
-        const staffRes = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
+        const staffRes = await pool.query('SELECT university_id, restaurant_id, role FROM staff WHERE id = $1', [req.user.id]);
         if (staffRes.rows.length === 0) return res.sendStatus(403);
         const uniId = staffRes.rows[0].university_id;
+        const staffRole = staffRes.rows[0].role;
+        const staffRestaurantId = staffRes.rows[0].restaurant_id;
+
+        // Determine restaurant filter
+        let restaurantId: string | null = null;
+        if (staffRole === 'staff') {
+            if (!staffRestaurantId) return res.status(403).json({ message: 'Staff member not assigned to a restaurant' });
+            restaurantId = staffRestaurantId;
+        } else if (req.query.restaurant_id) {
+            restaurantId = req.query.restaurant_id as string;
+        }
+
+        const params: any[] = [uniId];
+        let restaurantClause = '';
+        if (restaurantId) {
+            restaurantClause = ' AND o.restaurant_id = $2';
+            params.push(restaurantId);
+        }
 
         const result = await pool.query(`
             SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
-                   o.created_at, o.updated_at,
+                   o.created_at, o.updated_at, o.restaurant_id, o.batch_id,
                    u.name as user_name, u.phone as user_phone,
                    r.name as restaurant_name,
                    COALESCE(json_agg(
@@ -584,10 +645,10 @@ export const getPendingOrders = async (req: AuthRequest, res: Response) => {
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             WHERE o.university_id = $1
-              AND o.status NOT IN ('completed', 'cancelled', 'pending')
+              AND o.status NOT IN ('completed', 'cancelled', 'pending')${restaurantClause}
             GROUP BY o.id, u.name, u.phone, r.name
             ORDER BY o.created_at ASC
-        `, [uniId]);
+        `, params);
 
         res.json(result.rows);
     } catch (error: any) {
@@ -606,7 +667,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         await client.query('BEGIN');
 
         // First lock the order to prevent race conditions
-        const orderRes = await client.query('SELECT status, user_id, university_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
+        const orderRes = await client.query('SELECT status, user_id, university_id, restaurant_id FROM orders WHERE id = $1 FOR UPDATE', [id]);
         const currentOrder = orderRes.rows[0];
         
         if (!currentOrder) {
@@ -617,6 +678,12 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         if (req.user?.university_id && currentOrder.university_id !== req.user.university_id) {
             await client.query('ROLLBACK');
             return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        // ─── Restaurant IDOR: staff can only update orders for their restaurant ───
+        if (req.user?.restaurant_id && currentOrder.restaurant_id !== req.user.restaurant_id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ message: 'You can only manage orders for your assigned restaurant' });
         }
 
         // If a PAID order is being cancelled by admin, restore the stock.
@@ -671,9 +738,18 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
     const { status, restaurant_id, search, page = '1', limit = '50' } = req.query;
 
     try {
-        const staffRes = await pool.query('SELECT university_id FROM staff WHERE id = $1', [req.user.id]);
+        const staffRes = await pool.query('SELECT university_id, restaurant_id, role FROM staff WHERE id = $1', [req.user.id]);
         if (staffRes.rows.length === 0) return res.sendStatus(403);
         const uniId = staffRes.rows[0].university_id;
+        const staffRole = staffRes.rows[0].role;
+        const staffRestaurantId = staffRes.rows[0].restaurant_id;
+
+        // Staff enforcement: override restaurant_id filter
+        let effectiveRestaurantId = restaurant_id;
+        if (staffRole === 'staff') {
+            if (!staffRestaurantId) return res.status(403).json({ message: 'Staff member not assigned to a restaurant' });
+            effectiveRestaurantId = staffRestaurantId;
+        }
 
         let query = `
             SELECT o.*, 
@@ -701,9 +777,9 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
             query += ` AND o.status = $${pIdx++}`;
             params.push(status);
         }
-        if (restaurant_id) {
+        if (effectiveRestaurantId) {
             query += ` AND o.restaurant_id = $${pIdx++}`;
-            params.push(restaurant_id);
+            params.push(effectiveRestaurantId);
         }
         if (search && typeof search === 'string' && search.trim()) {
             const term = `%${search.trim()}%`;
@@ -734,7 +810,7 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
         const countParams: any[] = [uniId];
         let cIdx = 2;
         if (status) { countQuery += ` AND o.status = $${cIdx++}`; countParams.push(status); }
-        if (restaurant_id) { countQuery += ` AND o.restaurant_id = $${cIdx++}`; countParams.push(restaurant_id); }
+        if (effectiveRestaurantId) { countQuery += ` AND o.restaurant_id = $${cIdx++}`; countParams.push(effectiveRestaurantId); }
         if (search && typeof search === 'string' && search.trim()) {
             const term = `%${search.trim()}%`;
             countQuery += ` AND (
@@ -1047,6 +1123,458 @@ const expireStalePendingOrders = async () => {
         console.error('expireStalePendingOrders error:', error);
     } finally {
         client.release();
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// Multi-Restaurant Order Creation
+// ═══════════════════════════════════════════════════════════
+
+export const createMultiRestaurantOrder = async (req: AuthRequest, res: Response) => {
+    const { items, university_id } = req.body; // items: [{ menu_item_id, quantity }]
+    const user_id = req.user.id;
+
+    if (!items || items.length === 0) {
+        return res.status(400).json({ message: 'No items provided' });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch all menu items and group by restaurant
+        const sortedItems = [...items].sort((a: any, b: any) => a.menu_item_id.localeCompare(b.menu_item_id));
+        const restaurantGroups: Record<string, { restaurantId: string; restaurantName: string; items: any[]; total: number }> = {};
+
+        for (const item of sortedItems) {
+            const result = await client.query(
+                'SELECT price, is_available, restaurant_id, stock_quantity, name FROM menu_items WHERE id = $1',
+                [item.menu_item_id]
+            );
+            const menuItem = result.rows[0];
+
+            if (!menuItem || !menuItem.is_available) {
+                throw new Error(`Item ${item.menu_item_id} not available`);
+            }
+            if (menuItem.stock_quantity < item.quantity) {
+                throw new Error(`Insufficient stock for item: ${menuItem.name}. Only ${menuItem.stock_quantity} left.`);
+            }
+
+            const price = parseFloat(menuItem.price);
+            const rid = menuItem.restaurant_id;
+
+            if (!restaurantGroups[rid]) {
+                const rResult = await client.query('SELECT name FROM restaurants WHERE id = $1', [rid]);
+                restaurantGroups[rid] = {
+                    restaurantId: rid,
+                    restaurantName: rResult.rows[0]?.name ?? 'Restaurant',
+                    items: [],
+                    total: 0,
+                };
+            }
+
+            restaurantGroups[rid].items.push({ ...item, price, name: menuItem.name });
+            restaurantGroups[rid].total += price * item.quantity;
+        }
+
+        const restaurantKeys = Object.keys(restaurantGroups);
+
+        // Gate check: verify ALL restaurants are open
+        for (const rid of restaurantKeys) {
+            const gateCheck = await checkRestaurantAcceptingOrders(client, rid);
+            if (!gateCheck.accepting) {
+                throw new Error(gateCheck.reason || `Restaurant is not accepting orders`);
+            }
+        }
+
+        // 2. Calculate grand total and create ONE Razorpay order
+        const grandTotal = Object.values(restaurantGroups).reduce((sum, g) => sum + g.total, 0);
+        const amountInPaise = Math.round(grandTotal * 100);
+
+        let razorpayOrderId = `mock_order_${crypto.randomBytes(4).toString('hex')}`;
+        if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.includes('placeholder')) {
+            const razorpayOrder = await razorpay.orders.create({
+                amount: amountInPaise,
+                currency: 'INR',
+                receipt: `multi_${Date.now()}`,
+            });
+            razorpayOrderId = razorpayOrder.id;
+            console.log(`✅ Razorpay multi-order created: ${razorpayOrderId}, amount: ${amountInPaise} paise, restaurants: ${restaurantKeys.length}`);
+        } else if (process.env.NODE_ENV === 'production') {
+            throw new Error('Payment gateway is not configured');
+        }
+
+        // 3. Create batch ID to link all sub-orders
+        const batchId = `batch_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+        // 4. Create separate DB order for each restaurant
+        const subOrders: any[] = [];
+
+        for (let i = 0; i < restaurantKeys.length; i++) {
+            const group = restaurantGroups[restaurantKeys[i]];
+            const orderToken = await generateOrderToken(client);
+            const qrSecret = crypto.randomBytes(32).toString('hex');
+            // Each sub-order gets a unique payment_id suffix
+            const subPaymentId = restaurantKeys.length === 1 ? razorpayOrderId : `${razorpayOrderId}#sub${i}`;
+
+            const orderResult = await client.query(
+                `INSERT INTO orders (user_id, university_id, restaurant_id, status, total_amount, payment_id, order_token, qr_secret, qr_rotated_at, batch_id)
+                 VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, NOW(), $8)
+                 RETURNING id, order_token`,
+                [user_id, university_id, group.restaurantId, group.total, subPaymentId, orderToken, qrSecret, batchId]
+            );
+            const dbOrderId = orderResult.rows[0].id;
+
+            // Insert order items
+            for (const item of group.items) {
+                await client.query(
+                    'INSERT INTO order_items (order_id, menu_item_id, quantity, price_at_time) VALUES ($1, $2, $3, $4)',
+                    [dbOrderId, item.menu_item_id, item.quantity, item.price]
+                );
+            }
+
+            subOrders.push({
+                id: dbOrderId,
+                order_token: orderToken,
+                restaurant_id: group.restaurantId,
+                restaurant_name: group.restaurantName,
+                amount: group.total,
+                items: group.items,
+            });
+        }
+
+        await client.query('COMMIT');
+
+        res.status(201).json({
+            payment_id: razorpayOrderId,
+            total_amount: grandTotal,
+            amount_in_paise: amountInPaise,
+            currency: 'INR',
+            batch_id: batchId,
+            sub_orders: subOrders,
+        });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        const msg = error.message || 'Server error';
+        const isClientError = msg.includes('not available')
+            || msg.includes('Insufficient stock')
+            || msg.includes('closed')
+            || msg.includes('no longer accepted')
+            || msg.includes('Could not determine restaurant');
+
+        if (isClientError) {
+            console.warn(`[Order] Multi-order rejected: ${msg}`);
+            return res.status(400).json({ message: msg });
+        }
+        console.error('[Order] createMultiRestaurantOrder error:', error);
+        res.status(500).json({ message: 'Server error' });
+    } finally {
+        client.release();
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// Verify Payment for Multi-Restaurant Orders (Batch)
+// ═══════════════════════════════════════════════════════════
+export const verifyBatchPayment = async (req: AuthRequest, res: Response) => {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, batch_id } = req.body;
+
+    try {
+        let isValid = false;
+
+        if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
+            const body = razorpay_order_id + "|" + razorpay_payment_id;
+            const expectedSignature = crypto
+                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+                .update(body.toString())
+                .digest('hex');
+            isValid = (expectedSignature === razorpay_signature);
+        } else if (process.env.NODE_ENV !== 'production') {
+            isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
+        }
+
+        if (!isValid) {
+            return res.status(400).json({ status: 'failure', message: 'Invalid signature' });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Find all sub-orders in this batch
+            const batchOrders = await client.query(
+                "SELECT * FROM orders WHERE batch_id = $1 AND status = 'pending' FOR UPDATE",
+                [batch_id]
+            );
+
+            if (batchOrders.rows.length === 0) {
+                // Fallback: try single order by payment_id
+                const singleOrder = await client.query(
+                    "SELECT * FROM orders WHERE payment_id = $1 AND status = 'pending' FOR UPDATE",
+                    [razorpay_order_id]
+                );
+                if (singleOrder.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ status: 'failure', message: 'Order not found or already processed' });
+                }
+                batchOrders.rows.push(...singleOrder.rows);
+            }
+
+            // Process each sub-order
+            for (const order of batchOrders.rows) {
+                // Gate check: re-verify restaurant open
+                const gateCheck = await checkRestaurantAcceptingOrders(client, order.restaurant_id);
+                if (!gateCheck.accepting) {
+                    // Auto-refund this sub-order
+                    const refundAmount = Number(order.total_amount);
+                    await client.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [order.id]);
+                    await client.query('UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2', [refundAmount, order.user_id]);
+                    await client.query(
+                        `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id) VALUES ($1, $2, 'refund', $3, $4)`,
+                        [order.user_id, refundAmount, `Auto-refund: ${gateCheck.reason}`, order.id]
+                    );
+                    console.log(`🔒 Sub-order ${order.id} auto-cancelled & refunded ₹${refundAmount}`);
+                    continue;
+                }
+
+                // Decrement stock
+                const itemsRes = await client.query('SELECT menu_item_id, quantity FROM order_items WHERE order_id = $1', [order.id]);
+                const sortedItems = itemsRes.rows.sort((a: any, b: any) => a.menu_item_id.localeCompare(b.menu_item_id));
+
+                for (const item of sortedItems) {
+                    const miRes = await client.query(
+                        'SELECT stock_quantity, name, is_available FROM menu_items WHERE id = $1 FOR UPDATE',
+                        [item.menu_item_id]
+                    );
+                    const mi = miRes.rows[0];
+                    if (!mi || !mi.is_available) throw new Error(`Item ${mi?.name || item.menu_item_id} is no longer available`);
+                    if (mi.stock_quantity < item.quantity) throw new Error(`Insufficient stock for ${mi.name}`);
+
+                    const newStock = mi.stock_quantity - item.quantity;
+                    await client.query('UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2', [item.quantity, item.menu_item_id]);
+                    if (newStock <= 0) {
+                        await client.query('UPDATE menu_items SET is_available = false WHERE id = $1', [item.menu_item_id]);
+                    }
+                }
+
+                // Mark as preparing
+                await client.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [order.id]);
+
+                // Emit to staff
+                const fullOrderRes = await client.query(`
+                    SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                           o.created_at, o.updated_at, o.university_id, o.restaurant_id,
+                           u.name as user_name, u.phone as user_phone,
+                           r.name as restaurant_name,
+                           COALESCE(json_agg(
+                               json_build_object(
+                                   'id', oi.id, 'menu_item_id', oi.menu_item_id,
+                                   'quantity', oi.quantity, 'price_at_time', oi.price_at_time,
+                                   'item_name', mi.name, 'item_image', mi.image_url
+                               )
+                           ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                    FROM orders o
+                    LEFT JOIN users u ON o.user_id = u.id
+                    LEFT JOIN restaurants r ON o.restaurant_id = r.id
+                    LEFT JOIN order_items oi ON oi.order_id = o.id
+                    LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+                    WHERE o.id = $1
+                    GROUP BY o.id, u.name, u.phone, r.name
+                `, [order.id]);
+                const fullOrder = fullOrderRes.rows[0] || order;
+                emitNewOrder(order.university_id, fullOrder);
+            }
+
+            await client.query('COMMIT');
+            res.json({ status: 'success', batch_id, orders_processed: batchOrders.rows.length });
+        } catch (stockError: any) {
+            await client.query('ROLLBACK');
+            console.warn(`[Order] verifyBatchPayment stock conflict: ${stockError.message}`);
+            res.status(409).json({ status: 'failure', message: stockError.message || 'Stock unavailable after payment' });
+        } finally {
+            client.release();
+        }
+    } catch (error: any) {
+        console.error('[Order] verifyBatchPayment error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// Rotating QR Token
+// ═══════════════════════════════════════════════════════════
+
+export const getQrToken = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const orderRes = await pool.query(
+            'SELECT id, user_id, order_token, qr_secret, status FROM orders WHERE id = $1',
+            [id]
+        );
+
+        if (orderRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const order = orderRes.rows[0];
+
+        // Only order owner can get QR token
+        if (order.user_id !== userId) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        // If not ready, return status only
+        if (order.status !== 'ready') {
+            return res.json({
+                ready: false,
+                status: order.status,
+                order_token: order.order_token,
+            });
+        }
+
+        // Generate rotating QR data using HMAC
+        const timeBucket = Math.floor(Date.now() / 15000); // 15-second buckets
+        const payload = `${order.order_token}:${timeBucket}`;
+        const hmac = crypto.createHmac('sha256', order.qr_secret || order.order_token)
+            .update(payload)
+            .digest('hex')
+            .substring(0, 16);
+
+        const qrData = `${order.order_token}:${hmac}`;
+
+        // Time until next rotation
+        const nextBucket = (timeBucket + 1) * 15000;
+        const expiresIn = Math.max(1, Math.ceil((nextBucket - Date.now()) / 1000));
+
+        res.json({
+            ready: true,
+            status: order.status,
+            order_token: order.order_token,
+            qr_data: qrData,
+            expires_in: expiresIn,
+        });
+    } catch (error: any) {
+        console.error('[Order] getQrToken error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// Get Sub-Orders by Batch ID (for multi-restaurant orders)
+// ═══════════════════════════════════════════════════════════
+
+export const getSubOrdersByBatch = async (req: AuthRequest, res: Response) => {
+    const { batchId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const result = await pool.query(`
+            SELECT o.id, o.status, o.total_amount, o.order_token, o.restaurant_id, o.batch_id,
+                   o.created_at, o.updated_at,
+                   r.name as restaurant_name,
+                   COALESCE(json_agg(
+                       json_build_object(
+                           'id', oi.id, 'menu_item_id', oi.menu_item_id,
+                           'quantity', oi.quantity, 'price_at_time', oi.price_at_time,
+                           'item_name', mi.name, 'item_image', mi.image_url
+                       )
+                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.batch_id = $1 AND o.user_id = $2
+            GROUP BY o.id, r.name
+            ORDER BY r.name
+        `, [batchId, userId]);
+
+        res.json(result.rows);
+    } catch (error: any) {
+        console.error('[Order] getSubOrdersByBatch error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// Invoice/Bill Generation
+// ═══════════════════════════════════════════════════════════
+
+export const generateInvoice = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query(`
+            SELECT o.*,
+                   u.name as customer_name, u.phone as customer_phone, u.email as customer_email,
+                   r.name as restaurant_name, r.logo_url as restaurant_logo,
+                   uni.name as university_name,
+                   COALESCE(json_agg(
+                       json_build_object(
+                           'item_name', mi.name,
+                           'quantity', oi.quantity,
+                           'unit_price', oi.price_at_time,
+                           'total', oi.quantity * oi.price_at_time,
+                           'category', mi.category,
+                           'is_veg', mi.is_veg
+                       )
+                   ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN universities uni ON o.university_id = uni.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            WHERE o.id = $1
+            GROUP BY o.id, u.name, u.phone, u.email, r.name, r.logo_url, uni.name
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const order = result.rows[0];
+        const items = order.items || [];
+        const subtotal = items.reduce((sum: number, i: any) => sum + parseFloat(i.total || 0), 0);
+        const invoiceNumber = `INV-${order.order_token || order.id.substring(0, 8).toUpperCase()}-${new Date(order.created_at).getFullYear()}`;
+
+        // Return invoice data as JSON — the frontend will render the PDF
+        res.json({
+            invoice_number: invoiceNumber,
+            order_id: order.id,
+            order_token: order.order_token,
+            status: order.status,
+            payment_method: order.payment_id?.startsWith('wallet_') ? 'Wallet' : 'Razorpay',
+            payment_id: order.payment_id,
+            created_at: order.created_at,
+            updated_at: order.updated_at,
+            customer: {
+                name: order.customer_name,
+                phone: order.customer_phone,
+                email: order.customer_email,
+            },
+            restaurant: {
+                name: order.restaurant_name,
+                logo_url: order.restaurant_logo,
+            },
+            university: order.university_name,
+            items: items.map((i: any) => ({
+                name: i.item_name,
+                quantity: i.quantity,
+                unit_price: parseFloat(i.unit_price),
+                total: parseFloat(i.total),
+                category: i.category,
+                is_veg: i.is_veg,
+            })),
+            subtotal,
+            total: parseFloat(order.total_amount),
+            batch_id: order.batch_id,
+        });
+    } catch (error: any) {
+        console.error('[Order] generateInvoice error:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };
 
