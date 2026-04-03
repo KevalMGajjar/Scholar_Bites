@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/order_service.dart';
 
-/// Multi-restaurant QR screen with:
+/// Premium multi-restaurant QR screen matching the app's maroon/cream design.
+/// Features:
 /// - Horizontal PageView for swiping between restaurant sub-orders
 /// - 15-second rotating QR codes (HMAC-based)
 /// - "Not Ready" overlay when food isn't ready
+/// - "Continue Browsing" button
 /// - Screenshot prevention (Android FLAG_SECURE)
 class MultiQrScreen extends StatefulWidget {
   final String batchId;
@@ -24,13 +27,15 @@ class MultiQrScreen extends StatefulWidget {
 }
 
 class _MultiQrScreenState extends State<MultiQrScreen> {
+  static const _maroon = Color(0xFF8B1C28);
+  static const _darkText = Color(0xFF4A0E13);
+  static const _bg = Color(0xFFFCF9F5);
   static const _rotationInterval = Duration(seconds: 15);
   static const platform = MethodChannel('com.nexplay/security');
 
   final OrderService _orderService = OrderService();
   final PageController _pageController = PageController(viewportFraction: 0.88);
 
-  // QR data per sub-order index
   Map<int, String?> _qrData = {};
   Map<int, String> _statuses = {};
   Map<int, int> _expiresIn = {};
@@ -109,90 +114,130 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Column(
-          children: [
-            Text(
-              'Your Pickup QR Codes',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: -0.3,
-              ),
-            ),
-            Text(
-              '${widget.subOrders.length} restaurant${widget.subOrders.length > 1 ? 's' : ''} · Swipe to navigate',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.white.withOpacity(0.4),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 16),
-          // Page indicators
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(widget.subOrders.length, (i) {
-              final isActive = i == _currentPage;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: isActive ? 28 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  color: isActive
-                      ? const Color(0xFF818CF8)
-                      : Colors.white.withOpacity(0.1),
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          foregroundColor: _darkText,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+          ),
+          title: Column(
+            children: [
+              const Text(
+                'Pickup QR Codes',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: _darkText,
+                  fontSize: 17,
                 ),
-              );
-            }),
+              ),
+              Text(
+                '${widget.subOrders.length} restaurant${widget.subOrders.length > 1 ? 's' : ''} · Swipe to view',
+                style: TextStyle(
+                  color: _darkText.withOpacity(0.4),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          // QR Cards PageView
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.subOrders.length,
-              onPageChanged: (idx) => setState(() => _currentPage = idx),
-              itemBuilder: (context, index) {
-                final sub = widget.subOrders[index];
-                final status = _statuses[index] ?? 'preparing';
-                final qrData = _qrData[index];
-                final isReady = status == 'ready';
-                final isCompleted = status == 'completed';
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              // Page indicators
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.subOrders.length, (i) {
+                  final isActive = i == _currentPage;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: isActive ? 28 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: isActive ? _maroon : _maroon.withOpacity(0.12),
+                    ),
+                  );
+                }),
+              ).animate().fadeIn(duration: 400.ms),
+              const SizedBox(height: 16),
+              // QR Cards PageView
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.subOrders.length,
+                  onPageChanged: (idx) => setState(() => _currentPage = idx),
+                  itemBuilder: (context, index) {
+                    final sub = widget.subOrders[index];
+                    final status = _statuses[index] ?? 'preparing';
+                    final qrData = _qrData[index];
+                    final isReady = status == 'ready';
+                    final isCompleted = status == 'completed';
 
-                return AnimatedScale(
-                  scale: index == _currentPage ? 1.0 : 0.92,
-                  duration: const Duration(milliseconds: 300),
-                  child: _buildQrCard(
-                    sub: sub,
-                    index: index,
-                    status: status,
-                    qrData: qrData,
-                    isReady: isReady,
-                    isCompleted: isCompleted,
+                    return AnimatedScale(
+                      scale: index == _currentPage ? 1.0 : 0.93,
+                      duration: const Duration(milliseconds: 300),
+                      child: _buildQrCard(
+                        sub: sub,
+                        index: index,
+                        status: status,
+                        qrData: qrData,
+                        isReady: isReady,
+                        isCompleted: isCompleted,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Continue Browsing button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(32, 16, 32, 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _maroon,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 8,
+                      shadowColor: _maroon.withOpacity(0.4),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.restaurant_menu_rounded, size: 20),
+                        SizedBox(width: 10),
+                        Text(
+                          'Continue Browsing',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
-            ),
+                ),
+              ).animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(begin: 0.3),
+            ],
           ),
-          const SizedBox(height: 24),
-        ],
+        ),
       ),
     );
   }
@@ -210,45 +255,45 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
     final amount = sub['total_amount'] ?? sub['amount'] ?? 0;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isCompleted
-              ? [const Color(0xFF0F1218), const Color(0xFF0A0E16)]
-              : [const Color(0xFF10141E), const Color(0xFF0C1020)],
-        ),
         border: Border.all(
           color: isReady
-              ? const Color(0xFF818CF8).withOpacity(0.3)
-              : Colors.white.withOpacity(0.06),
+              ? _maroon.withOpacity(0.2)
+              : _darkText.withOpacity(0.05),
           width: isReady ? 1.5 : 1,
         ),
-        boxShadow: isReady
-            ? [BoxShadow(color: const Color(0xFF818CF8).withOpacity(0.08), blurRadius: 40)]
-            : null,
+        boxShadow: [
+          BoxShadow(
+            color: isReady
+                ? _maroon.withOpacity(0.08)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
           // Restaurant header
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: Colors.white.withOpacity(0.04)),
+                bottom: BorderSide(color: _darkText.withOpacity(0.05)),
               ),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF818CF8), Color(0xFFA78BFA)],
+                      colors: [_maroon, Color(0xFF6B151F)],
                     ),
                   ),
                   child: Center(
@@ -270,17 +315,16 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
                       Text(
                         restaurantName,
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                          color: _darkText,
+                          fontWeight: FontWeight.w800,
                           fontSize: 15,
-                          letterSpacing: -0.3,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         'Token: $orderToken · ₹${_formatAmount(amount)}',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
+                          color: _darkText.withOpacity(0.4),
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -295,37 +339,30 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
           // QR Code area
           Expanded(
             child: Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // QR Code
-                  if (isReady && qrData != null)
-                    _buildActiveQr(qrData, index)
-                  else if (isCompleted)
-                    _buildCompletedState()
-                  else
-                    _buildNotReadyOverlay(status),
-                ],
-              ),
+              child: isReady && qrData != null
+                  ? _buildActiveQr(qrData, index)
+                  : isCompleted
+                      ? _buildCompletedState()
+                      : _buildNotReadyOverlay(status),
             ),
           ),
-          // Items preview
+          // Items summary footer
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
             decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(color: Colors.white.withOpacity(0.04)),
+                top: BorderSide(color: _darkText.withOpacity(0.05)),
               ),
             ),
             child: Row(
               children: [
-                Icon(Icons.receipt_long_rounded, size: 14, color: Colors.white.withOpacity(0.3)),
+                Icon(Icons.receipt_long_rounded, size: 14, color: _darkText.withOpacity(0.25)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _buildItemsSummary(sub),
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.35),
+                      color: _darkText.withOpacity(0.35),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -338,7 +375,7 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(delay: (100 * index).ms, duration: 400.ms).slideY(begin: 0.1);
   }
 
   Widget _buildActiveQr(String qrData, int index) {
@@ -350,12 +387,12 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF818CF8).withOpacity(0.1),
+                color: _maroon.withOpacity(0.06),
                 blurRadius: 30,
-                spreadRadius: 5,
+                spreadRadius: 2,
               ),
             ],
           ),
@@ -363,19 +400,18 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
             data: qrData,
             version: QrVersions.auto,
             size: 180,
-            backgroundColor: Colors.white,
             eyeStyle: const QrEyeStyle(
               eyeShape: QrEyeShape.square,
-              color: Color(0xFF1A1A2E),
+              color: _darkText,
             ),
             dataModuleStyle: const QrDataModuleStyle(
               dataModuleShape: QrDataModuleShape.square,
-              color: Color(0xFF1A1A2E),
+              color: _darkText,
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        // Countdown indicator
+        const SizedBox(height: 14),
+        // Refresh countdown
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -385,15 +421,15 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
               child: CircularProgressIndicator(
                 value: expiresIn / 15.0,
                 strokeWidth: 2,
-                backgroundColor: Colors.white.withOpacity(0.06),
-                valueColor: const AlwaysStoppedAnimation(Color(0xFF818CF8)),
+                backgroundColor: _maroon.withOpacity(0.08),
+                valueColor: AlwaysStoppedAnimation(_maroon.withOpacity(0.5)),
               ),
             ),
             const SizedBox(width: 8),
             Text(
               'Refreshes in ${expiresIn}s',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.35),
+                color: _darkText.withOpacity(0.3),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -405,34 +441,34 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
   }
 
   Widget _buildNotReadyOverlay(String status) {
-    final statusLabel = status == 'preparing' ? 'Being Prepared' : status.toUpperCase();
+    final statusLabel = status == 'preparing' ? 'Being Prepared' : status;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Blurred/dimmed QR placeholder
+        // Dimmed QR placeholder
         Container(
           width: 180,
           height: 180,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: Colors.white.withOpacity(0.03),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            borderRadius: BorderRadius.circular(24),
+            color: _maroon.withOpacity(0.03),
+            border: Border.all(color: _maroon.withOpacity(0.06)),
           ),
           child: Center(
             child: Icon(
               Icons.qr_code_2_rounded,
               size: 80,
-              color: Colors.white.withOpacity(0.06),
+              color: _maroon.withOpacity(0.08),
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: const Color(0xFFF59E0B).withOpacity(0.08),
-            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.15)),
+            color: const Color(0xFFF59E0B).withOpacity(0.1),
+            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.2)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -452,9 +488,9 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'QR code will appear when your order is ready',
+          'QR code will appear when ready',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.3),
+            color: _darkText.withOpacity(0.3),
             fontSize: 11,
           ),
         ),
@@ -483,7 +519,7 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
         const SizedBox(height: 4),
         Text(
           'This order has been collected',
-          style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
+          style: TextStyle(color: _darkText.withOpacity(0.3), fontSize: 12),
         ),
       ],
     );
@@ -494,7 +530,7 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
     String label;
     switch (status) {
       case 'preparing':
-        color = const Color(0xFF818CF8);
+        color = const Color(0xFF3B82F6);
         label = 'PREPARING';
       case 'ready':
         color = const Color(0xFF10B981);
@@ -511,7 +547,6 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
         color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Text(
         label,

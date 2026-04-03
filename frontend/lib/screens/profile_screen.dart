@@ -9,6 +9,8 @@ import 'welcome_screen.dart';
 import 'feedback_screen.dart';
 import 'notifications_screen.dart';
 import 'order_qr_screen.dart';
+import 'multi_qr_screen.dart';
+import 'invoice_screen.dart';
 import '../services/payment_service.dart';
 import '../services/wallet_service.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
@@ -498,6 +500,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final String restaurant = order['restaurant_name'] ?? 'Restaurant';
     final String dateStr = _formatDate(order['created_at']?.toString());
     final String orderToken = order['order_token']?.toString() ?? '';
+    final String batchId = order['batch_id']?.toString() ?? '';
     final List items = order['items'] is List ? order['items'] : [];
     final bool isExpanded = _expandedOrders.contains(index);
     final Color statusColor = _statusColors[status] ?? _maroon;
@@ -723,26 +726,47 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
               // Show QR button for active orders
               if (isExpanded &&
-                  orderToken.isNotEmpty &&
+                  (orderToken.isNotEmpty || batchId.isNotEmpty) &&
                   ['pending', 'preparing', 'ready'].contains(status)) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   height: 46,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => OrderQrScreen(
-                            orderToken: orderToken,
-                            orderId: orderId,
-                            status: status,
-                            amount: total,
-                            restaurantName: restaurant,
+                    onPressed: () async {
+                      if (batchId.isNotEmpty) {
+                        try {
+                          final subOrders = await OrderService().getSubOrdersByBatch(batchId);
+                          if (context.mounted && subOrders.isNotEmpty) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MultiQrScreen(
+                                  batchId: batchId,
+                                  subOrders: subOrders.cast<Map<String, dynamic>>(),
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            CustomToast.showErrorToast(context, 'Failed to load batch orders');
+                          }
+                        }
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OrderQrScreen(
+                              orderToken: orderToken,
+                              orderId: orderId,
+                              status: status,
+                              amount: total,
+                              restaurantName: restaurant,
+                            ),
                           ),
-                        ),
-                      );
+                        );
+                      }
                     },
                     icon: const Icon(Icons.qr_code_2_rounded, size: 20),
                     label: const Text(
@@ -757,6 +781,38 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                       elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
+              
+              // Add Invoice Button for all expanded orders
+              if (isExpanded) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      final targetId = batchId.isNotEmpty ? batchId : orderId;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => InvoiceScreen(orderId: targetId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.receipt_long_rounded, size: 20),
+                    label: const Text(
+                      'View Invoice',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _maroon,
+                      side: BorderSide(color: _maroon.withValues(alpha: 0.3)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),

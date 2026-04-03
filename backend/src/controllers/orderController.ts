@@ -441,7 +441,7 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
     try {
         const result = await pool.query(`
             WITH user_contexts AS (
-                SELECT id as base_order_id, group_order_id 
+                SELECT id as base_order_id, group_order_id, batch_id
                 FROM orders 
                 WHERE user_id = $1
             )
@@ -454,6 +454,7 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
                 MAX(COALESCE(go.created_at, o.created_at)) as created_at,
                 MAX(COALESCE(go.created_at, o.updated_at)) as updated_at,
                 MAX(r.name) as restaurant_name,
+                MAX(o.batch_id) as batch_id,
                 COALESCE(json_agg(
                     json_build_object(
                         'id', oi.id,
@@ -473,8 +474,43 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             LEFT JOIN users u ON o.user_id = u.id
+            WHERE uc.batch_id IS NULL
             GROUP BY COALESCE(go.code, uc.base_order_id::text)
-            ORDER BY MAX(COALESCE(go.created_at, o.created_at)) DESC
+
+            UNION ALL
+
+            -- Batch orders (multi-restaurant) grouped into single entries
+            SELECT 
+                uc.batch_id as id,
+                MAX(o.status::text) as status,
+                SUM(o.total_amount)::text as total_amount,
+                MAX(COALESCE(o.payment_id, '')) as payment_id,
+                '' as order_token,
+                MAX(o.created_at) as created_at,
+                MAX(o.updated_at) as updated_at,
+                STRING_AGG(DISTINCT r.name, ', ') as restaurant_name,
+                uc.batch_id as batch_id,
+                COALESCE(json_agg(
+                    json_build_object(
+                        'id', oi.id,
+                        'menu_item_id', oi.menu_item_id,
+                        'quantity', oi.quantity,
+                        'price_at_time', oi.price_at_time,
+                        'item_name', mi.name,
+                        'item_image', mi.image_url,
+                        'added_by', u.name
+                    )
+                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM user_contexts uc
+            JOIN orders o ON o.id = uc.base_order_id
+            LEFT JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+            LEFT JOIN users u ON o.user_id = u.id
+            WHERE uc.batch_id IS NOT NULL
+            GROUP BY uc.batch_id
+
+            ORDER BY created_at DESC
         `, [req.user.id]);
 
         res.json(result.rows);
@@ -1507,10 +1543,11 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
 
     try {
         const result = await pool.query(`
-            SELECT o.*,
+            SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                   o.created_at, o.updated_at, o.batch_id, o.university_id,
                    u.name as customer_name, u.phone as customer_phone, u.email as customer_email,
                    r.name as restaurant_name, r.logo_url as restaurant_logo,
-                   uni.name as university_name,
+                   COALESCE(uni.name, 'Ahmedabad University') as university_name,
                    COALESCE(json_agg(
                        json_build_object(
                            'item_name', mi.name,
@@ -1528,7 +1565,9 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             WHERE o.id = $1
-            GROUP BY o.id, u.name, u.phone, u.email, r.name, r.logo_url, uni.name
+            GROUP BY o.id, o.status, o.total_amount, o.payment_id, o.order_token,
+                     o.created_at, o.updated_at, o.batch_id, o.university_id,
+                     u.name, u.phone, u.email, r.name, r.logo_url, uni.name
         `, [id]);
 
         if (result.rows.length === 0) {
