@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:printing/printing.dart';
 import '../services/order_service.dart';
 import '../widgets/spoon_loader.dart';
+import '../utils/pdf_generator.dart';
 
 class InvoiceScreen extends StatefulWidget {
   final String orderId;
@@ -18,6 +20,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   static const _bg = Color(0xFFFCF9F5);
 
   bool _isLoading = true;
+  bool _isGeneratingPdf = false;
   Map<String, dynamic>? _invoice;
   String? _error;
 
@@ -55,6 +58,21 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     }
   }
 
+  Future<void> _downloadInvoice() async {
+    if (_invoice == null) return;
+    setState(() => _isGeneratingPdf = true);
+    try {
+      final pdfBytes = await PdfInvoiceGenerator.generate(_invoice!);
+      await Printing.sharePdf(bytes: pdfBytes, filename: '${_invoice!['invoice_number'] ?? 'invoice'}.pdf');
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingPdf = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,6 +84,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         elevation: 0,
         foregroundColor: _darkText,
       ),
+      floatingActionButton: _invoice != null
+          ? FloatingActionButton.extended(
+              onPressed: _isGeneratingPdf ? null : _downloadInvoice,
+              backgroundColor: _maroon,
+              foregroundColor: Colors.white,
+              icon: _isGeneratingPdf 
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.download_rounded),
+              label: Text(_isGeneratingPdf ? 'Generating...' : 'Download Ticket'),
+            ).animate().slideY(begin: 1).fadeIn()
+          : null,
       body: _isLoading
           ? const Center(child: SpoonLoader(size: 40))
           : _error != null

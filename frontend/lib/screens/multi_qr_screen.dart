@@ -31,7 +31,6 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
   static const _maroon = Color(0xFF8B1C28);
   static const _darkText = Color(0xFF4A0E13);
   static const _bg = Color(0xFFFCF9F5);
-  static const _rotationInterval = Duration(seconds: 15);
   static const platform = MethodChannel('com.nexplay/security');
 
   final OrderService _orderService = OrderService();
@@ -51,7 +50,22 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
     _enableScreenSecurity();
     _initializeStatuses();
     _fetchAllQrTokens();
-    _refreshTimer = Timer.periodic(_rotationInterval, (_) => _fetchAllQrTokens());
+    
+    // Live countdown timer: decrement 1sec locally, trigger refresh at 0
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_disposed) return;
+      setState(() {
+        for (int i = 0; i < widget.subOrders.length; i++) {
+          if (_expiresIn[i] != null && _expiresIn[i]! > 0) {
+            _expiresIn[i] = _expiresIn[i]! - 1;
+            // Fetch fresh token exactly when this specific QR expires
+            if (_expiresIn[i] == 0) {
+              _fetchQrToken(i);
+            }
+          }
+        }
+      });
+    });
   }
 
   @override

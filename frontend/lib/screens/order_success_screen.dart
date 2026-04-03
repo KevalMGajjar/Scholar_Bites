@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'multi_qr_screen.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
@@ -300,20 +299,8 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              QrImageView(
-                                data: widget.orderToken,
-                                version: QrVersions.auto,
-                                size: 140,
-                                eyeStyle: const QrEyeStyle(
-                                  eyeShape: QrEyeShape.square,
-                                  color: _darkText,
-                                ),
-                                dataModuleStyle: const QrDataModuleStyle(
-                                  dataModuleShape: QrDataModuleShape.square,
-                                  color: _darkText,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
+// Static QR purposefully removed — users should click 'Show QR at Counter'
+// to launch the dynamic, secure MultiQrScreen.
                               SizedBox(
                                 width: double.infinity,
                                 height: 48,

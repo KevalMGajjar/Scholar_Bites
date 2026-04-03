@@ -129,7 +129,7 @@ class _FoodTechAppState extends State<FoodTechApp> {
                       {
                         'id': data['order_id']?.toString() ?? '',
                         'order_token': data['order_token']?.toString() ?? '',
-                        'status': 'ready',
+                        'status': data['status']?.toString() ?? 'ready',
                         'total_amount': double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
                         'restaurant_name': data['restaurant_name'] ?? 'Restaurant',
                       }
