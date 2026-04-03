@@ -1545,7 +1545,7 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
         const result = await pool.query(`
             SELECT o.id, o.status, o.total_amount, o.payment_id, o.order_token,
                    o.created_at, o.updated_at, o.batch_id, o.university_id,
-                   u.name as customer_name, u.phone as customer_phone, u.email as customer_email,
+                   u.name as customer_name, u.phone as customer_phone,
                    r.name as restaurant_name, r.logo_url as restaurant_logo,
                    COALESCE(uni.name, 'Ahmedabad University') as university_name,
                    COALESCE(json_agg(
@@ -1567,7 +1567,7 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
             WHERE o.id = $1
             GROUP BY o.id, o.status, o.total_amount, o.payment_id, o.order_token,
                      o.created_at, o.updated_at, o.batch_id, o.university_id,
-                     u.name, u.phone, u.email, r.name, r.logo_url, uni.name
+                     u.name, u.phone, r.name, r.logo_url, uni.name
         `, [id]);
 
         if (result.rows.length === 0) {
