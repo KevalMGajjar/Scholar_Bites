@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'order_qr_screen.dart';
+import 'multi_qr_screen.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
   final String orderId;
@@ -322,12 +322,17 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => OrderQrScreen(
-                                          orderToken: widget.orderToken,
-                                          orderId: widget.orderId,
-                                          status: 'preparing',
-                                          amount: widget.amount,
-                                          restaurantName: widget.restaurantName,
+                                        builder: (_) => MultiQrScreen(
+                                          batchId: widget.orderId,
+                                          subOrders: [
+                                            {
+                                              'id': widget.orderId,
+                                              'status': 'preparing',
+                                              'total_amount': widget.amount,
+                                              'restaurant_name': widget.restaurantName,
+                                              'order_token': widget.orderToken,
+                                            }
+                                          ],
                                         ),
                                       ),
                                     );

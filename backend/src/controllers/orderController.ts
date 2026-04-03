@@ -483,7 +483,7 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
             SELECT 
                 uc.batch_id as id,
                 MAX(o.status::text) as status,
-                SUM(o.total_amount)::text as total_amount,
+                SUM(o.total_amount) as total_amount,
                 MAX(COALESCE(o.payment_id, '')) as payment_id,
                 '' as order_token,
                 MAX(o.created_at) as created_at,

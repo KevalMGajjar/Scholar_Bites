@@ -10,7 +10,7 @@ import 'models/cart_model.dart';
 import 'models/favorites_model.dart';
 import 'models/user_model.dart';
 import 'screens/splash_screen.dart';
-import 'screens/order_qr_screen.dart';
+import 'screens/multi_qr_screen.dart';
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
 
@@ -123,11 +123,17 @@ class _FoodTechAppState extends State<FoodTechApp> {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => OrderQrScreen(
-                    orderId: data['order_id']?.toString() ?? '',
-                    orderToken: data['order_token']?.toString() ?? '',
-                    status: 'ready',
-                    amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
+                  MaterialPageRoute(builder: (_) => MultiQrScreen(
+                    batchId: data['order_id']?.toString() ?? '',
+                    subOrders: [
+                      {
+                        'id': data['order_id']?.toString() ?? '',
+                        'order_token': data['order_token']?.toString() ?? '',
+                        'status': 'ready',
+                        'total_amount': double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
+                        'restaurant_name': data['restaurant_name'] ?? 'Restaurant',
+                      }
+                    ],
                   )),
                 );
               },

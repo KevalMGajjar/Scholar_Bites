@@ -8,7 +8,7 @@ import '../utils/token_storage.dart';
 import 'welcome_screen.dart';
 import 'feedback_screen.dart';
 import 'notifications_screen.dart';
-import 'order_qr_screen.dart';
+
 import 'multi_qr_screen.dart';
 import 'invoice_screen.dart';
 import '../services/payment_service.dart';
@@ -757,12 +757,17 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => OrderQrScreen(
-                              orderToken: orderToken,
-                              orderId: orderId,
-                              status: status,
-                              amount: total,
-                              restaurantName: restaurant,
+                            builder: (_) => MultiQrScreen(
+                              batchId: orderId,
+                              subOrders: [
+                                {
+                                  'id': orderId,
+                                  'status': status,
+                                  'total_amount': total,
+                                  'restaurant_name': restaurant,
+                                  'order_token': orderToken,
+                                }
+                              ],
                             ),
                           ),
                         );
