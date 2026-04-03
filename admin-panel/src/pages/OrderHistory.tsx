@@ -257,26 +257,28 @@ export default function OrderHistory() {
                     <td className="px-6 py-4 text-slate-600 text-[12px] font-medium whitespace-nowrap">{formatDate(order.created_at)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                        <button
-                          onClick={async () => {
-                            try {
-                              const res = await api.get(`/admin/orders/${order.id}/invoice`);
-                              const invoiceData = res.data;
-                              // Open invoice in a new window
-                              const w = window.open('', '_blank', 'width=800,height=1000');
-                              if (w) {
-                                w.document.write(generateInvoiceHtml(invoiceData));
-                                w.document.close();
+                        {order.status === 'completed' && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await api.get(`/admin/orders/${order.id}/invoice`);
+                                const invoiceData = res.data;
+                                // Open invoice in a new window
+                                const w = window.open('', '_blank', 'width=800,height=1000');
+                                if (w) {
+                                  w.document.write(generateInvoiceHtml(invoiceData));
+                                  w.document.close();
+                                }
+                              } catch (err) {
+                                console.error('Failed to generate invoice:', err);
+                                setToast({ msg: 'Failed to generate invoice', type: 'error' });
                               }
-                            } catch (err) {
-                              console.error('Failed to generate invoice:', err);
-                              setToast({ msg: 'Failed to generate invoice', type: 'error' });
-                            }
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/6 border border-indigo-500/12 text-indigo-400 text-[11px] font-bold hover:bg-indigo-500/15 transition-all btn-press"
-                        >
-                          <FileText size={11} /> Invoice
-                        </button>
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/6 border border-indigo-500/12 text-indigo-400 text-[11px] font-bold hover:bg-indigo-500/15 transition-all btn-press"
+                          >
+                            <FileText size={11} /> Invoice
+                          </button>
+                        )}
                         {order.status === 'completed' && (
                           <button onClick={() => { setRefundModalOrder(order); setRefundReason(''); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[11px] font-bold hover:bg-red-500/15 transition-all btn-press">
