@@ -83,18 +83,30 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: _darkText,
+        actions: [
+          if (_invoice != null)
+            _isGeneratingPdf
+                ? const Padding(
+                    padding: EdgeInsets.only(right: 20.0),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: _maroon,
+                          strokeWidth: 2.5,
+                        ),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.download_rounded, color: _maroon, size: 28),
+                    tooltip: 'Download Invoice',
+                    onPressed: _downloadInvoice,
+                  ).animate().fadeIn().scale(),
+          const SizedBox(width: 8),
+        ],
       ),
-      floatingActionButton: _invoice != null
-          ? FloatingActionButton.extended(
-              onPressed: _isGeneratingPdf ? null : _downloadInvoice,
-              backgroundColor: _maroon,
-              foregroundColor: Colors.white,
-              icon: _isGeneratingPdf 
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.download_rounded),
-              label: Text(_isGeneratingPdf ? 'Generating...' : 'Download Ticket'),
-            ).animate().slideY(begin: 1).fadeIn()
-          : null,
       body: _isLoading
           ? const Center(child: SpoonLoader(size: 40))
           : _error != null
