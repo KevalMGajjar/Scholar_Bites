@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/order_service.dart';
+import 'invoice_screen.dart';
 
 /// Premium multi-restaurant QR screen matching the app's maroon/cream design.
 /// Features:
@@ -198,6 +199,42 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
                   },
                 ),
               ),
+              // Show Invoice button if ANY order is completed
+              if (widget.subOrders.any((sub) => sub['status'] == 'completed'))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 16, 32, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => InvoiceScreen(orderId: widget.batchId),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.receipt_long_rounded, size: 20),
+                      label: const Text(
+                        'View Invoice',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _maroon,
+                        side: BorderSide(color: _maroon.withOpacity(0.3), width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 500.ms, duration: 400.ms).slideY(begin: 0.3),
+
               // Continue Browsing button
               Padding(
                 padding: const EdgeInsets.fromLTRB(32, 16, 32, 24),

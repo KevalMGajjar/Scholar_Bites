@@ -1564,7 +1564,7 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
             LEFT JOIN universities uni ON o.university_id = uni.id
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
-            WHERE o.id = $1 OR o.batch_id = $1
+            WHERE o.id::text = $1 OR o.batch_id = $1
             GROUP BY o.id, o.status, o.total_amount, o.payment_id, o.order_token,
                      o.created_at, o.updated_at, o.batch_id, o.university_id,
                      u.name, u.phone, r.name, r.logo_url, uni.name
