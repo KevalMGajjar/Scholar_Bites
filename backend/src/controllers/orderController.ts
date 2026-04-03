@@ -1564,7 +1564,7 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
             LEFT JOIN universities uni ON o.university_id = uni.id
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
-            WHERE o.id = $1
+            WHERE o.id = $1 OR o.batch_id = $1
             GROUP BY o.id, o.status, o.total_amount, o.payment_id, o.order_token,
                      o.created_at, o.updated_at, o.batch_id, o.university_id,
                      u.name, u.phone, r.name, r.logo_url, uni.name
@@ -1574,32 +1574,39 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: 'Order not found' });
         }
 
-        const order = result.rows[0];
-        const items = order.items || [];
-        const subtotal = items.reduce((sum: number, i: any) => sum + parseFloat(i.total || 0), 0);
-        const invoiceNumber = `INV-${order.order_token || order.id.substring(0, 8).toUpperCase()}-${new Date(order.created_at).getFullYear()}`;
+        const baseOrder = result.rows[0];
+        const isBatch = result.rows.length > 1;
+
+        const allItems = result.rows.flatMap((r: any) => r.items || []);
+        const totalAmount = result.rows.reduce((sum: number, r: any) => sum + parseFloat(r.total_amount || 0), 0);
+        const subtotal = allItems.reduce((sum: number, i: any) => sum + parseFloat(i.total || 0), 0);
+        
+        const restaurantNameStr = isBatch 
+            ? Array.from(new Set(result.rows.map((r: any) => r.restaurant_name))).join(', ') 
+            : baseOrder.restaurant_name;
+
+        const invoiceNumber = `INV-${(baseOrder.batch_id || baseOrder.order_token || baseOrder.id).substring(0, 8).toUpperCase()}-${new Date(baseOrder.created_at).getFullYear()}`;
 
         // Return invoice data as JSON — the frontend will render the PDF
         res.json({
             invoice_number: invoiceNumber,
-            order_id: order.id,
-            order_token: order.order_token,
-            status: order.status,
-            payment_method: order.payment_id?.startsWith('wallet_') ? 'Wallet' : 'Razorpay',
-            payment_id: order.payment_id,
-            created_at: order.created_at,
-            updated_at: order.updated_at,
+            order_id: isBatch ? baseOrder.batch_id : baseOrder.id,
+            order_token: baseOrder.order_token,
+            status: baseOrder.status,
+            payment_method: baseOrder.payment_id?.startsWith('wallet_') ? 'Wallet' : 'Razorpay',
+            payment_id: baseOrder.payment_id,
+            created_at: baseOrder.created_at,
+            updated_at: baseOrder.updated_at,
             customer: {
-                name: order.customer_name,
-                phone: order.customer_phone,
-                email: order.customer_email,
+                name: baseOrder.customer_name,
+                phone: baseOrder.customer_phone,
             },
             restaurant: {
-                name: order.restaurant_name,
-                logo_url: order.restaurant_logo,
+                name: restaurantNameStr,
+                logo_url: isBatch ? null : baseOrder.restaurant_logo,
             },
-            university: order.university_name,
-            items: items.map((i: any) => ({
+            university: baseOrder.university_name,
+            items: allItems.map((i: any) => ({
                 name: i.item_name,
                 quantity: i.quantity,
                 unit_price: parseFloat(i.unit_price),
@@ -1608,8 +1615,8 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
                 is_veg: i.is_veg,
             })),
             subtotal,
-            total: parseFloat(order.total_amount),
-            batch_id: order.batch_id,
+            total: totalAmount,
+            batch_id: baseOrder.batch_id,
         });
     } catch (error: any) {
         console.error('[Order] generateInvoice error:', error.message);
