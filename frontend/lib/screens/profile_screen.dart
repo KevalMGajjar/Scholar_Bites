@@ -791,13 +791,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 ),
               ],
               
-              // Add Invoice Button for all expanded orders
-              if (isExpanded) ...[
+              // Add Invoice Button ONLY for completed expanded orders
+              if (isExpanded && status == 'completed') ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   height: 46,
                   child: OutlinedButton.icon(
+
                     onPressed: () {
                       final targetId = batchId.isNotEmpty ? batchId : orderId;
                       Navigator.push(

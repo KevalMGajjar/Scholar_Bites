@@ -1574,6 +1574,12 @@ export const generateInvoice = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: 'Order not found' });
         }
 
+        // Security Check: Ensure at least one order in the batch is completed
+        const hasCompletedOrder = result.rows.some((r: any) => r.status === 'completed');
+        if (!hasCompletedOrder) {
+            return res.status(403).json({ message: 'Invoice can only be generated for completed orders' });
+        }
+
         const baseOrder = result.rows[0];
         const isBatch = result.rows.length > 1;
 
