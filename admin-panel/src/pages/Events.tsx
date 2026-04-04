@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, UserPlus, Table, Trash2, Mail, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
-import { adminApi } from '../utils/api';
-import toast from 'react-hot-toast';
+import api from '../services/api';
 
 interface Dean {
   id: string;
@@ -37,14 +36,14 @@ export default function Events() {
     setLoading(true);
     try {
       if (activeTab === 'deans') {
-        const { data } = await adminApi.get('/deans');
+        const { data } = await api.get('/admin/deans');
         setDeans(data);
       } else if (activeTab === 'calendar') {
-        const { data } = await adminApi.get('/events');
+        const { data } = await api.get('/admin/events');
         setEvents(data);
       }
     } catch (error) {
-      toast.error('Failed to load data');
+      alert('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -56,13 +55,13 @@ export default function Events() {
 
     setIsSubmitting(true);
     try {
-      await adminApi.post('/deans', { email: deanEmail, password: deanPassword });
-      toast.success('Dean added successfully');
+      await api.post('/admin/deans', { email: deanEmail, password: deanPassword });
+      alert('Dean added successfully');
       setDeanEmail('');
       setDeanPassword('');
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to add dean');
+      alert(error.response?.data?.message || 'Failed to add dean');
     } finally {
       setIsSubmitting(false);
     }
@@ -71,17 +70,16 @@ export default function Events() {
   const handleDeleteDean = async (id: string) => {
     if (!confirm('Are you sure you want to delete this dean?')) return;
     try {
-      await adminApi.delete(`/deans/${id}`);
-      toast.success('Dean deleted');
+      await api.delete(`/admin/deans/${id}`);
       fetchData();
     } catch (error) {
-      toast.error('Failed to delete dean');
+      alert('Failed to delete dean');
     }
   };
 
   const downloadCSV = async (type: string) => {
     try {
-      const response = await adminApi.get(`/export/${type}`, { responseType: 'blob' });
+      const response = await api.get(`/admin/export/${type}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -90,7 +88,7 @@ export default function Events() {
       link.click();
       link.remove();
     } catch (error) {
-      toast.error('Failed to download CSV');
+      alert('Failed to download CSV');
     }
   };
 
