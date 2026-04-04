@@ -9,6 +9,7 @@ import Restaurants from './pages/Restaurants';
 import MenuItems from './pages/MenuItems';
 import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
+import Events from './pages/Events';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="/restaurants" element={<AdminRoute><Restaurants /></AdminRoute>} />
             <Route path="/menu" element={<AdminRoute><MenuItems /></AdminRoute>} />
             <Route path="/statistics" element={<AdminRoute><Statistics /></AdminRoute>} />
+            <Route path="/events" element={<AdminRoute><Events /></AdminRoute>} />
             <Route path="/settings" element={<AdminRoute><Settings /></AdminRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -7,6 +7,7 @@ import '../widgets/primary_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../utils/custom_toast.dart';
 import 'otp_screen.dart';
+import 'staff_code_screen.dart';
 
 class PhoneScreen extends StatefulWidget {
   const PhoneScreen({super.key});
@@ -137,6 +138,31 @@ class _PhoneScreenState extends State<PhoneScreen> {
                       onTap: _requestOtp,
                     ).animate().fade(delay: 800.ms, duration: 600.ms).scaleXY(begin: 0.9, end: 1.0, curve: Curves.easeOutBack),
               
+              const SizedBox(height: 30),
+
+              // Staff Login Option
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const StaffCodeScreen(),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    "Are you a staff member?",
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: const Color(0xFF8B1C28),
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ).animate().fade(delay: 1000.ms, duration: 600.ms),
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         ),

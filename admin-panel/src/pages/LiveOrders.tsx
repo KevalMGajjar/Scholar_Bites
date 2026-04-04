@@ -49,6 +49,8 @@ export default function LiveOrders() {
   const { socket } = useSocket();
   const { selectedRestaurantId } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [preOrders, setPreOrders] = useState<any[]>([]); // Added for Pre-Orders
+  const [viewMode, setViewMode] = useState<'live' | 'preorders'>('live'); // Added toggle
   const [loading, setLoading] = useState(true);
   const [tokenSearch, setTokenSearch] = useState('');
   const [scannedOrder, setScannedOrder] = useState<Order | null>(null);
@@ -57,17 +59,23 @@ export default function LiveOrders() {
   const [scanWarning, setScanWarning] = useState<{ message: string; scanned_at?: string; token?: string } | null>(null);
 
   const fetchOrders = useCallback(async () => {
+    setLoading(true);
     try {
-      const params: any = {};
-      if (selectedRestaurantId) params.restaurant_id = selectedRestaurantId;
-      const res = await api.get('/admin/orders/pending', { params });
-      setOrders(res.data);
+      if (viewMode === 'live') {
+        const params: any = {};
+        if (selectedRestaurantId) params.restaurant_id = selectedRestaurantId;
+        const res = await api.get('/admin/orders/pending', { params });
+        setOrders(res.data);
+      } else {
+        const res = await api.get('/admin/pre-orders/today');
+        setPreOrders(res.data);
+      }
     } catch (err) {
       console.error('Failed to fetch orders', err);
     } finally {
       setLoading(false);
     }
-  }, [selectedRestaurantId]);
+  }, [selectedRestaurantId, viewMode]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -98,6 +106,26 @@ export default function LiveOrders() {
     } catch (err) { console.error('Failed to update status', err); }
   };
 
+  const updatePreOrderStatus = async (preOrderId: string, currentStatus: string) => {
+    const nextStatus = STATUS_FLOW[currentStatus];
+    if (!nextStatus) return;
+    try {
+      await api.patch(`/admin/pre-orders/${preOrderId}/status`, { status: nextStatus });
+      if (nextStatus === 'completed') {
+        setPreOrders((prev) => prev.filter((o) => o.id !== preOrderId));
+      } else {
+        setPreOrders((prev) => prev.map((o) => (o.id === preOrderId ? { ...o, status: nextStatus } : o)));
+      }
+    } catch (err) { console.error('Failed to update pre-order status', err); }
+  };
+
+  const cancelPreOrder = async (preOrderId: string) => {
+    try {
+      await api.patch(`/admin/pre-orders/${preOrderId}/status`, { status: 'cancelled' });
+      setPreOrders((prev) => prev.filter((o) => o.id !== preOrderId));
+    } catch (err) { console.error('Failed to cancel pre order', err); }
+  };
+
   const cancelOrder = async (orderId: string) => {
     try {
       await api.post(`/admin/orders/${orderId}/refund`, { reason: 'Cancelled by staff' });
@@ -125,9 +153,15 @@ export default function LiveOrders() {
       {/* ── Header ── */}
       <div className="flex items-end justify-between mb-10 animate-fade-up">
         <div className="space-y-1.5">
-          <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Live Orders</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Live Orders</h1>
+            <div className="flex bg-[#0a0c14] p-1 rounded-xl border border-white/5 shadow-inner">
+              <button onClick={() => setViewMode('live')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${viewMode === 'live' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>Live</button>
+              <button onClick={() => setViewMode('preorders')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${viewMode === 'preorders' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>Staff Pre-Orders</button>
+            </div>
+          </div>
           <p className="text-slate-500 text-[14px] font-medium">
-            <span className="text-white font-bold">{orders.length}</span> active order{orders.length !== 1 ? 's' : ''} across all restaurants
+            <span className="text-white font-bold">{viewMode === 'live' ? orders.length : preOrders.length}</span> active order{orders.length !== 1 ? 's' : ''} across all restaurants
           </p>
         </div>
         <div className="flex items-center gap-2.5">
@@ -259,7 +293,7 @@ export default function LiveOrders() {
       {/* ── Kanban Columns ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100%-7rem)]">
         {STATUS_COLUMNS.map((col, colIdx) => {
-          const colOrders = orders.filter((o) => o.status === col.key);
+          const colOrders = viewMode === 'live' ? orders.filter((o) => o.status === col.key) : preOrders.filter((o) => o.status === col.key);
           return (
             <div key={col.key} className="flex flex-col min-h-0 animate-fade-up" style={{ animationDelay: `${colIdx * 100}ms` }}>
               {/* Column Header */}
@@ -297,8 +331,13 @@ export default function LiveOrders() {
                         </div>
                       </div>
 
-                      {/* Restaurant */}
-                      <p className="text-slate-500 text-[11px] font-semibold mb-3 uppercase tracking-wider">{order.restaurant_name}</p>
+                      {/* Restaurant & Order Type */}
+                      <div className="flex justify-between items-center mb-3">
+                        <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider">{order.restaurant_name}</p>
+                        {viewMode === 'preorders' && (
+                          <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-400 text-[10px] font-bold tracking-widest uppercase">Pre-Order ({new Date(order.pre_order_date).toLocaleTimeString([], {hour: '2-digit'})})</span>
+                        )}
+                      </div>
 
                       {/* Customer */}
                       <div className="flex items-center gap-2.5 mb-3.5 pb-3.5 border-b border-white/[0.04]">
@@ -313,13 +352,13 @@ export default function LiveOrders() {
 
                       {/* Items */}
                       <div className="space-y-2 mb-3.5">
-                        {order.items?.filter(i => i.item_name).map((item, idx) => (
+                        {order.items?.filter((i: any) => i.item_name || i.food_name).map((item: any, idx: number) => (
                           <div key={idx} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-indigo-400 text-[11px] font-bold bg-indigo-500/8 px-1.5 py-0.5 rounded-md min-w-[24px] text-center">{item.quantity}x</span>
-                              <span className="text-slate-300 text-[13px]">{item.item_name}</span>
+                              <span className="text-slate-300 text-[13px]">{item.item_name || item.food_name}</span>
                             </div>
-                            <span className="text-slate-600 text-[13px] font-medium">₹{(parseFloat(item.price_at_time) * item.quantity).toFixed(0)}</span>
+                            <span className="text-slate-600 text-[13px] font-medium">₹{(parseFloat(item.price_at_time || item.price) * item.quantity).toFixed(0)}</span>
                           </div>
                         ))}
                       </div>
@@ -332,7 +371,7 @@ export default function LiveOrders() {
 
                       {/* Actions */}
                       <div className="flex gap-2">
-                        <button onClick={() => updateStatus(order.id, order.status)}
+                        <button onClick={() => viewMode === 'live' ? updateStatus(order.id, order.status) : updatePreOrderStatus(order.id, order.status)}
                           className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold tracking-wide transition-all btn-press ${
                             col.key === 'pending' ? 'bg-amber-500 text-slate-900 hover:shadow-lg hover:shadow-amber-500/20'
                             : col.key === 'preparing' ? 'bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/20'
@@ -341,7 +380,7 @@ export default function LiveOrders() {
                           {ACTION_LABELS[order.status]}
                         </button>
                         {col.key === 'pending' && (
-                          <button onClick={() => cancelOrder(order.id)}
+                          <button onClick={() => viewMode === 'live' ? cancelOrder(order.id) : cancelPreOrder(order.id)}
                             className="px-4 py-2.5 rounded-xl bg-red-500/8 border border-red-500/15 text-red-400 text-[12px] font-bold hover:bg-red-500/15 transition-all btn-press">
                             Cancel
                           </button>

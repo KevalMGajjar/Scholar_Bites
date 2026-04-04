@@ -83,4 +83,20 @@ class WalletService {
       throw Exception(errorMsg);
     }
   }
+
+  /// Redeem a dean coupon code.
+  Future<Map<String, dynamic>> redeemCoupon(String code) async {
+    try {
+      final response = await _dio.post(
+        '/wallet/redeem-coupon',
+        data: {'code': code},
+      );
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data is Map
+          ? e.response?.data['message'] ?? e.message
+          : e.message;
+      throw Exception(errorMsg);
+    }
+  }
 }

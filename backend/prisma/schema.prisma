@@ -9,7 +9,9 @@ datasource db {
   extensions = [uuidOssp(map: "uuid-ossp")]
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 1. universities Table
+// ═══════════════════════════════════════════════════════════════
 model University {
   id         String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name       String       @unique @db.VarChar(255)
@@ -23,11 +25,35 @@ model University {
   staff       Staff[]
   restaurants Restaurant[]
   orders      Order[]
+  deans       Dean[]
+  settings    UniversitySettings?
+  preOrders   StaffPreOrder[]
+  eventOrders EventPreOrder[]
 
   @@map("universities")
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 1.1. university_settings Table
+// Stores per-university configuration including auto-rotating staff code
+// ═══════════════════════════════════════════════════════════════
+model UniversitySettings {
+  id                          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id               String   @unique @db.Uuid
+  staff_access_code           String   @db.VarChar(20)       // Auto-rotated every 24 hours
+  staff_code_rotated_at       DateTime @default(now()) @db.Timestamptz
+  group_order_visible_students Boolean @default(false)       // Toggle for student group order access
+  created_at                  DateTime @default(now()) @db.Timestamptz
+  updated_at                  DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  university University @relation(fields: [university_id], references: [id])
+
+  @@map("university_settings")
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 1.5. restaurants Table (Vendors/Stalls within University)
+// ═══════════════════════════════════════════════════════════════
 model Restaurant {
   id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   university_id     String   @db.Uuid
@@ -40,36 +66,50 @@ model Restaurant {
   prep_time_minutes Int      @default(15)
   created_at        DateTime @default(now()) @db.Timestamptz
 
-  university    University  @relation(fields: [university_id], references: [id])
+  university    University      @relation(fields: [university_id], references: [id])
   menuItems     MenuItem[]
   orders        Order[]
   staff         Staff[]
+  preOrders     StaffPreOrder[]
 
   @@unique([university_id, name])
   @@map("restaurants")
 }
 
-// 2. users Table (Students)
+// ═══════════════════════════════════════════════════════════════
+// 2. users Table (Students & University Staff — app users)
+// ═══════════════════════════════════════════════════════════════
+enum UserType {
+  student
+  university_staff
+}
+
 model User {
   id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   university_id  String   @db.Uuid
   name           String   @db.VarChar(100)
   phone          String   @unique @db.VarChar(15)
+  user_type      UserType @default(student)
   wallet_balance Decimal  @default(0.00) @db.Decimal(10, 2)
   active_token   String?  @db.VarChar(64)
   created_at     DateTime @default(now()) @db.Timestamptz
 
-  university    University  @relation(fields: [university_id], references: [id])
-  groupOrders   GroupOrder[] 
-  groupMembers  GroupOrderMember[]
-  orders        Order[]
-  transactions  WalletTransaction[]
-  reviews       Review[]
+  university      University         @relation(fields: [university_id], references: [id])
+  groupOrders     GroupOrder[]
+  groupMembers    GroupOrderMember[]
+  orders          Order[]
+  transactions    WalletTransaction[]
+  reviews         Review[]
+  preOrders       StaffPreOrder[]
+  eventOrders     EventPreOrder[]
+  redeemedCoupons DeanCoupon[]
 
   @@map("users")
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 2.5 Wallet Transactions
+// ═══════════════════════════════════════════════════════════════
 enum TransactionType {
   credit
   debit
@@ -90,7 +130,9 @@ model WalletTransaction {
   @@map("wallet_transactions")
 }
 
-// 3. staff Table
+// ═══════════════════════════════════════════════════════════════
+// 3. staff Table (Admin Panel + Counter Staff — NOT app users)
+// ═══════════════════════════════════════════════════════════════
 enum Role {
   staff
   admin
@@ -115,7 +157,57 @@ model Staff {
   @@map("staff")
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 3.5 Deans — University deans managed by admin
+// ═══════════════════════════════════════════════════════════════
+model Dean {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id   String   @db.Uuid
+  name            String   @db.VarChar(100)
+  email           String   @unique @db.VarChar(255)
+  password_hash   String   @db.VarChar(255)
+  school_name     String   @db.VarChar(255)
+  total_budget    Decimal  @default(0.00) @db.Decimal(10, 2)
+  used_budget     Decimal  @default(0.00) @db.Decimal(10, 2)
+  active_token    String?  @db.VarChar(64)
+  created_at      DateTime @default(now()) @db.Timestamptz
+
+  university University   @relation(fields: [university_id], references: [id])
+  coupons    DeanCoupon[]
+
+  @@map("deans")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3.6 Dean Coupons — Budget distribution via coupon codes
+// ═══════════════════════════════════════════════════════════════
+enum CouponStatus {
+  active
+  redeemed
+  expired
+  revoked
+}
+
+model DeanCoupon {
+  id          String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  dean_id     String       @db.Uuid
+  code        String       @unique @db.VarChar(12)
+  amount      Decimal      @db.Decimal(10, 2)
+  status      CouponStatus @default(active)
+  redeemed_by String?      @db.Uuid    // user_id of university_staff who redeemed
+  redeemed_at DateTime?    @db.Timestamptz
+  created_at  DateTime     @default(now()) @db.Timestamptz
+  expires_at  DateTime     @db.Timestamptz  // Default: 30 days from creation
+
+  dean Dean  @relation(fields: [dean_id], references: [id])
+  user User? @relation(fields: [redeemed_by], references: [id])
+
+  @@map("dean_coupons")
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 4. menu_items Table
+// ═══════════════════════════════════════════════════════════════
 model MenuItem {
   id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   restaurant_id    String   @db.Uuid
@@ -129,16 +221,20 @@ model MenuItem {
   nutritional_info Json?
   created_at       DateTime @default(now()) @db.Timestamptz
 
-  restaurant     Restaurant  @relation(fields: [restaurant_id], references: [id])
-  orderItems     OrderItem[]
-  reviews        Review[]
+  restaurant         Restaurant          @relation(fields: [restaurant_id], references: [id])
+  orderItems         OrderItem[]
+  reviews            Review[]
+  preOrderItems      StaffPreOrderItem[]
+  eventPreOrderItems EventPreOrderItem[]
 
   @@unique([restaurant_id, name])
   @@index([category])
-  @@map("menu_items") 
+  @@map("menu_items")
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 5. group_orders Table (Dutch Treat)
+// ═══════════════════════════════════════════════════════════════
 enum GroupOrderStatus {
   open
   locked
@@ -164,7 +260,9 @@ model GroupOrder {
   @@map("group_orders")
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 6. group_order_members Table
+// ═══════════════════════════════════════════════════════════════
 enum PaymentStatus {
   pending
   paid
@@ -187,7 +285,9 @@ model GroupOrderMember {
   @@map("group_order_members")
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 7. orders Table
+// ═══════════════════════════════════════════════════════════════
 enum OrderStatus {
   pending
   preparing
@@ -228,7 +328,9 @@ model Order {
   @@map("orders")
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 8. order_items Table
+// ═══════════════════════════════════════════════════════════════
 model OrderItem {
   id            String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   order_id      String  @db.Uuid
@@ -242,7 +344,9 @@ model OrderItem {
   @@map("order_items")
 }
 
+// ═══════════════════════════════════════════════════════════════
 // 9. reviews Table
+// ═══════════════════════════════════════════════════════════════
 model Review {
   id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   user_id      String   @db.Uuid
@@ -255,4 +359,93 @@ model Review {
 
   @@unique([user_id, menu_item_id])
   @@map("reviews")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 10. Staff Pre-Orders (Daily meal pre-ordering for university staff)
+// ═══════════════════════════════════════════════════════════════
+enum PreOrderStatus {
+  pending
+  confirmed
+  preparing
+  ready
+  completed
+  cancelled
+}
+
+model StaffPreOrder {
+  id              String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id         String         @db.Uuid
+  university_id   String         @db.Uuid
+  restaurant_id   String         @db.Uuid
+  status          PreOrderStatus @default(pending)
+  order_date      DateTime       @db.Date              // The date for which food is pre-ordered
+  total_amount    Decimal        @db.Decimal(10, 2)
+  payment_method  String         @default("wallet") @db.VarChar(20)
+  created_at      DateTime       @default(now()) @db.Timestamptz
+
+  user       User                @relation(fields: [user_id], references: [id])
+  university University          @relation(fields: [university_id], references: [id])
+  restaurant Restaurant          @relation(fields: [restaurant_id], references: [id])
+  items      StaffPreOrderItem[]
+
+  @@map("staff_pre_orders")
+}
+
+model StaffPreOrderItem {
+  id              String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  pre_order_id    String  @db.Uuid
+  menu_item_id    String  @db.Uuid
+  quantity        Int
+  price_at_time   Decimal @db.Decimal(10, 2)
+
+  preOrder StaffPreOrder @relation(fields: [pre_order_id], references: [id])
+  menuItem MenuItem      @relation(fields: [menu_item_id], references: [id])
+
+  @@map("staff_pre_order_items")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 11. Event Pre-Orders (Staff event catering requests)
+// ═══════════════════════════════════════════════════════════════
+enum EventStatus {
+  upcoming
+  confirmed
+  preparing
+  completed
+  cancelled
+}
+
+model EventPreOrder {
+  id               String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id          String      @db.Uuid         // The staff member who created it
+  university_id    String      @db.Uuid
+  event_name       String      @db.VarChar(255)
+  event_date       DateTime    @db.Date
+  event_time       String      @db.VarChar(10)  // HH:MM format
+  member_count     Int
+  staff_name       String      @db.VarChar(100)
+  staff_email      String      @db.VarChar(255)
+  status           EventStatus @default(upcoming)
+  total_amount     Decimal     @default(0.00) @db.Decimal(10, 2)
+  created_at       DateTime    @default(now()) @db.Timestamptz
+
+  user       User                @relation(fields: [user_id], references: [id])
+  university University          @relation(fields: [university_id], references: [id])
+  items      EventPreOrderItem[]
+
+  @@map("event_pre_orders")
+}
+
+model EventPreOrderItem {
+  id               String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  event_order_id   String  @db.Uuid
+  menu_item_id     String  @db.Uuid
+  quantity         Int
+  price_at_time    Decimal @db.Decimal(10, 2)
+
+  eventOrder EventPreOrder @relation(fields: [event_order_id], references: [id])
+  menuItem   MenuItem      @relation(fields: [menu_item_id], references: [id])
+
+  @@map("event_pre_order_items")
 }

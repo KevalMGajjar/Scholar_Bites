@@ -209,6 +209,95 @@ class AuthService {
     return null;
   }
 
+  // ─── University Staff Auth Methods ───
+  
+  static Future<bool> verifyStaffCode(String staffCode) async {
+    try {
+      final response = await _dio.post(
+        '/auth/verify-staff-code',
+        data: {'staff_code': staffCode},
+      );
+      return response.statusCode == 200 && response.data['valid'] == true;
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['message'] ?? 'Invalid staff access code');
+    }
+  }
+
+  static Future<UserModel?> loginOtpStaff(String phone) async {
+    try {
+      final response = await _dio.post(
+        '/auth/login-otp-staff',
+        data: {'phone': phone},
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final token = data['token'];
+        final userModel = UserModel.fromJson(data['user']);
+        if (token != null) {
+          await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
+          await TokenStorage.saveUniversityId(userModel.universityId);
+          await TokenStorage.saveUserName(userModel.name);
+          await TokenStorage.saveUserEmail(userModel.email);
+          await TokenStorage.savePhone(phone);
+          await TokenStorage.saveUserType(userModel.userType);
+
+          final userBox = Hive.box<UserModel>('userBox');
+          await userBox.put('currentUser', userModel);
+
+          await NotificationService().registerCurrentToken();
+        }
+        return userModel;
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null; // Return null if 404 (needs registration)
+      }
+      throw Exception(e.response?.data['message'] ?? 'Staff login failed');
+    }
+    return null;
+  }
+
+  static Future<UserModel?> registerOtpStaff({
+    required String phone,
+    required String staffCode,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/register-otp-staff',
+        data: {
+          'phone': phone,
+          'staff_code': staffCode,
+        },
+      );
+
+      if (response.statusCode == 201) {
+        final data = response.data;
+        final token = data['token'];
+        final userModel = UserModel.fromJson(data['user']);
+        if (token != null) {
+          await TokenStorage.saveToken(token);
+          await TokenStorage.saveUserId(userModel.id);
+          await TokenStorage.saveUniversityId(userModel.universityId);
+          await TokenStorage.saveUserName(userModel.name);
+          await TokenStorage.saveUserEmail(userModel.email);
+          await TokenStorage.savePhone(phone);
+          await TokenStorage.saveUserType(userModel.userType);
+
+          final userBox = Hive.box<UserModel>('userBox');
+          await userBox.put('currentUser', userModel);
+
+          await NotificationService().registerCurrentToken();
+        }
+        return userModel;
+      }
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['message'] ?? 'Staff registration failed');
+    }
+    return null;
+  }
+
   /// Returns the cached user from Hive (for auto-login on app restart)
   static UserModel? getCachedUser() {
     final userBox = Hive.box<UserModel>('userBox');

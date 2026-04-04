@@ -386,3 +386,97 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
         client.release();
     }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// 5. Redeem Dean Coupon — University Staff Only
+// ═══════════════════════════════════════════════════════════════
+export const redeemCoupon = async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    const userType = req.user?.user_type;
+    const { coupon_code } = req.body;
+
+    if (userType !== 'university_staff') {
+        return res.status(403).json({ message: 'Only university staff can redeem coupons' });
+    }
+
+    if (!coupon_code || typeof coupon_code !== 'string') {
+        return res.status(400).json({ message: 'Coupon code is required' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Find the coupon
+        const couponResult = await client.query(
+            `SELECT dc.*, d.name as dean_name, d.school_name
+             FROM dean_coupons dc
+             JOIN deans d ON dc.dean_id = d.id
+             WHERE dc.code = $1
+             FOR UPDATE`,
+            [coupon_code.toUpperCase().trim()]
+        );
+
+        if (couponResult.rows.length === 0) {
+            throw new Error('Invalid coupon code');
+        }
+
+        const coupon = couponResult.rows[0];
+
+        if (coupon.status !== 'active') {
+            if (coupon.status === 'redeemed') throw new Error('This coupon has already been redeemed');
+            if (coupon.status === 'expired') throw new Error('This coupon has expired');
+            if (coupon.status === 'revoked') throw new Error('This coupon has been revoked');
+        }
+
+        // Check expiry
+        if (new Date(coupon.expires_at) < new Date()) {
+            // Mark as expired
+            await client.query("UPDATE dean_coupons SET status = 'expired' WHERE id = $1", [coupon.id]);
+            throw new Error('This coupon has expired');
+        }
+
+        const amount = Number(coupon.amount);
+
+        // Credit user wallet
+        const updatedUser = await client.query(
+            'UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2 RETURNING wallet_balance',
+            [amount, userId]
+        );
+
+        // Record credit transaction
+        await client.query(
+            `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
+             VALUES ($1, $2, 'credit', $3, $4)`,
+            [userId, amount, `Dean Coupon from ${coupon.dean_name} (${coupon.school_name})`, coupon.id]
+        );
+
+        // Mark coupon as redeemed
+        await client.query(
+            `UPDATE dean_coupons SET status = 'redeemed', redeemed_by = $1, redeemed_at = NOW()
+             WHERE id = $2`,
+            [userId, coupon.id]
+        );
+
+        await client.query('COMMIT');
+
+        auditLog({ userId, action: 'COUPON_REDEEMED', resource: `coupon:${coupon.code}`, ip: getRequestIp(req) });
+
+        res.json({
+            status: 'success',
+            amount_credited: amount,
+            new_balance: Number(updatedUser.rows[0].wallet_balance),
+            coupon_code: coupon.code,
+            dean_name: coupon.dean_name,
+            school_name: coupon.school_name,
+        });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        const msg = error.message || 'Coupon redemption failed';
+        console.warn('[Wallet] redeemCoupon:', msg);
+        res.status(400).json({ status: 'failure', message: msg });
+    } finally {
+        client.release();
+    }
+};
+

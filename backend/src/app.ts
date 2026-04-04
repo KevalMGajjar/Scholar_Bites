@@ -15,6 +15,8 @@ import walletRoutes from './routes/walletRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import superAdminRoutes from './routes/superAdminRoutes';
 import userRoutes from './routes/userRoutes';
+import staffRoutes from './routes/staffRoutes';
+import deanRoutes from './routes/deanRoutes';
 
 const app = express();
 
@@ -57,6 +59,12 @@ app.use('/api/admin/login/verify-otp', authLimiter);
 app.use('/api/admin/login/google', authLimiter);
 app.use('/api/admin/password/request-otp', otpLimiter);
 
+// ─── Staff Auth Rate Limiting ───
+app.use('/api/auth/verify-staff-code', authLimiter);
+app.use('/api/auth/login-otp-staff', authLimiter);
+app.use('/api/auth/register-otp-staff', authLimiter);
+app.use('/api/dean/login', authLimiter);
+
 // Serve uploaded images
 app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 
@@ -72,6 +80,8 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/dean', deanRoutes);
 
 app.get('/api', (req, res) => {
     res.send('University Canteen API is running');
@@ -124,6 +134,32 @@ app.use((req, res, next) => {
         res.sendFile(fullPath);
     } else {
         res.sendFile(superAdminIndex);
+    }
+});
+
+// ─── Serve Dean Portal (built static files) ───
+const deanDist = path.resolve(__dirname, '../../dean-portal/dist');
+const deanIndex = path.join(deanDist, 'index.html');
+
+app.use((req, res, next) => {
+    if (!req.path.startsWith('/dean') || req.path.startsWith('/api/dean')) {
+        return next();
+    }
+
+    if (!fs.existsSync(deanIndex)) {
+        res.status(503).send('Dean portal not built. Run: cd dean-portal && npm run build');
+        return;
+    }
+
+    let filePath = req.path.replace('/dean', '');
+    if (filePath === '') filePath = '/';
+
+    const fullPath = path.join(deanDist, filePath);
+
+    if (filePath !== '/' && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        res.sendFile(fullPath);
+    } else {
+        res.sendFile(deanIndex);
     }
 });
 

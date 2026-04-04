@@ -10,8 +10,15 @@ import 'home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phoneNumber;
+  final bool isStaffLogin;
+  final String? staffCode;
   
-  const OtpScreen({super.key, required this.phoneNumber});
+  const OtpScreen({
+    super.key, 
+    required this.phoneNumber, 
+    this.isStaffLogin = false, 
+    this.staffCode,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -44,7 +51,9 @@ class _OtpScreenState extends State<OtpScreen> {
     if (!mounted) return;
     
     try {
-      final existingUser = await AuthService.loginOtp(widget.phoneNumber);
+      final existingUser = widget.isStaffLogin
+          ? await AuthService.loginOtpStaff(widget.phoneNumber)
+          : await AuthService.loginOtp(widget.phoneNumber);
       
       if (!mounted) return;
 
@@ -60,9 +69,14 @@ class _OtpScreenState extends State<OtpScreen> {
       } else {
         // New user — register directly (backend auto-assigns Ahmedabad University)
         try {
-          final newUser = await AuthService.registerOtp(
-            phone: widget.phoneNumber,
-          );
+          final newUser = widget.isStaffLogin
+              ? await AuthService.registerOtpStaff(
+                  phone: widget.phoneNumber,
+                  staffCode: widget.staffCode!,
+                )
+              : await AuthService.registerOtp(
+                  phone: widget.phoneNumber,
+                );
           setState(() => _isLoading = false);
           
           if (newUser != null && mounted) {

@@ -39,6 +39,8 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [uniSuccess, setUniSuccess] = useState('');
   const [uniError, setUniError] = useState('');
+  const [uniSettings, setUniSettings] = useState<any>(null);
+  const [groupOrderVisible, setGroupOrderVisible] = useState(false);
 
   // ── Staff state ──
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -72,8 +74,20 @@ export default function Settings() {
 
   const fetchUniversity = useCallback(async () => {
     if (!user?.university_id) return;
-    try { const res = await api.get(`/university/${user.university_id}`); setUniversity(res.data); setName(res.data.name); setAddress(res.data.address || ''); setSupportPhone(res.data.support_phone || ''); setSupportEmail(res.data.support_email || ''); setLogoPreview(res.data.logo_url || null); }
-    catch (err) { console.error(err); setUniError('Failed to load university'); }
+    try { 
+      const res = await api.get(`/university/${user.university_id}`); 
+      setUniversity(res.data); 
+      setName(res.data.name); 
+      setAddress(res.data.address || ''); 
+      setSupportPhone(res.data.support_phone || ''); 
+      setSupportEmail(res.data.support_email || ''); 
+      setLogoPreview(res.data.logo_url || null); 
+
+      const settingsRes = await api.get(`/admin/settings/${user.university_id}`);
+      setUniSettings(settingsRes.data);
+      setGroupOrderVisible(settingsRes.data.group_order_visible_students);
+    }
+    catch (err) { console.error(err); setUniError('Failed to load university profile or settings'); }
     finally { setLoading(false); }
   }, [user?.university_id]);
 
@@ -92,7 +106,13 @@ export default function Settings() {
     setSaving(true); setUniError(''); setUniSuccess('');
     const fd = new FormData(); fd.append('name', name); fd.append('address', address); fd.append('support_phone', supportPhone); fd.append('support_email', supportEmail);
     if (logoFile) fd.append('logo', logoFile);
-    try { await api.patch(`/university/${user.university_id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); setUniSuccess('University updated successfully!'); setLogoFile(null); fetchUniversity(); }
+    try { 
+      await api.patch(`/university/${user.university_id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); 
+      await api.patch(`/admin/settings/${user.university_id}`, { group_order_visible_students: groupOrderVisible });
+      setUniSuccess('Profile & settings updated successfully!'); 
+      setLogoFile(null); 
+      fetchUniversity(); 
+    }
     catch (err: any) { setUniError(err.response?.data?.message || 'Update failed'); }
     finally { setSaving(false); }
   };
@@ -193,7 +213,33 @@ export default function Settings() {
               <div><label className={labelClass}><Mail size={11} className="text-indigo-400" /> Support Email</label>
                 <input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="help@university.edu" className={inputClass} /></div>
             </div>
-            <div className="flex justify-end">
+            
+            {/* System Toggles & Secrets */}
+            <div className="pt-6 border-t border-white/[0.04]">
+              <h3 className="text-white font-bold text-[13px] mb-4">System Settings</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div>
+                    <h4 className="text-[13px] font-bold text-white mb-1">Group Order Students</h4>
+                    <p className="text-[11px] text-slate-500">Allow students to initiate group orders.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={groupOrderVisible} onChange={(e) => setGroupOrderVisible(e.target.checked)} />
+                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                  </label>
+                </div>
+                
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <h4 className="text-[13px] font-bold text-amber-400 mb-1 flex items-center gap-1.5"><Lock size={12} /> Staff Access Code</h4>
+                  <p className="text-[11px] text-amber-500/70 mb-2">Used by university staff to authenticate in the mobile app. Rotates daily automatically.</p>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[18px] font-bold text-white tracking-[0.2em]">{uniSettings?.staff_access_code || '------'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-white/[0.04]">
               <button type="submit" disabled={saving} className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[13px] font-bold hover:shadow-lg hover:shadow-indigo-500/20 transition-all disabled:opacity-50 btn-press flex items-center gap-2">
                 {saving ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> Saving...</> : 'Save Changes'}
               </button>

@@ -108,4 +108,12 @@ class TokenStorage {
   static Future<String?> getPhone() async {
     return await _storage.read(key: 'user_phone');
   }
+
+  static Future<void> saveUserType(String userType) async {
+    await _storage.write(key: 'user_type', value: userType);
+  }
+
+  static Future<String?> getUserType() async {
+    return await _storage.read(key: 'user_type');
+  }
 }

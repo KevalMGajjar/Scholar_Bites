@@ -43,7 +43,13 @@ export const getUniversities = async (req: Request, res: Response) => {
 export const getUniversityById = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        const result = await pool.query('SELECT * FROM universities WHERE id = $1', [id]);
+        const result = await pool.query(
+            `SELECT u.*, s.group_order_visible_students 
+             FROM universities u
+             LEFT JOIN university_settings s ON u.id = s.university_id
+             WHERE u.id = $1`, 
+             [id]
+        );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'University not found' });
         }

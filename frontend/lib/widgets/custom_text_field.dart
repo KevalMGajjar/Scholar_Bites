@@ -14,6 +14,7 @@ class CustomTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
 
   const CustomTextField({
     super.key,
@@ -26,6 +27,7 @@ class CustomTextField extends StatefulWidget {
     this.keyboardType,
     this.maxLength,
     this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -95,6 +97,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
             onChanged: widget.onChanged,
             maxLength: widget.maxLength,
             inputFormatters: widget.inputFormatters,
+            textCapitalization: widget.textCapitalization,
             style: GoogleFonts.poppins(
               color: const Color(0xFF4A0E13),
               fontSize: 16,

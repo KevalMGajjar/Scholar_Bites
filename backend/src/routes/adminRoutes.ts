@@ -6,6 +6,10 @@ import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
 import { upload } from '../controllers/uploadController';
 import { getStatistics } from '../controllers/statisticsController';
+import { createDean, getAllDeans, updateDeanBudget, deleteDean, getAllEvents, getEventsCalendar, exportEventsCSV, getDeanFundDistribution, exportFundDistributionCSV } from '../controllers/deanController';
+import { getTodayPreOrders, updatePreOrderStatus } from '../controllers/preOrderController';
+import { updateEventStatus } from '../controllers/eventPreOrderController';
+import { getUniversitySettings, updateUniversitySettings } from '../controllers/staffAuthController';
 
 const router = Router();
 
@@ -55,5 +59,27 @@ router.delete('/staff/:id', authorizeRole(['admin', 'super_admin']), deleteStaff
 // ─── Password Change via OTP (Self-service for any authenticated staff) ───
 router.post('/password/request-otp', requestPasswordOtp);
 router.post('/password/verify-and-change', verifyOtpAndChangePassword);
+
+// ─── University Settings (Admin + Super Admin) ───
+router.get('/settings/:university_id', authorizeRole(['admin', 'super_admin']), getUniversitySettings);
+router.patch('/settings/:university_id', authorizeRole(['admin', 'super_admin']), updateUniversitySettings);
+
+// ─── Dean Management (Admin only) ───
+router.post('/deans', authorizeRole(['admin', 'super_admin']), createDean);
+router.get('/deans', authorizeRole(['admin', 'super_admin']), getAllDeans);
+router.patch('/deans/:id/budget', authorizeRole(['admin', 'super_admin']), updateDeanBudget);
+router.delete('/deans/:id', authorizeRole(['admin', 'super_admin']), deleteDean);
+router.get('/deans/:id/fund-distribution', authorizeRole(['admin', 'super_admin']), getDeanFundDistribution);
+router.get('/deans/:id/fund-distribution/export', authorizeRole(['admin', 'super_admin']), exportFundDistributionCSV);
+
+// ─── Event Management (Admin only) ───
+router.get('/events', authorizeRole(['admin', 'super_admin']), getAllEvents);
+router.get('/events/calendar', authorizeRole(['admin', 'super_admin']), getEventsCalendar);
+router.get('/events/export', authorizeRole(['admin', 'super_admin']), exportEventsCSV);
+router.patch('/events/:id/status', authorizeRole(['admin', 'super_admin']), updateEventStatus);
+
+// ─── Pre-Order Management (Admin only) ───
+router.get('/pre-orders/today', authorizeRole(['admin', 'super_admin']), getTodayPreOrders);
+router.patch('/pre-orders/:id/status', authorizeRole(['admin', 'super_admin']), updatePreOrderStatus);
 
 export default router;

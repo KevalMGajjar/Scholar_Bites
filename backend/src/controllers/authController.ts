@@ -59,13 +59,13 @@ export const loginOtp = async (req: Request, res: Response) => {
         // If the user logs in again, we overwrite the old token. The old device
         // will be kicked out via the DEVICE_CONFLICT check in authMiddleware.
 
-        const token = generateToken({ id: user.id, phone: user.phone, role });
+        const token = generateToken({ id: user.id, phone: user.phone, role, user_type: user.user_type || 'student' });
 
         // Save token hash for single-device enforcement
         const table = role === 'student' ? 'users' : 'staff';
         await saveActiveToken(user.id, token, table);
 
-        res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, university_id: user.university_id, university_name: user.university_name, role } });
+        res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, university_id: user.university_id, university_name: user.university_name, role, user_type: user.user_type || 'student' } });
     } catch (error: any) {
         console.error('[Auth] loginOtp error:', error.message);
         res.status(500).json({ message: 'Server error' });
@@ -91,12 +91,12 @@ export const registerOtp = async (req: Request, res: Response) => {
         const uniResult = await pool.query('SELECT name FROM universities WHERE id = $1', [university_id]);
         const universityName = uniResult.rows[0]?.name || '';
 
-        const token = generateToken({ id: user.id, phone: user.phone, role: 'student' });
+        const token = generateToken({ id: user.id, phone: user.phone, role: 'student', user_type: 'student' });
 
         // Save token hash for single-device enforcement
         await saveActiveToken(user.id, token);
 
-        res.status(201).json({ token, user: { ...user, university_name: universityName, role: 'student' } });
+        res.status(201).json({ token, user: { ...user, university_name: universityName, role: 'student', user_type: 'student' } });
     } catch (error: any) {
         console.error('[Auth] register error:', error.message);
         if (error.code === '23505') {

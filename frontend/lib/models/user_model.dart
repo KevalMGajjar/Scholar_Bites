@@ -7,6 +7,7 @@ class UserModel {
   final String role;
   final String universityId;
   final String universityName;
+  final String userType;
 
   UserModel({
     required this.id,
@@ -15,6 +16,7 @@ class UserModel {
     required this.role,
     required this.universityId,
     this.universityName = '',
+    this.userType = 'student',
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,7 @@ class UserModel {
       role: json['role']?.toString() ?? 'student',
       universityId: json['university_id']?.toString() ?? '',
       universityName: json['university_name']?.toString() ?? '',
+      userType: json['user_type']?.toString() ?? 'student',
     );
   }
 
@@ -36,6 +39,7 @@ class UserModel {
       'role': role,
       'university_id': universityId,
       'university_name': universityName,
+      'user_type': userType,
     };
   }
 }
@@ -58,17 +62,19 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       role: fields[3] as String? ?? 'student',
       universityId: fields[4] as String? ?? '',
       universityName: fields[5] as String? ?? '',
+      userType: fields[6] as String? ?? 'student',
     );
   }
 
   @override
   void write(BinaryWriter writer, UserModel obj) {
-    writer.writeByte(6); // number of fields
+    writer.writeByte(7); // number of fields
     writer.writeByte(0); writer.write(obj.id);
     writer.writeByte(1); writer.write(obj.name);
     writer.writeByte(2); writer.write(obj.email);
     writer.writeByte(3); writer.write(obj.role);
     writer.writeByte(4); writer.write(obj.universityId);
     writer.writeByte(5); writer.write(obj.universityName);
+    writer.writeByte(6); writer.write(obj.userType);
   }
 }

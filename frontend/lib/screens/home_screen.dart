@@ -14,6 +14,9 @@ import 'restaurant_detail_screen.dart';
 import 'group/group_entry_screen.dart';
 import 'group/group_lobby_screen.dart';
 import 'group/group_payment_screen.dart';
+import 'staff_pre_order_screen.dart';
+import 'event_pre_order_screen.dart';
+import 'redeem_coupon_screen.dart';
 import '../services/group_service.dart';
 import '../services/menu_service.dart';
 import '../services/restaurant_service.dart';
@@ -63,6 +66,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _universityLogoUrl;
   String? _universityAddress;
   int _unreadNotifsCount = 0;
+  bool _isStaff = false;
+  bool _groupOrderVisible = false;
 
   // Categories with Material icons for Story UI
   List<Map<String, dynamic>> _categories = [];
@@ -184,9 +189,17 @@ class _HomeScreenState extends State<HomeScreen> {
               _universityName = uniData['name'];
               _universityLogoUrl = uniData['logo_url'];
               _universityAddress = uniData['address'];
+              _groupOrderVisible = uniData['group_order_visible_students'] ?? false;
             });
           }
         } catch (_) {}
+        
+        final userType = await TokenStorage.getUserType();
+        if (mounted) {
+          setState(() {
+            _isStaff = (userType == 'university_staff');
+          });
+        }
         
         // Fetch trending items, unread count, AND all items concurrently
         final responses = await Future.wait([
@@ -882,7 +895,99 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                      // 5. Campus Spots List
+                      // 5. Staff Actions Section (Only for Staff)
+                      if (_isStaff) 
+                        SliverToBoxAdapter(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(left: 24, top: 16, bottom: 8),
+                                child: Text('Staff Actions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1E1E1E))),
+                              ),
+                              SizedBox(
+                                height: 160,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                                  children: [
+                                    // Pre-order Card
+                                    GestureDetector(
+                                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StaffPreOrderScreen())),
+                                      child: Container(
+                                        width: 160,
+                                        margin: const EdgeInsets.only(right: 16, bottom: 16),
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(colors: [Color(0xFF8B1C28), Color(0xFF6A121D)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                                          borderRadius: BorderRadius.circular(24),
+                                          boxShadow: [BoxShadow(color: const Color(0xFF8B1C28).withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle), child: const Icon(Icons.room_service_rounded, color: Colors.white, size: 24)),
+                                            const Spacer(),
+                                            const Text('Daily Pre-Order', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ).animate().fadeIn(duration: 600.ms).slideX(begin: 0.1, end: 0),
+                                    ),
+                                    // Club Events Card
+                                    GestureDetector(
+                                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EventPreOrderScreen())),
+                                      child: Container(
+                                        width: 160,
+                                        margin: const EdgeInsets.only(right: 16, bottom: 16),
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(24),
+                                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 8))],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF8B1C28).withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.event_available_rounded, color: Color(0xFF8B1C28), size: 24)),
+                                            const Spacer(),
+                                            const Text('Catering Request', style: TextStyle(color: Color(0xFF4A0E13), fontSize: 15, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ).animate().fadeIn(duration: 600.ms, delay: 100.ms).slideX(begin: 0.1, end: 0),
+                                    ),
+                                    // Redeem Dean Coupon Card
+                                    GestureDetector(
+                                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RedeemCouponScreen())),
+                                      child: Container(
+                                        width: 160,
+                                        margin: const EdgeInsets.only(bottom: 16),
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(24),
+                                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 8))],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF8B1C28).withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.local_activity_rounded, color: Color(0xFF8B1C28), size: 24)),
+                                            const Spacer(),
+                                            const Text('Redeem Coupon', style: TextStyle(color: Color(0xFF4A0E13), fontSize: 16, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ).animate().fadeIn(duration: 600.ms, delay: 200.ms).slideX(begin: 0.1, end: 0),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // 6. Campus Spots List
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.only(left: 24, top: 32, bottom: 16),
@@ -1013,32 +1118,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
           ),
           
-          // Floating Group Order Button
-          Positioned(
-            right: 20,
-            bottom: 120,
-            child: GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupEntryScreen())),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF8B1C28), Color(0xFFB52A3A)]),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(color: const Color(0xFF8B1C28).withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6)),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.group_rounded, color: Colors.white, size: 20),
-                    const SizedBox(width: 8),
-                    Text('Group Order', style: GoogleFonts.poppins(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-                  ],
+          // Floating Group Order Button (Visible to staff or if enabled for students)
+          if (_isStaff || _groupOrderVisible)
+            Positioned(
+              right: 20,
+              bottom: 120,
+              child: GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupEntryScreen())),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF8B1C28), Color(0xFFB52A3A)]),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFF8B1C28).withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.group_rounded, color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Group Order', style: GoogleFonts.poppins(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
 
           // Floating Bottom Navigation Bar
           Positioned(
