@@ -52,11 +52,16 @@ async function syncLogo() {
         };
 
         const adminLogoPath = path.resolve(__dirname, '../../admin-panel/public/admin/logo.png');
+        const deanLogoPath = path.resolve(__dirname, '../../dean-portal/public/logo.png');
         const flutterLogoPath = path.resolve(__dirname, '../../frontend/assets/logo.png');
         
         console.log('Downloading to:', adminLogoPath);
         await downloadFile(logoUrl, adminLogoPath);
         console.log('Successfully saved admin logo');
+
+        console.log('Downloading to:', deanLogoPath);
+        await downloadFile(logoUrl, deanLogoPath);
+        console.log('Successfully saved dean portal logo');
 
         if (fs.existsSync(path.dirname(flutterLogoPath))) {
             console.log('Downloading to:', flutterLogoPath);

@@ -36,7 +36,7 @@ export default function Login() {
         {/* Logo Area */}
         <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 p-3 mb-6 relative group overflow-hidden">
           <div className="absolute inset-0 bg-white/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          <img src="/logo.png" alt="Logo" className="w-full h-full object-contain filter brightness-110 drop-shadow-md z-10" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Logo" className="w-full h-full object-contain filter brightness-110 drop-shadow-md z-10" />
         </div>
         <h2 className="mt-2 text-center text-[28px] font-extrabold text-white tracking-[-0.03em]">Dean Portal</h2>
         <p className="mt-2 text-center text-[14px] text-slate-500 font-medium">Please sign in to your faculty account</p>

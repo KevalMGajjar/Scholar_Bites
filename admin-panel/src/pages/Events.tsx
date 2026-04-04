@@ -149,7 +149,6 @@ export default function Events() {
                       value={deanEmail}
                       onChange={(e) => setDeanEmail(e.target.value)}
                       className="w-full bg-[#060810] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                      placeholder="dean@university.edu"
                     />
                   </div>
                 </div>
@@ -165,7 +164,6 @@ export default function Events() {
                       value={deanPassword}
                       onChange={(e) => setDeanPassword(e.target.value)}
                       className="w-full bg-[#060810] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                      placeholder="••••••••"
                     />
                   </div>
                 </div>
