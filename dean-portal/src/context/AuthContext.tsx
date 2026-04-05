@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     if (token && storedUser) {
       setUser(JSON.parse(storedUser));
-      api.get('/dean/me')
+      api.get('/dean/profile')
         .then((res) => {
           setUser(res.data);
           localStorage.setItem('dean_user', JSON.stringify(res.data));

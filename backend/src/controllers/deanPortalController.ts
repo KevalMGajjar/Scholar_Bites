@@ -241,7 +241,7 @@ export const getFundDistribution = async (req: Request, res: Response) => {
 
         const coupons = await pool.query(
             `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at,
-                    u.name as redeemed_by_name, u.phone as redeemed_by_phone
+                    u.name as redeemed_by_name, u.phone as redeemed_by_phone, u.role as redeemed_by_role
              FROM dean_coupons dc
              LEFT JOIN users u ON dc.redeemed_by = u.id
              WHERE dc.dean_id = $1
@@ -256,6 +256,21 @@ export const getFundDistribution = async (req: Request, res: Response) => {
         const totalRedeemed = redeemed.reduce((s: number, c: any) => s + Number(c.amount), 0);
         const active = allCoupons.filter((c: any) => c.status === 'active');
         const totalActive = active.reduce((s: number, c: any) => s + Number(c.amount), 0);
+
+        // Demographic distributions based on redeemed role
+        const distMap: Record<string, { count: number; totalAmount: number }> = {};
+        redeemed.forEach((c: any) => {
+            const role = c.redeemed_by_role || 'unknown';
+            if (!distMap[role]) distMap[role] = { count: 0, totalAmount: 0 };
+            distMap[role].count += 1;
+            distMap[role].totalAmount += Number(c.amount);
+        });
+
+        const distributionsArray = Object.entries(distMap).map(([role, data]) => ({
+            role,
+            count: data.count,
+            totalAmount: data.totalAmount
+        }));
 
         const d = deanResult.rows[0];
         res.json({
@@ -276,6 +291,7 @@ export const getFundDistribution = async (req: Request, res: Response) => {
                 ...c,
                 amount: Number(c.amount),
             })),
+            distributions: distributionsArray
         });
     } catch (error: any) {
         console.error('[DeanPortal] getFundDistribution error:', error.message);

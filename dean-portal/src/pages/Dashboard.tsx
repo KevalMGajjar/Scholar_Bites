@@ -44,7 +44,7 @@ export default function Dashboard() {
         api.get('/dean/fund-distribution')
       ]);
       setCoupons(couponsRes.data);
-      setDistributions(fundsRes.data);
+      setDistributions(fundsRes.data.distributions || []);
     } catch (error) {
       toast.error('Failed to load dashboard data');
     } finally {
