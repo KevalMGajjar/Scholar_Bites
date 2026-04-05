@@ -89,7 +89,7 @@ class WalletService {
     try {
       final response = await _dio.post(
         '/wallet/redeem-coupon',
-        data: {'code': code},
+        data: {'coupon_code': code},
       );
       return Map<String, dynamic>.from(response.data);
     } on DioException catch (e) {

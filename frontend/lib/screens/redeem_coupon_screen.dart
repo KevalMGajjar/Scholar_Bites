@@ -84,7 +84,7 @@ class _RedeemCouponScreenState extends State<RedeemCouponScreen> {
             ).animate().scale(delay: 200.ms, curve: Curves.easeOutBack),
             const SizedBox(height: 32),
             Text(
-              'Enter your 8-character code below to add department funds to your wallet.',
+              'Enter your 10-character code below to add department funds to your wallet.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 14,
@@ -95,7 +95,7 @@ class _RedeemCouponScreenState extends State<RedeemCouponScreen> {
             const SizedBox(height: 32),
             CustomTextField(
               controller: _codeController,
-              hintText: 'e.g. A1B2C3D4',
+              hintText: 'e.g. DCA1B2C3D4',
               prefixIcon: Icons.confirmation_number_rounded,
               textCapitalization: TextCapitalization.characters,
             ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
