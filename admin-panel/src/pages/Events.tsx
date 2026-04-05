@@ -4,8 +4,12 @@ import api from '../services/api';
 
 interface Dean {
   id: string;
+  name?: string;
+  school_name?: string;
   email: string;
   created_at: string;
+  total_budget?: number;
+  used_budget?: number;
 }
 
 interface EventPreOrder {
@@ -31,6 +35,23 @@ export default function Events() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [fundInputs, setFundInputs] = useState<Record<string, string>>({});
+  const [isUpdatingFunds, setIsUpdatingFunds] = useState<string | null>(null);
+
+  const handleUpdateFunds = async (deanId: string) => {
+    const amount = Number(fundInputs[deanId]);
+    if (!fundInputs[deanId] || isNaN(amount)) return;
+    setIsUpdatingFunds(deanId);
+    try {
+      await api.patch(`/admin/deans/${deanId}/budget`, { amount });
+      setFundInputs((prev) => ({ ...prev, [deanId]: '' }));
+      fetchData();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to update funds');
+    } finally {
+      setIsUpdatingFunds(null);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -357,20 +378,75 @@ export default function Events() {
       )}
 
       {activeTab === 'funds' && (
-        <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6 min-h-[400px] flex flex-col items-center justify-center text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-2xl flex items-center justify-center mb-4">
-            <CheckCircle2 className="text-emerald-400" size={32} />
+        <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <CheckCircle2 className="text-emerald-400" /> Dean Fund Distribution
+            </h2>
+            <button
+              onClick={() => downloadCSV('funds')}
+              className="px-4 py-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all text-white"
+            >
+              <Table size={16} /> Export Master Ledger
+            </button>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Fund Distribution & Coupons</h2>
-          <p className="text-slate-400 max-w-md mx-auto mb-6">
-            Detailed fund distribution is managed securely through the Dean Portal. You can download the aggregated summary report from here.
-          </p>
-          <button
-            onClick={() => downloadCSV('funds')}
-            className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"
-          >
-            <Table size={18} /> Download Master Report
-          </button>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-white/[0.02]">
+                  <th className="py-3 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Dean Details</th>
+                  <th className="py-3 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Allocated (₹)</th>
+                  <th className="py-3 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Used (₹)</th>
+                  <th className="py-3 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Update Budget</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-500">Loading...</td>
+                  </tr>
+                ) : deans.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-500 bg-white/[0.01]">
+                      {activeTab === 'funds' && "No Deans are currently active."}
+                    </td>
+                  </tr>
+                ) : (
+                  deans.map((dean) => (
+                    <tr key={dean.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-4 px-6">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-white">{dean.name || 'Not Available'}</span>
+                          <span className="text-xs text-slate-400">{dean.school_name || 'No School Recorded'}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-sm text-emerald-400 font-bold">{dean.total_budget?.toFixed(2) || '0.00'}</td>
+                      <td className="py-4 px-6 text-sm text-slate-400">{dean.used_budget?.toFixed(2) || '0.00'}</td>
+                      <td className="py-4 px-6">
+                        <div className="flex justify-end items-center gap-2">
+                          <input
+                            type="number"
+                            placeholder="Add / Deduct"
+                            value={fundInputs[dean.id] || ''}
+                            onChange={(e) => setFundInputs({ ...fundInputs, [dean.id]: e.target.value })}
+                            className="bg-[#060810] border border-white/10 rounded-lg py-1.5 px-3 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-32 outline-none"
+                          />
+                          <button
+                            onClick={() => handleUpdateFunds(dean.id)}
+                            disabled={isUpdatingFunds === dean.id || !fundInputs[dean.id]}
+                            className="bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/50 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-all shadow-md"
+                          >
+                            {isUpdatingFunds === dean.id ? '...' : 'Update'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

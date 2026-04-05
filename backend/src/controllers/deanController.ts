@@ -74,8 +74,8 @@ export const updateDeanBudget = async (req: AuthRequest, res: Response) => {
     const { amount } = req.body;
     const parsedAmount = Number(amount);
 
-    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ message: 'Valid positive amount is required' });
+    if (amount === undefined || isNaN(parsedAmount)) {
+        return res.status(400).json({ message: 'Valid numeric amount is required' });
     }
 
     try {
