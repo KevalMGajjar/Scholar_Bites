@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
-import { TicketPercent, Wallet, LogOut, Plus, Trash2, ShieldCheck, Download, Users } from 'lucide-react';
+import { TicketPercent, Wallet, LogOut, Plus, Trash2, Download, Users } from 'lucide-react';
 
 interface Coupon {
   id: string;
