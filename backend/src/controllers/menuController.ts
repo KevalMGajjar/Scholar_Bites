@@ -21,6 +21,7 @@ export const getTrendingItems = async (req: Request, res: Response) => {
              JOIN orders o ON oi.order_id = o.id
              JOIN restaurants r ON m.restaurant_id = r.id
              WHERE o.university_id = $1
+               AND LOWER(r.name) != 'event management'
                AND o.status IN ('preparing', 'ready', 'completed')
              GROUP BY m.id, r.is_open
              ORDER BY order_count DESC
@@ -53,7 +54,7 @@ export const getMenu = async (req: Request, res: Response) => {
                 SELECT m.*, r.is_open as restaurant_is_open 
                 FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
-                WHERE m.restaurant_id = $${pIndex++}${availFilter}
+                WHERE m.restaurant_id = $${pIndex++} AND LOWER(r.name) != 'event management'${availFilter}
             `;
             params.push(restaurant_id);
         } else if (university_id) {
@@ -61,7 +62,7 @@ export const getMenu = async (req: Request, res: Response) => {
                 SELECT DISTINCT ON (m.name) m.*, r.is_open as restaurant_is_open 
                 FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
-                WHERE r.university_id = $${pIndex++}${availFilter}
+                WHERE r.university_id = $${pIndex++} AND LOWER(r.name) != 'event management'${availFilter}
             `;
             params.push(university_id);
         }

@@ -197,11 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
         final userType = await TokenStorage.getUserType();
         final bool isStaff = (userType == 'university_staff');
 
-        List<Restaurant> visibleRests = rests;
-        if (!isStaff) {
-          visibleRests = rests.where((r) => r.name.toLowerCase() != 'event management').toList();
-        }
-
         if (mounted) {
           setState(() {
             _isStaff = isStaff;
@@ -238,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (mounted) {
           setState(() {
-            _restaurants = visibleRests;
+            _restaurants = rests;
             _trendingItems = trending;
             _categories = dynCategories;
             _unreadNotifsCount = unreadCount;

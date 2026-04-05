@@ -12,9 +12,9 @@ export const getRestaurantsByUniversity = async (req: Request, res: Response) =>
     }
 
     try {
-        // Return all restaurants — frontend will handle open/closed state based on times
-        const query = 'SELECT * FROM restaurants WHERE university_id = $1 ORDER BY rating DESC, name';
-        const result = await pool.query(query, [university_id]);
+        // Return all public restaurants, completely hiding 'Event Management' which is private/restricted
+        const query = 'SELECT * FROM restaurants WHERE university_id = $1 AND LOWER(name) != $2 ORDER BY rating DESC, name';
+        const result = await pool.query(query, [university_id, 'event management']);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching restaurants:', error);
