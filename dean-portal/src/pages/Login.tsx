@@ -35,7 +35,7 @@ export default function Login() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 animate-fade-up">
         {/* Logo Area */}
         <div className="w-20 h-20 mx-auto bg-transparent flex items-center justify-center p-2 mb-4 relative group overflow-hidden">
-          <img src="/logo.png" alt="University Logo" className="w-full h-full object-contain filter brightness-110 drop-shadow-md z-10" />
+          <img src="/dean/logo.png" alt="University Logo" className="w-full h-full object-contain filter brightness-110 drop-shadow-md z-10" />
         </div>
         <h2 className="mt-2 text-center text-4xl font-display font-bold text-content-primary tracking-tight">Dean Portal</h2>
         <p className="mt-2 text-center text-sm text-content-secondary font-medium">Please authenticate to access the ledger</p>

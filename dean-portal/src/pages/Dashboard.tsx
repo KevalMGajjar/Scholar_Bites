@@ -116,7 +116,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between h-20">
             <div className="flex items-center gap-4">
-              <img src="/logo.png" alt="University Logo" className="w-10 h-10 object-contain drop-shadow-md filter brightness-110" />
+              <img src="/dean/logo.png" alt="University Logo" className="w-10 h-10 object-contain drop-shadow-md filter brightness-110" />
               <span className="font-display font-bold text-content-primary text-xl tracking-tight">Dean Portal</span>
             </div>
             <div className="flex items-center gap-6">
