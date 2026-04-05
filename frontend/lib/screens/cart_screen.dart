@@ -46,6 +46,7 @@ class _CartScreenState extends State<CartScreen> {
   int? _minutesUntilClose; // null = no closing_time set
   String? _closingRestaurantName;
   bool _restaurantClosed = false;
+  bool _isEventManagementOrder = false;
 
   @override
   void initState() {
@@ -99,6 +100,12 @@ class _CartScreenState extends State<CartScreen> {
       );
 
       if (restaurant == null || !mounted) return;
+      
+      if (restaurant.name.toLowerCase() == 'event management') {
+        setState(() {
+          _isEventManagementOrder = true;
+        });
+      }
 
       // Check if restaurant is currently open
       if (!restaurant.isCurrentlyOpen) {
@@ -1065,45 +1072,47 @@ class _CartScreenState extends State<CartScreen> {
           const SizedBox(height: 20),
 
           // Pay Button (Razorpay)
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _isProcessingPayment ? null : () => _startCheckoutFlow(cart),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _maroon,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                elevation: 6,
-                shadowColor: _maroon.withValues(alpha: 0.5),
-              ),
-              child: _isProcessingPayment 
-                ? const SizedBox(
-                    width: 24, 
-                    height: 24, 
-                    child: SpoonLoader(size: 24)
-                  )
-                : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.payment_rounded, size: 22),
-                  SizedBox(width: 10),
-                  Text(
-                    'Pay',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
+          if (!_isEventManagementOrder)
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isProcessingPayment ? null : () => _startCheckoutFlow(cart),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _maroon,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
                   ),
-                ],
+                  elevation: 6,
+                  shadowColor: _maroon.withValues(alpha: 0.5),
+                ),
+                child: _isProcessingPayment 
+                  ? const SizedBox(
+                      width: 24, 
+                      height: 24, 
+                      child: SpoonLoader(size: 24)
+                    )
+                  : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.payment_rounded, size: 22),
+                    SizedBox(width: 10),
+                    Text(
+                      'Pay with Razorpay',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 12),
+          if (!_isEventManagementOrder)
+            const SizedBox(height: 12),
 
           // Pay with Wallet Button
           SizedBox(

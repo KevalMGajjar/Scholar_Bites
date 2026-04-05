@@ -24,6 +24,8 @@ export default function Events() {
   const [loading, setLoading] = useState(true);
 
   // New Dean form
+  const [deanName, setDeanName] = useState('');
+  const [deanSchool, setDeanSchool] = useState('');
   const [deanEmail, setDeanEmail] = useState('');
   const [deanPassword, setDeanPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,17 +53,27 @@ export default function Events() {
 
   const handeAddDean = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!deanEmail || !deanPassword) return;
+    if (!deanEmail || !deanPassword || !deanName || !deanSchool) {
+      alert("Please fill in all fields.");
+      return;
+    }
+
+    if (deanPassword.length < 8) {
+      alert("Password must be at least 8 characters.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      await api.post('/admin/deans', { email: deanEmail, password: deanPassword });
+      await api.post('/admin/deans', { name: deanName, school_name: deanSchool, email: deanEmail, password: deanPassword });
       alert('Dean added successfully');
+      setDeanName('');
+      setDeanSchool('');
       setDeanEmail('');
       setDeanPassword('');
       fetchData();
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to add dean');
+      alert(error.response?.data?.message || error.message || 'Failed to add dean');
     } finally {
       setIsSubmitting(false);
     }
@@ -139,6 +151,36 @@ export default function Events() {
               <form onSubmit={handeAddDean} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    Name
+                  </label>
+                  <div className="relative">
+                    <UserPlus size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      value={deanName}
+                      onChange={(e) => setDeanName(e.target.value)}
+                      className="w-full bg-[#060810] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    School Name
+                  </label>
+                  <div className="relative">
+                    <Table size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      value={deanSchool}
+                      onChange={(e) => setDeanSchool(e.target.value)}
+                      className="w-full bg-[#060810] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
                     Email Address
                   </label>
                   <div className="relative">
@@ -161,6 +203,7 @@ export default function Events() {
                     <input
                       type="password"
                       required
+                      minLength={8}
                       value={deanPassword}
                       onChange={(e) => setDeanPassword(e.target.value)}
                       className="w-full bg-[#060810] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"

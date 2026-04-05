@@ -195,11 +195,19 @@ class _HomeScreenState extends State<HomeScreen> {
         } catch (_) {}
         
         final userType = await TokenStorage.getUserType();
+        final bool isStaff = (userType == 'university_staff');
+
+        List<Restaurant> visibleRests = rests;
+        if (!isStaff) {
+          visibleRests = rests.where((r) => r.name.toLowerCase() != 'event management').toList();
+        }
+
         if (mounted) {
           setState(() {
-            _isStaff = (userType == 'university_staff');
+            _isStaff = isStaff;
           });
         }
+
         
         // Fetch trending items, unread count, AND all items concurrently
         final responses = await Future.wait([
@@ -230,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (mounted) {
           setState(() {
-            _restaurants = rests;
+            _restaurants = visibleRests;
             _trendingItems = trending;
             _categories = dynCategories;
             _unreadNotifsCount = unreadCount;

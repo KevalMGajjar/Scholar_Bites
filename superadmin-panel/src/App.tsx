@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import AuditLogs from './pages/AuditLogs';
 import RefundQueue from './pages/RefundQueue';
 import StaffManagement from './pages/StaffManagement';
+import Settings from './pages/Settings';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -38,10 +39,10 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
-
             <Route path="/staff" element={<StaffManagement />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/refunds" element={<RefundQueue />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

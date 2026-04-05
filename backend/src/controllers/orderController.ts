@@ -19,7 +19,7 @@ const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // UTC+5:30
 const checkRestaurantAcceptingOrders = async (
     client: any,
     restaurantId: string
-): Promise<{ accepting: boolean; reason?: string; minutesLeft?: number }> => {
+): Promise<{ accepting: boolean; reason?: string; minutesLeft?: number; restaurantName?: string }> => {
     const result = await client.query(
         'SELECT is_open, opening_time, closing_time, name FROM restaurants WHERE id = $1',
         [restaurantId]
@@ -57,7 +57,7 @@ const checkRestaurantAcceptingOrders = async (
         }
     }
 
-    return { accepting: true };
+    return { accepting: true, restaurantName: rest.name };
 };
 
 // ─── Generate a unique 4-char alphanumeric order token ───
@@ -136,12 +136,15 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             throw new Error(gateCheck.reason || 'Restaurant is not accepting orders');
         }
 
+        // ── Gate Check: Event Management must be wallet only ──
+        const isEventManagement = gateCheck.restaurantName?.toLowerCase() === 'event management';
+
         const amountInPaise = Math.round(totalAmount * 100);
 
         // 2. Create Razorpay Order
         let orderId = `mock_order_${crypto.randomBytes(4).toString('hex')}`;
 
-        if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.includes('placeholder')) {
+        if (!isEventManagement && process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.includes('placeholder')) {
             const razorpayOrder = await razorpay.orders.create({
                 amount: amountInPaise,
                 currency: 'INR',
@@ -260,7 +263,8 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                 // ── Gate Check: Re-verify restaurant is still open ──
                 // Catches the race condition where user opened Razorpay before close and paid after.
                 const gateCheck = await checkRestaurantAcceptingOrders(client, order.restaurant_id);
-                if (!gateCheck.accepting) {
+                if (!gateCheck.accepting || gateCheck.restaurantName?.toLowerCase() === 'event management') {
+                    const reason = gateCheck.accepting ? 'Event Management orders must be paid using Wallet' : gateCheck.reason;
                     // Cancel the order
                     await client.query(
                         "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
@@ -275,13 +279,13 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                     await client.query(
                         `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
                          VALUES ($1, $2, 'refund', $3, $4)`,
-                        [order.user_id, refundAmount, `Auto-refund: ${gateCheck.reason}`, order.id]
+                        [order.user_id, refundAmount, `Auto-refund: ${reason}`, order.id]
                     );
                     await client.query('COMMIT');
-                    console.log(`🔒 Order ${order.id} auto-cancelled & refunded ₹${refundAmount}: ${gateCheck.reason}`);
+                    console.log(`🔒 Order ${order.id} auto-cancelled & refunded ₹${refundAmount}: ${reason}`);
                     return res.status(409).json({
                         status: 'failure',
-                        message: gateCheck.reason,
+                        message: reason,
                         refunded: true,
                         refund_amount: refundAmount,
                     });
@@ -1361,14 +1365,15 @@ export const verifyBatchPayment = async (req: AuthRequest, res: Response) => {
             for (const order of batchOrders.rows) {
                 // Gate check: re-verify restaurant open
                 const gateCheck = await checkRestaurantAcceptingOrders(client, order.restaurant_id);
-                if (!gateCheck.accepting) {
+                if (!gateCheck.accepting || gateCheck.restaurantName?.toLowerCase() === 'event management') {
+                    const reason = gateCheck.accepting ? 'Event Management orders must be paid using Wallet' : gateCheck.reason;
                     // Auto-refund this sub-order
                     const refundAmount = Number(order.total_amount);
                     await client.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [order.id]);
                     await client.query('UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2', [refundAmount, order.user_id]);
                     await client.query(
                         `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id) VALUES ($1, $2, 'refund', $3, $4)`,
-                        [order.user_id, refundAmount, `Auto-refund: ${gateCheck.reason}`, order.id]
+                        [order.user_id, refundAmount, `Auto-refund: ${reason}`, order.id]
                     );
                     console.log(`🔒 Sub-order ${order.id} auto-cancelled & refunded ₹${refundAmount}`);
                     continue;

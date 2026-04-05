@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, LogOut, ShieldCheck, Undo2 } from 'lucide-react';
+import { LayoutDashboard, LogOut, ShieldCheck, Undo2, Settings } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -46,6 +46,11 @@ export default function Sidebar() {
         <NavLink to="/refunds" className={({ isActive }) => getNavLinkClass(isActive)}>
           <Undo2 size={20} className="opacity-80" />
           Refund Queue
+        </NavLink>
+
+        <NavLink to="/settings" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <Settings size={20} className="opacity-80" />
+          Settings
         </NavLink>
       </nav>
 
