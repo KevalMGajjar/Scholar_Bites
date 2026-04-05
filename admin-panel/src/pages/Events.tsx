@@ -38,14 +38,17 @@ export default function Events() {
   const [fundInputs, setFundInputs] = useState<Record<string, string>>({});
   const [isUpdatingFunds, setIsUpdatingFunds] = useState<string | null>(null);
 
-  const handleUpdateFunds = async (deanId: string) => {
-    const amount = Number(fundInputs[deanId]);
-    if (!fundInputs[deanId] || isNaN(amount)) return;
+  const handleUpdateFunds = async (deanId: string, action: 'add' | 'deduct') => {
+    let amount = Number(fundInputs[deanId]);
+    if (!fundInputs[deanId] || isNaN(amount) || amount <= 0) return;
+    
+    if (action === 'deduct') amount = -amount;
+
     setIsUpdatingFunds(deanId);
     try {
-      await api.patch(`/admin/deans/${deanId}/budget`, { amount });
+      const res = await api.patch(`/admin/deans/${deanId}/budget`, { amount });
+      setDeans((prev) => prev.map((d) => (d.id === deanId ? { ...d, ...res.data } : d)));
       setFundInputs((prev) => ({ ...prev, [deanId]: '' }));
-      fetchData();
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to update funds');
     } finally {
@@ -427,17 +430,27 @@ export default function Events() {
                         <div className="flex justify-end items-center gap-2">
                           <input
                             type="number"
-                            placeholder="Add / Deduct"
+                            placeholder="Amount"
+                            min="1"
                             value={fundInputs[dean.id] || ''}
                             onChange={(e) => setFundInputs({ ...fundInputs, [dean.id]: e.target.value })}
-                            className="bg-[#060810] border border-white/10 rounded-lg py-1.5 px-3 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-32 outline-none"
+                            className="bg-[#060810] border border-white/10 rounded-lg py-1.5 px-3 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-24 outline-none"
                           />
                           <button
-                            onClick={() => handleUpdateFunds(dean.id)}
-                            disabled={isUpdatingFunds === dean.id || !fundInputs[dean.id]}
-                            className="bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/50 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-all shadow-md"
+                            onClick={() => handleUpdateFunds(dean.id, 'add')}
+                            disabled={isUpdatingFunds === dean.id || !fundInputs[dean.id] || Number(fundInputs[dean.id]) <= 0}
+                            className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400 disabled:opacity-50 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                            title="Add Funds"
                           >
-                            {isUpdatingFunds === dean.id ? '...' : 'Update'}
+                            + Add
+                          </button>
+                          <button
+                            onClick={() => handleUpdateFunds(dean.id, 'deduct')}
+                            disabled={isUpdatingFunds === dean.id || !fundInputs[dean.id] || Number(fundInputs[dean.id]) <= 0}
+                            className="bg-red-500/20 hover:bg-red-500/40 text-red-400 disabled:opacity-50 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                            title="Deduct Funds"
+                          >
+                            - Deduct
                           </button>
                         </div>
                       </td>

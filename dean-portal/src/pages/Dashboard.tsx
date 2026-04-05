@@ -28,8 +28,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   // New Coupon Form
-  const [discountPercent, setDiscountPercent] = useState('100');
-  const [maxAmount, setMaxAmount] = useState('500');
+  const [couponAmount, setCouponAmount] = useState('500');
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
@@ -57,8 +56,7 @@ export default function Dashboard() {
     setIsGenerating(true);
     try {
       const res = await api.post('/dean/coupons', {
-        discount_percentage: parseFloat(discountPercent),
-        max_discount_amount: parseFloat(maxAmount),
+        amount: parseFloat(couponAmount),
       });
       toast.success('Coupon generated successfully!');
       
@@ -171,18 +169,13 @@ export default function Dashboard() {
             <form onSubmit={generateCoupon} className="flex-1 flex flex-col relative z-10">
               <div className="space-y-5 flex-1">
                 <div>
-                  <label className="label-premium block mb-2">Discount %</label>
-                  <input type="number" value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} required min="1" max="100"
-                    className="w-full bg-surface-lowest border border-ghost-border rounded-xl py-3 px-4 text-content-primary focus:border-primary-light focus:ring-1 focus:ring-primary-light transition-colors font-medium" />
-                </div>
-                <div>
-                  <label className="label-premium block mb-2">Maximum Value (₹)</label>
-                  <input type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} required min="1"
+                  <label className="label-premium block mb-2">Voucher Value (₹)</label>
+                  <input type="number" value={couponAmount} onChange={(e) => setCouponAmount(e.target.value)} required min="10"
                     className="w-full bg-surface-lowest border border-ghost-border rounded-xl py-3 px-4 text-content-primary focus:border-primary-light focus:ring-1 focus:ring-primary-light transition-colors font-medium font-mono text-lg" />
                 </div>
               </div>
               <button 
-                type="submit" disabled={isGenerating || availableBudget < parseFloat(maxAmount) || !maxAmount}
+                type="submit" disabled={isGenerating || availableBudget < parseFloat(couponAmount) || !couponAmount}
                 className="w-full mt-6 btn-premium py-4 flex justify-center items-center gap-2 text-lg shadow-xl shadow-primary-container/20 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? <div className="w-5 h-5 border-2 border-primary-container border-t-transparent rounded-full animate-spin" /> : <><Plus size={20} /> Authorize</>}
@@ -217,7 +210,7 @@ export default function Dashboard() {
                     {coupons.map((c, i) => (
                       <tr key={c.id} className={`hover:bg-surface-highest/20 transition-colors stagger-${(i%4)+1}`}>
                         <td className="py-5 px-6 font-mono font-bold text-primary-light tracking-widest text-lg">{c.code}</td>
-                        <td className="py-5 px-6 font-medium text-content-secondary">{c.discount_percentage}% (Max ₹{c.max_discount_amount})</td>
+                        <td className="py-5 px-6 font-medium text-content-secondary">₹{c.amount}</td>
                         <td className="py-5 px-6">
                           {c.is_used ? (
                             <span className="px-3 py-1.5 rounded-md text-xs font-bold bg-surface-highest text-content-tertiary border border-ghost-border">Redeemed</span>
@@ -230,7 +223,7 @@ export default function Dashboard() {
                         <td className="py-5 px-6 font-medium text-content-secondary">{new Date(c.expires_at).toLocaleDateString()}</td>
                         <td className="py-5 px-6 text-right">
                           {!c.is_used && new Date(c.expires_at) >= new Date() && (
-                            <button onClick={() => deleteCoupon(c.id, c.max_discount_amount.toString())} className="text-content-tertiary hover:text-primary-light p-2 rounded-lg hover:bg-surface-high border border-transparent hover:border-ghost-border transition-all">
+                            <button onClick={() => deleteCoupon(c.id, c.amount.toString())} className="text-content-tertiary hover:text-primary-light p-2 rounded-lg hover:bg-surface-high border border-transparent hover:border-ghost-border transition-all">
                               <Trash2 size={18} />
                             </button>
                           )}

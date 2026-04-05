@@ -223,9 +223,9 @@ export const getEventMenuItems = async (req: AuthRequest, res: Response) => {
     const { university_id } = req.params;
 
     try {
-        // Find the "Club Events" restaurant
+        // Find the "Club Events" or "Event Management" restaurant
         const restResult = await pool.query(
-            "SELECT id FROM restaurants WHERE university_id = $1 AND name ILIKE '%Club Events%'",
+            "SELECT id FROM restaurants WHERE university_id = $1 AND (name ILIKE '%Club Events%' OR name ILIKE '%Event Management%')",
             [university_id]
         );
 
