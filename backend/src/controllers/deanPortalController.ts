@@ -158,8 +158,11 @@ export const generateCoupon = async (req: Request, res: Response) => {
 
         const coupon = result.rows[0];
         res.status(201).json({
-            ...coupon,
-            amount: Number(coupon.amount),
+            coupon: {
+                ...coupon,
+                amount: Number(coupon.amount),
+            },
+            used_budget: String(Number(deanResult.rows[0].used_budget) + parsedAmount)
         });
     } catch (error: any) {
         console.error('[DeanPortal] generateCoupon error:', error.message);
@@ -241,7 +244,7 @@ export const getFundDistribution = async (req: Request, res: Response) => {
 
         const coupons = await pool.query(
             `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at,
-                    u.name as redeemed_by_name, u.phone as redeemed_by_phone, u.role as redeemed_by_role
+                    u.name as redeemed_by_name, u.phone as redeemed_by_phone, u.user_type as redeemed_by_role
              FROM dean_coupons dc
              LEFT JOIN users u ON dc.redeemed_by = u.id
              WHERE dc.dean_id = $1
