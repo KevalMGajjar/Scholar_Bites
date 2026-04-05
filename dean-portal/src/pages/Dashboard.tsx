@@ -13,6 +13,9 @@ interface Coupon {
   expires_at: string;
   is_used: boolean;
   coupon_type: string;
+  event_name?: string;
+  redeemed_by_phone?: string;
+  redeemed_at?: string;
 }
 
 interface Distribution {
@@ -200,9 +203,11 @@ export default function Dashboard() {
                   <thead className="bg-surface-lowest/50 border-b border-ghost-border">
                     <tr>
                       <th className="py-4 px-6 label-premium">Access Key</th>
+                      <th className="py-4 px-6 label-premium">Event Name</th>
+                      <th className="py-4 px-6 label-premium">Phone Number</th>
+                      <th className="py-4 px-6 label-premium">Redeemed At</th>
                       <th className="py-4 px-6 label-premium">Value Cap</th>
                       <th className="py-4 px-6 label-premium">State</th>
-                      <th className="py-4 px-6 label-premium">Expiration</th>
                       <th className="py-4 px-6 label-premium text-right">Admin</th>
                     </tr>
                   </thead>
@@ -210,6 +215,11 @@ export default function Dashboard() {
                     {coupons.map((c, i) => (
                       <tr key={c.id} className={`hover:bg-surface-highest/20 transition-colors stagger-${(i%4)+1}`}>
                         <td className="py-5 px-6 font-mono font-bold text-primary-light tracking-widest text-lg">{c.code}</td>
+                        <td className="py-5 px-6 font-medium text-content-secondary">{c.event_name || '-'}</td>
+                        <td className="py-5 px-6 font-medium text-content-secondary">{c.redeemed_by_phone || '-'}</td>
+                        <td className="py-5 px-6 font-medium text-content-secondary">
+                          {c.redeemed_at ? new Date(c.redeemed_at).toLocaleString() : '-'}
+                        </td>
                         <td className="py-5 px-6 font-medium text-content-secondary">₹{c.amount}</td>
                         <td className="py-5 px-6">
                           {c.is_used ? (
@@ -220,7 +230,6 @@ export default function Dashboard() {
                             <span className="px-3 py-1.5 rounded-md text-xs font-bold bg-[#004d00]/30 text-[#a3f69c] border border-[#005512]">Active</span>
                           )}
                         </td>
-                        <td className="py-5 px-6 font-medium text-content-secondary">{new Date(c.expires_at).toLocaleDateString()}</td>
                         <td className="py-5 px-6 text-right">
                           {!c.is_used && new Date(c.expires_at) >= new Date() && (
                             <button onClick={() => deleteCoupon(c.id, c.amount.toString())} className="text-content-tertiary hover:text-primary-light p-2 rounded-lg hover:bg-surface-high border border-transparent hover:border-ghost-border transition-all">

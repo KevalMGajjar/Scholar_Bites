@@ -85,11 +85,11 @@ class WalletService {
   }
 
   /// Redeem a dean coupon code.
-  Future<Map<String, dynamic>> redeemCoupon(String code) async {
+  Future<Map<String, dynamic>> redeemCoupon(String code, String eventName) async {
     try {
       final response = await _dio.post(
         '/wallet/redeem-coupon',
-        data: {'coupon_code': code},
+        data: {'coupon_code': code, 'event_name': eventName},
       );
       return Map<String, dynamic>.from(response.data);
     } on DioException catch (e) {

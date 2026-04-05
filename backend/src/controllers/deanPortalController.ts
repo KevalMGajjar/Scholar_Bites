@@ -243,7 +243,7 @@ export const getFundDistribution = async (req: Request, res: Response) => {
         }
 
         const coupons = await pool.query(
-            `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at,
+            `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at, dc.event_name,
                     u.name as redeemed_by_name, u.phone as redeemed_by_phone, u.user_type as redeemed_by_role
              FROM dean_coupons dc
              LEFT JOIN users u ON dc.redeemed_by = u.id

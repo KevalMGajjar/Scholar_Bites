@@ -15,19 +15,25 @@ class RedeemCouponScreen extends StatefulWidget {
 
 class _RedeemCouponScreenState extends State<RedeemCouponScreen> {
   final TextEditingController _codeController = TextEditingController();
+  final TextEditingController _eventNameController = TextEditingController();
   bool _isRedeeming = false;
 
   void _redeemCoupon() async {
     final code = _codeController.text.trim().toUpperCase();
+    final eventName = _eventNameController.text.trim();
     if (code.isEmpty) {
       CustomToast.showErrorToast(context, 'Please enter a coupon code');
+      return;
+    }
+    if (eventName.isEmpty) {
+      CustomToast.showErrorToast(context, 'Please specify the event name');
       return;
     }
 
     setState(() => _isRedeeming = true);
 
     try {
-      await WalletService().redeemCoupon(code);
+      await WalletService().redeemCoupon(code, eventName);
       if (mounted) {
         CustomToast.showSuccessToast(context, 'Coupon redeemed successfully! Funds added to wallet.');
         Navigator.pop(context, true);
@@ -99,6 +105,12 @@ class _RedeemCouponScreenState extends State<RedeemCouponScreen> {
               prefixIcon: Icons.confirmation_number_rounded,
               textCapitalization: TextCapitalization.characters,
             ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
+            const SizedBox(height: 16),
+            CustomTextField(
+              controller: _eventNameController,
+              hintText: 'Event Name (e.g. Science Fair)',
+              prefixIcon: Icons.event_rounded,
+            ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
             const SizedBox(height: 32),
             _isRedeeming
                 ? const SizedBox(

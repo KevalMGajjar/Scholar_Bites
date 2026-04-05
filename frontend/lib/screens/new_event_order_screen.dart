@@ -24,6 +24,8 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
 
   final TextEditingController _eventNameController = TextEditingController();
   final TextEditingController _guestsController = TextEditingController();
+  final TextEditingController _staffNameController = TextEditingController();
+  final TextEditingController _staffEmailController = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
@@ -83,6 +85,14 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
       CustomToast.showErrorToast(context, 'Please enter a valid number of guests');
       return;
     }
+    if (_staffNameController.text.trim().isEmpty) {
+      CustomToast.showErrorToast(context, 'Please enter staff name');
+      return;
+    }
+    if (_staffEmailController.text.trim().isEmpty || !_staffEmailController.text.contains('@')) {
+      CustomToast.showErrorToast(context, 'Please enter a valid staff email');
+      return;
+    }
     if (_selectedDate == null || _selectedTime == null) {
       CustomToast.showErrorToast(context, 'Please select date and time for catering');
       return;
@@ -94,10 +104,6 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
 
     setState(() => _isSubmitting = true);
 
-    final eventDateTime = DateTime(
-      _selectedDate!.year, _selectedDate!.month, _selectedDate!.day,
-      _selectedTime!.hour, _selectedTime!.minute,
-    );
 
     final itemsList = _cart.entries.map((e) {
       final item = _menuItems.firstWhere((m) => m['id'] == e.key);
@@ -111,8 +117,11 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
     try {
       await _staffService.createEventOrder(
         eventName: _eventNameController.text.trim(),
-        cateringTime: eventDateTime.toIso8601String(),
-        expectedGuests: int.parse(_guestsController.text),
+        eventDate: _selectedDate!.toIso8601String().split('T')[0],
+        eventTime: '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
+        memberCount: int.parse(_guestsController.text),
+        staffName: _staffNameController.text.trim(),
+        staffEmail: _staffEmailController.text.trim(),
         items: itemsList,
       );
       
@@ -200,6 +209,31 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
                       fillColor: Colors.white,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                       prefixIcon: const Icon(Icons.people_alt_rounded, color: Color(0xFF8B1C28)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  TextField(
+                    controller: _staffNameController,
+                    decoration: InputDecoration(
+                      labelText: 'Staff Name',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      prefixIcon: const Icon(Icons.person_rounded, color: Color(0xFF8B1C28)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  TextField(
+                    controller: _staffEmailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Staff Email',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      prefixIcon: const Icon(Icons.email_rounded, color: Color(0xFF8B1C28)),
                     ),
                   ),
                   const SizedBox(height: 12),

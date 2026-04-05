@@ -71,8 +71,11 @@ class StaffService {
   /// Create an event pre-order
   Future<Map<String, dynamic>> createEventOrder({
     required String eventName,
-    required String cateringTime,
-    required int expectedGuests,
+    required String eventDate,
+    required String eventTime,
+    required int memberCount,
+    required String staffName,
+    required String staffEmail,
     required List<Map<String, dynamic>> items,
   }) async {
     try {
@@ -80,8 +83,11 @@ class StaffService {
         '/staff/event-orders',
         data: {
           'event_name': eventName,
-          'catering_time': cateringTime,
-          'expected_guests': expectedGuests,
+          'event_date': eventDate,
+          'event_time': eventTime,
+          'member_count': memberCount,
+          'staff_name': staffName,
+          'staff_email': staffEmail,
           'items': items,
         },
       );

@@ -393,7 +393,7 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
 export const redeemCoupon = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     const userType = req.user?.user_type;
-    const { coupon_code } = req.body;
+    const { coupon_code, event_name } = req.body;
 
     if (userType !== 'university_staff') {
         return res.status(403).json({ message: 'Only university staff can redeem coupons' });
@@ -401,6 +401,10 @@ export const redeemCoupon = async (req: AuthRequest, res: Response) => {
 
     if (!coupon_code || typeof coupon_code !== 'string') {
         return res.status(400).json({ message: 'Coupon code is required' });
+    }
+
+    if (!event_name || typeof event_name !== 'string' || event_name.trim() === '') {
+        return res.status(400).json({ message: 'Event name is required to redeem a coupon' });
     }
 
     const client = await pool.connect();
@@ -453,9 +457,9 @@ export const redeemCoupon = async (req: AuthRequest, res: Response) => {
 
         // Mark coupon as redeemed
         await client.query(
-            `UPDATE dean_coupons SET status = 'redeemed', redeemed_by = $1, redeemed_at = NOW()
+            `UPDATE dean_coupons SET status = 'redeemed', redeemed_by = $1, redeemed_at = NOW(), event_name = $3
              WHERE id = $2`,
-            [userId, coupon.id]
+            [userId, coupon.id, event_name.trim()]
         );
 
         await client.query('COMMIT');
