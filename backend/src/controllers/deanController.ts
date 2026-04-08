@@ -3,7 +3,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import pool from '../config/db';
-import exceljs from 'exceljs';
+import * as ExcelJS from 'exceljs';
 import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
 
 // ═══════════════════════════════════════════════════════════════
@@ -288,7 +288,7 @@ export const exportEventsExcel = async (req: AuthRequest, res: Response) => {
             [AHMEDABAD_UNIVERSITY_ID]
         );
 
-        const workbook = new exceljs.Workbook();
+        const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Events List');
 
         worksheet.columns = [
@@ -323,8 +323,8 @@ export const exportEventsExcel = async (req: AuthRequest, res: Response) => {
             });
         });
 
-        worksheet.eachRow((row, rowNumber) => {
-            row.eachCell((cell, colNumber) => {
+        worksheet.eachRow((row: any, rowNumber: number) => {
+            row.eachCell((cell: any, colNumber: number) => {
                 cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
                 if (rowNumber > 1 && colNumber === 8) {
                     cell.numFmt = '₹#,##0.00'; 
@@ -431,7 +431,7 @@ export const exportFundsLedgerExcel = async (req: AuthRequest, res: Response) =>
              ORDER BY name ASC`
         );
 
-        const workbook = new exceljs.Workbook();
+        const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Dean Fund Distribution Ledger');
 
         worksheet.columns = [
@@ -458,8 +458,8 @@ export const exportFundsLedgerExcel = async (req: AuthRequest, res: Response) =>
             });
         });
 
-        worksheet.eachRow((row, rowNumber) => {
-            row.eachCell((cell, colNumber) => {
+        worksheet.eachRow((row: any, rowNumber: number) => {
+            row.eachCell((cell: any, colNumber: number) => {
                 cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
                 if (rowNumber > 1 && colNumber >= 4) {
                     cell.numFmt = '₹#,##0.00'; 
