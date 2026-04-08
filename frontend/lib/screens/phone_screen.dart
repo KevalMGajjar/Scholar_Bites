@@ -7,7 +7,6 @@ import '../widgets/primary_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../utils/custom_toast.dart';
 import 'otp_screen.dart';
-import 'staff_code_screen.dart';
 
 class PhoneScreen extends StatefulWidget {
   const PhoneScreen({super.key});
@@ -18,13 +17,17 @@ class PhoneScreen extends StatefulWidget {
 
 class _PhoneScreenState extends State<PhoneScreen> {
   final _phoneController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _phoneFocusNode = FocusNode();
+  final _usernameFocusNode = FocusNode();
   bool _isLoading = false;
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _usernameController.dispose();
     _phoneFocusNode.dispose();
+    _usernameFocusNode.dispose();
     super.dispose();
   }
 
@@ -42,10 +45,14 @@ class _PhoneScreenState extends State<PhoneScreen> {
     
     if (mounted) {
       setState(() => _isLoading = false);
+      final username = _usernameController.text.trim();
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => OtpScreen(phoneNumber: phone),
+          builder: (context) => OtpScreen(
+            phoneNumber: phone,
+            username: username.isNotEmpty ? username : null,
+          ),
         ),
       );
     }
@@ -97,7 +104,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
               const SizedBox(height: 40),
               
               Text(
-                "What's your number?",
+                "Let's get started",
                 style: GoogleFonts.poppins(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -106,7 +113,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
               ).animate().fade(delay: 200.ms, duration: 600.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic),
               const SizedBox(height: 8),
               Text(
-                "We'll send you a verification code. No passwords needed.",
+                "Enter your phone number and an optional username.",
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   color: const Color(0xFF4A0E13).withValues(alpha: 0.7),
@@ -127,6 +134,20 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 ],
               ).animate().fade(delay: 600.ms, duration: 600.ms).slideX(begin: -0.1, end: 0, curve: Curves.easeOutCubic),
               
+              const SizedBox(height: 20),
+
+              CustomTextField(
+                controller: _usernameController,
+                hintText: 'Username (optional)',
+                prefixIcon: Icons.person_outline_rounded,
+                focusNode: _usernameFocusNode,
+                keyboardType: TextInputType.text,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._]')),
+                  LengthLimitingTextInputFormatter(30),
+                ],
+              ).animate().fade(delay: 700.ms, duration: 600.ms).slideX(begin: -0.1, end: 0, curve: Curves.easeOutCubic),
+              
               const SizedBox(height: 40),
               
               _isLoading
@@ -139,30 +160,6 @@ class _PhoneScreenState extends State<PhoneScreen> {
                     ).animate().fade(delay: 800.ms, duration: 600.ms).scaleXY(begin: 0.9, end: 1.0, curve: Curves.easeOutBack),
               
               const SizedBox(height: 30),
-
-              // Staff Login Option
-              Center(
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const StaffCodeScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    "Are you a staff member?",
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: const Color(0xFF8B1C28),
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ).animate().fade(delay: 1000.ms, duration: 600.ms),
-              ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -170,3 +167,4 @@ class _PhoneScreenState extends State<PhoneScreen> {
     );
   }
 }
+

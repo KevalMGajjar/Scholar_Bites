@@ -196,6 +196,8 @@ const createTablesQuery = `
   -- Migrations for existing DBs
   ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS active_token TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type VARCHAR(30) DEFAULT 'student';
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);
   ALTER TABLE staff ADD COLUMN IF NOT EXISTS active_token TEXT;
 
   -- 11. Refund Requests Table (Two-step approval: admin → super_admin)

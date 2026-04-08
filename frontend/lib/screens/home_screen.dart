@@ -67,7 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _universityAddress;
   int _unreadNotifsCount = 0;
   bool _isStaff = false;
-  bool _groupOrderVisible = false;
 
   // Categories with Material icons for Story UI
   List<Map<String, dynamic>> _categories = [];
@@ -189,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
               _universityName = uniData['name'];
               _universityLogoUrl = uniData['logo_url'];
               _universityAddress = uniData['address'];
-              _groupOrderVisible = uniData['group_order_visible_students'] ?? false;
             });
           }
         } catch (_) {}
@@ -1121,8 +1119,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
           ),
           
-          // Floating Group Order Button (Visible to staff or if enabled for students)
-          if (_isStaff || _groupOrderVisible)
+          // Floating Group Order Button (Staff Only)
+          if (_isStaff)
             Positioned(
               right: 20,
               bottom: 120,

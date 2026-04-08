@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 import { getSystemHealth, getStaffMembers, getStaffAnalytics, addStaffMember, deleteStaffMember, getAuditLogs, getLockedAccountsList, unlockAccountHandler } from '../controllers/superAdminController';
+import { getUniversityStaff, createUniversityStaff, bulkCreateUniversityStaff, deleteUniversityStaff } from '../controllers/universityStaffController';
 
 const router = Router();
 
@@ -18,5 +19,11 @@ router.get('/audit-logs', getAuditLogs);
 // ─── Account Lockout Management ───
 router.get('/locked-accounts', getLockedAccountsList);
 router.post('/unlock-account', unlockAccountHandler);
+
+// ─── University Staff Management ───
+router.get('/university-staff', getUniversityStaff);
+router.post('/university-staff', createUniversityStaff);
+router.post('/university-staff/bulk', bulkCreateUniversityStaff);
+router.delete('/university-staff/:id', deleteUniversityStaff);
 
 export default router;

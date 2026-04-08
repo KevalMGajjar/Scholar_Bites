@@ -10,14 +10,12 @@ import 'home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phoneNumber;
-  final bool isStaffLogin;
-  final String? staffCode;
+  final String? username;
   
   const OtpScreen({
     super.key, 
     required this.phoneNumber, 
-    this.isStaffLogin = false, 
-    this.staffCode,
+    this.username,
   });
 
   @override
@@ -51,9 +49,8 @@ class _OtpScreenState extends State<OtpScreen> {
     if (!mounted) return;
     
     try {
-      final existingUser = widget.isStaffLogin
-          ? await AuthService.loginOtpStaff(widget.phoneNumber)
-          : await AuthService.loginOtp(widget.phoneNumber);
+      // Try to login — this works for both existing students and pre-created staff
+      final existingUser = await AuthService.loginOtp(widget.phoneNumber);
       
       if (!mounted) return;
 
@@ -67,16 +64,12 @@ class _OtpScreenState extends State<OtpScreen> {
           (route) => false,
         );
       } else {
-        // New user — register directly (backend auto-assigns Ahmedabad University)
+        // New user — register with optional username
         try {
-          final newUser = widget.isStaffLogin
-              ? await AuthService.registerOtpStaff(
-                  phone: widget.phoneNumber,
-                  staffCode: widget.staffCode!,
-                )
-              : await AuthService.registerOtp(
-                  phone: widget.phoneNumber,
-                );
+          final newUser = await AuthService.registerOtp(
+            phone: widget.phoneNumber,
+            username: widget.username,
+          );
           setState(() => _isLoading = false);
           
           if (newUser != null && mounted) {
@@ -102,6 +95,7 @@ class _OtpScreenState extends State<OtpScreen> {
         try {
           final newUser = await AuthService.registerOtp(
             phone: widget.phoneNumber,
+            username: widget.username,
           );
           setState(() => _isLoading = false);
           
@@ -299,3 +293,4 @@ class _OtpScreenState extends State<OtpScreen> {
     );
   }
 }
+

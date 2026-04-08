@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import AuditLogs from './pages/AuditLogs';
 import RefundQueue from './pages/RefundQueue';
 import StaffManagement from './pages/StaffManagement';
+import UniversityStaffManagement from './pages/UniversityStaffManagement';
 import Settings from './pages/Settings';
 import Sidebar from './components/Sidebar';
 
@@ -40,6 +41,7 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/staff" element={<StaffManagement />} />
+            <Route path="/university-staff" element={<UniversityStaffManagement />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/refunds" element={<RefundQueue />} />
             <Route path="/settings" element={<Settings />} />

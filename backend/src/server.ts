@@ -13,7 +13,7 @@ import app from './app';
 import { initSocket } from './services/socketService';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { startPendingOrderCleanup } from './controllers/orderController';
-import { startStaffCodeRotation } from './services/staffCodeService';
+// Staff code rotation removed — staff are now pre-created by admin
 
 const PORT = process.env.PORT || 3000;
 
@@ -25,7 +25,7 @@ initSocket(server);
 // Start cron jobs
 startNotificationScheduler();
 startPendingOrderCleanup();
-startStaffCodeRotation();
+// startStaffCodeRotation(); — removed, staff codes deprecated
 
 server.listen(PORT as number, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT} at 0.0.0.0`);

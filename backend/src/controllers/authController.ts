@@ -65,7 +65,7 @@ export const loginOtp = async (req: Request, res: Response) => {
         const table = role === 'student' ? 'users' : 'staff';
         await saveActiveToken(user.id, token, table);
 
-        res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, university_id: user.university_id, university_name: user.university_name, role, user_type: user.user_type || 'student' } });
+        res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, username: user.username || null, university_id: user.university_id, university_name: user.university_name, role, user_type: user.user_type || 'student' } });
     } catch (error: any) {
         console.error('[Auth] loginOtp error:', error.message);
         res.status(500).json({ message: 'Server error' });
@@ -73,16 +73,16 @@ export const loginOtp = async (req: Request, res: Response) => {
 };
 
 export const registerOtp = async (req: Request, res: Response) => {
-    const { phone } = req.body;
+    const { phone, username } = req.body;
     // Single-university mode: always assign to Ahmedabad University
     const university_id = AHMEDABAD_UNIVERSITY_ID;
 
     try {
-        const name = `Student ${phone}`;
+        const name = username || `Student ${phone}`;
 
         const result = await pool.query(
-            'INSERT INTO users (name, university_id, phone) VALUES ($1, $2, $3) RETURNING id, name, phone, university_id',
-            [name, university_id, phone]
+            'INSERT INTO users (name, university_id, phone, username) VALUES ($1, $2, $3, $4) RETURNING id, name, phone, university_id, username',
+            [name, university_id, phone, username || null]
         );
 
         const user = result.rows[0];
