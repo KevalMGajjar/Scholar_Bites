@@ -18,10 +18,15 @@ interface Dean {
 interface EventPreOrder {
   id: string;
   event_name: string;
-  catering_time: string;
-  expected_guests: number;
+  event_date: string;
+  event_time: string;
+  member_count: number;
+  staff_name: string;
+  staff_email: string;
   status: string;
-  staff: { name: string; phone: string };
+  total_amount: number;
+  creator_name?: string;
+  creator_phone?: string;
 }
 
 export default function Events() {
@@ -206,13 +211,16 @@ export default function Events() {
 
   useEffect(() => {
     const filtered = events.filter(e => {
-        const d = new Date(e.catering_time);
-        return d.getDate() === selectedDate.getDate() &&
-               d.getMonth() === selectedDate.getMonth() &&
-               d.getFullYear() === selectedDate.getFullYear();
+        const d = new Date(e.event_date);
+        return d.getUTCDate() === selectedDate.getDate() &&
+               d.getUTCMonth() === selectedDate.getMonth() &&
+               d.getUTCFullYear() === selectedDate.getFullYear();
     });
     setSelectedEvents(filtered);
   }, [selectedDate, events]);
+
+  const today = new Date();
+  const isToday = (day: number) => day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
   const getBudgetPct = (dean: Dean) => {
     const total = dean.total_budget || 0;
@@ -526,26 +534,45 @@ export default function Events() {
                   const cellDate = new Date(year, month, day);
                   const isSelected = selectedDate.getDate() === day && selectedDate.getMonth() === month && selectedDate.getFullYear() === year;
                   const dayEvents = events.filter(e => {
-                      const ed = new Date(e.catering_time);
-                      return ed.getDate() === day && ed.getMonth() === month && ed.getFullYear() === year;
+                      const ed = new Date(e.event_date);
+                      return ed.getUTCDate() === day && ed.getUTCMonth() === month && ed.getUTCFullYear() === year;
                   });
+                  const todayCell = isToday(day);
+                  const hasEvt = dayEvents.length > 0;
+
+                  let cellBorder = 'border-white/5 hover:border-white/20';
+                  let cellBg = 'bg-[#060810]';
+                  if (isSelected) {
+                    cellBorder = 'border-rose-500/50';
+                    cellBg = 'bg-[#8B1C28]/10 shadow-[inset_0_0_20px_rgba(139,28,40,0.2)]';
+                  } else if (todayCell) {
+                    cellBorder = 'border-emerald-500/40';
+                    cellBg = 'bg-emerald-500/5';
+                  } else if (hasEvt) {
+                    cellBorder = 'border-rose-500/30';
+                    cellBg = 'bg-rose-500/5';
+                  }
 
                   return (
                     <button
                       key={idx}
                       onClick={() => setSelectedDate(cellDate)}
-                      className={`h-24 rounded-xl p-2 flex flex-col items-start justify-start border transition-all text-left relative group
-                        ${isSelected ? 'bg-[#8B1C28]/10 border-rose-500/50 shadow-[inset_0_0_20px_rgba(139,28,40,0.2)]' : 'bg-[#060810] border-white/5 hover:border-white/20'}`}
+                      className={`h-24 rounded-xl p-2 flex flex-col items-start justify-start border transition-all text-left relative group ${cellBg} ${cellBorder}`}
                     >
-                      <span className={`text-sm font-semibold mb-2 ${isSelected ? 'text-rose-400' : 'text-slate-400 group-hover:text-white'}`}>
-                        {day}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-sm font-semibold ${isSelected ? 'text-rose-400' : todayCell ? 'text-emerald-400' : 'text-slate-400 group-hover:text-white'}`}>
+                          {day}
+                        </span>
+                        {todayCell && (
+                          <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Today</span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-1 mt-auto">
                         {dayEvents.map(evt => (
                           <div 
                             key={evt.id} 
                             title={evt.event_name}
-                            className={`w-2 h-2 rounded-full ${evt.status === 'pending' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'}`}
+                            className={`w-2 h-2 rounded-full ${evt.status === 'pending' || evt.status === 'upcoming' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'}`}
                           />
                         ))}
                       </div>
@@ -588,15 +615,15 @@ export default function Events() {
                         <div className="space-y-3 mt-4">
                           <div className="flex items-center gap-3 text-sm text-slate-300">
                             <Clock size={16} className="text-rose-400" />
-                            <span>{new Date(evt.catering_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span>{evt.event_time || '—'}</span>
                           </div>
                           <div className="flex items-center gap-3 text-sm text-slate-300">
                             <Users size={16} className="text-rose-400" />
-                            <span>{evt.expected_guests} Expected Guests</span>
+                            <span>{evt.member_count} Members</span>
                           </div>
                           <div className="flex items-center gap-3 text-sm text-slate-300">
                             <UserPlus size={16} className="text-rose-400" />
-                            <span>{evt.staff?.name} ({evt.staff?.phone})</span>
+                            <span>{evt.staff_name} ({evt.staff_email})</span>
                           </div>
                         </div>
 
