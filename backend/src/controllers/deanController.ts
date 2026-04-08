@@ -102,6 +102,57 @@ export const updateDeanBudget = async (req: AuthRequest, res: Response) => {
     }
 };
 
+/** Update dean details (name, email, school_name) */
+export const updateDeanDetails = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { name, email, school_name } = req.body;
+
+    if (!name && !email && !school_name) {
+        return res.status(400).json({ message: 'At least one field (name, email, school_name) is required' });
+    }
+
+    try {
+        // If email is being updated, check for duplicates
+        if (email) {
+            const existing = await pool.query('SELECT id FROM deans WHERE email = $1 AND id != $2', [email, id]);
+            if (existing.rows.length > 0) {
+                return res.status(409).json({ message: 'A dean with this email already exists' });
+            }
+        }
+
+        const fields: string[] = [];
+        const values: any[] = [];
+        let paramIndex = 1;
+
+        if (name) { fields.push(`name = $${paramIndex++}`); values.push(name); }
+        if (email) { fields.push(`email = $${paramIndex++}`); values.push(email); }
+        if (school_name) { fields.push(`school_name = $${paramIndex++}`); values.push(school_name); }
+
+        values.push(id);
+
+        const result = await pool.query(
+            `UPDATE deans SET ${fields.join(', ')} WHERE id = $${paramIndex}
+             RETURNING id, name, email, school_name, total_budget, used_budget, created_at`,
+            values
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Dean not found' });
+        }
+
+        const dean = result.rows[0];
+        res.json({
+            ...dean,
+            total_budget: Number(dean.total_budget),
+            used_budget: Number(dean.used_budget),
+            remaining_budget: Number(dean.total_budget) - Number(dean.used_budget),
+        });
+    } catch (error: any) {
+        console.error('[Dean] updateDeanDetails error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 /** Delete a dean */
 export const deleteDean = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;

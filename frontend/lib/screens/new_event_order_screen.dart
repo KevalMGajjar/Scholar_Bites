@@ -108,7 +108,7 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
     final itemsList = _cart.entries.map((e) {
       final item = _menuItems.firstWhere((m) => m['id'] == e.key);
       return {
-        'food_id': item['id'],
+        'menu_item_id': item['id'],
         'quantity': e.value,
         'price': item['price'],
       };
