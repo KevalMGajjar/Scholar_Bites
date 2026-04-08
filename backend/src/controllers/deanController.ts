@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import pool from '../config/db';
+import exceljs from 'exceljs';
 import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
 
 // ═══════════════════════════════════════════════════════════════
@@ -273,8 +274,8 @@ export const getEventsCalendar = async (req: AuthRequest, res: Response) => {
     }
 };
 
-/** Export events as CSV */
-export const exportEventsCSV = async (req: AuthRequest, res: Response) => {
+/** Export events as nicely formatted Excel */
+export const exportEventsExcel = async (req: AuthRequest, res: Response) => {
     try {
         const result = await pool.query(
             `SELECT e.event_name, e.event_date, e.event_time, e.member_count,
@@ -287,31 +288,60 @@ export const exportEventsCSV = async (req: AuthRequest, res: Response) => {
             [AHMEDABAD_UNIVERSITY_ID]
         );
 
-        const headers = ['Event Name', 'Date', 'Time', 'Members', 'Staff Name', 'Staff Email', 'Status', 'Total Amount', 'Created At', 'Created By'];
-        const rows = result.rows.map((r: any) => [
-            r.event_name,
-            new Date(r.event_date).toLocaleDateString('en-IN'),
-            r.event_time,
-            r.member_count,
-            r.staff_name,
-            r.staff_email,
-            r.status,
-            Number(r.total_amount).toFixed(2),
-            new Date(r.created_at).toLocaleString('en-IN'),
-            r.created_by,
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+        const workbook = new exceljs.Workbook();
+        const worksheet = workbook.addWorksheet('Events List');
 
-        const csv = [headers.join(','), ...rows].join('\n');
+        worksheet.columns = [
+            { header: 'Event Name', key: 'event_name', width: 30 },
+            { header: 'Date', key: 'date', width: 15 },
+            { header: 'Time', key: 'time', width: 12 },
+            { header: 'Members', key: 'members', width: 12 },
+            { header: 'Staff Name', key: 'staff_name', width: 20 },
+            { header: 'Staff Email', key: 'staff_email', width: 25 },
+            { header: 'Status', key: 'status', width: 15 },
+            { header: 'Total Amount (₹)', key: 'amount', width: 18 },
+            { header: 'Created By', key: 'created_by', width: 20 },
+            { header: 'Created At', key: 'created_at', width: 20 },
+        ];
 
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename="events_export.csv"');
-        res.send(csv);
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF8B1C28' } }; 
+        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        result.rows.forEach((r: any) => {
+            worksheet.addRow({
+                event_name: r.event_name,
+                date: new Date(r.event_date).toLocaleDateString('en-IN'),
+                time: r.event_time,
+                members: r.member_count,
+                staff_name: r.staff_name,
+                staff_email: r.staff_email,
+                status: String(r.status).toUpperCase(),
+                amount: Number(r.total_amount),
+                created_by: r.created_by,
+                created_at: new Date(r.created_at).toLocaleString('en-IN')
+            });
+        });
+
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell, colNumber) => {
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                if (rowNumber > 1 && colNumber === 8) {
+                    cell.numFmt = '₹#,##0.00'; 
+                }
+            });
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="events_export.xlsx"');
+        
+        await workbook.xlsx.write(res);
+        res.end();
     } catch (error: any) {
-        console.error('[Events] exportEventsCSV error:', error.message);
+        console.error('[Events] exportEventsExcel error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };
-
 /** Get fund distribution for a specific dean */
 export const getDeanFundDistribution = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
@@ -388,6 +418,62 @@ export const exportFundDistributionCSV = async (req: AuthRequest, res: Response)
         res.send(csv);
     } catch (error: any) {
         console.error('[Dean] exportFundDistributionCSV error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/** Export Overall Funds Ledger as formatted Excel */
+export const exportFundsLedgerExcel = async (req: AuthRequest, res: Response) => {
+    try {
+        const result = await pool.query(
+            `SELECT name as dean_name, school_name, email, total_budget, used_budget, (total_budget - used_budget) as remaining_budget 
+             FROM deans
+             ORDER BY name ASC`
+        );
+
+        const workbook = new exceljs.Workbook();
+        const worksheet = workbook.addWorksheet('Dean Fund Distribution Ledger');
+
+        worksheet.columns = [
+            { header: 'Dean Name', key: 'dean_name', width: 25 },
+            { header: 'School Name', key: 'school_name', width: 30 },
+            { header: 'Email', key: 'email', width: 30 },
+            { header: 'Total Budget (₹)', key: 'total_budget', width: 18 },
+            { header: 'Used Budget (₹)', key: 'used_budget', width: 18 },
+            { header: 'Remaining Budget (₹)', key: 'remaining_budget', width: 22 },
+        ];
+
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF8B1C28' } }; 
+        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        result.rows.forEach((row: any) => {
+            worksheet.addRow({
+                dean_name: row.dean_name,
+                school_name: row.school_name,
+                email: row.email,
+                total_budget: Number(row.total_budget || 0),
+                used_budget: Number(row.used_budget || 0),
+                remaining_budget: Number(row.remaining_budget || 0),
+            });
+        });
+
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell, colNumber) => {
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                if (rowNumber > 1 && colNumber >= 4) {
+                    cell.numFmt = '₹#,##0.00'; 
+                }
+            });
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="fund_distribution_ledger.xlsx"');
+        
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error: any) {
+        console.error('[Dean] exportFundsLedgerExcel error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };

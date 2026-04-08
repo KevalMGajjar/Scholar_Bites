@@ -6,7 +6,7 @@ import { createRestaurant, getAllRestaurants, updateRestaurant, deleteRestaurant
 import { addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController';
 import { upload } from '../controllers/uploadController';
 import { getStatistics } from '../controllers/statisticsController';
-import { createDean, getAllDeans, updateDeanBudget, updateDeanDetails, deleteDean, getAllEvents, getEventsCalendar, exportEventsCSV, getDeanFundDistribution, exportFundDistributionCSV } from '../controllers/deanController';
+import { createDean, getAllDeans, updateDeanBudget, updateDeanDetails, deleteDean, getAllEvents, getEventsCalendar, exportEventsExcel, getDeanFundDistribution, exportFundDistributionCSV, exportFundsLedgerExcel } from '../controllers/deanController';
 import { getTodayPreOrders, updatePreOrderStatus } from '../controllers/preOrderController';
 import { updateEventStatus } from '../controllers/eventPreOrderController';
 import { getUniversitySettings, updateUniversitySettings } from '../controllers/staffAuthController';
@@ -73,10 +73,13 @@ router.delete('/deans/:id', authorizeRole(['admin', 'super_admin']), deleteDean)
 router.get('/deans/:id/fund-distribution', authorizeRole(['admin', 'super_admin']), getDeanFundDistribution);
 router.get('/deans/:id/fund-distribution/export', authorizeRole(['admin', 'super_admin']), exportFundDistributionCSV);
 
+// ─── Export Routes ───
+router.get('/export/events', authorizeRole(['admin', 'super_admin']), exportEventsExcel);
+router.get('/export/funds', authorizeRole(['admin', 'super_admin']), exportFundsLedgerExcel);
+
 // ─── Event Management (Admin only) ───
 router.get('/events', authorizeRole(['admin', 'super_admin']), getAllEvents);
 router.get('/events/calendar', authorizeRole(['admin', 'super_admin']), getEventsCalendar);
-router.get('/events/export', authorizeRole(['admin', 'super_admin']), exportEventsCSV);
 router.patch('/events/:id/status', authorizeRole(['admin', 'super_admin']), updateEventStatus);
 
 // ─── Pre-Order Management (Admin only) ───
