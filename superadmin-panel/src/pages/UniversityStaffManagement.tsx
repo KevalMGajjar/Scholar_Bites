@@ -213,8 +213,8 @@ export default function UniversityStaffManagement() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#e5e2e1] tracking-tight flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-500/20 flex items-center justify-center">
-            <Users size={20} className="text-sky-400" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/20 flex items-center justify-center">
+            <Users size={20} className="text-red-400" />
           </div>
           University Staff Management
         </h1>
@@ -257,20 +257,20 @@ export default function UniversityStaffManagement() {
             placeholder="Search by name, phone, or username..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-[#1c1b1b]/60 border border-[#554240]/20 rounded-xl text-[#e5e2e1] placeholder-[#a38b88]/50 text-sm focus:outline-none focus:border-sky-500/40 transition-colors"
+            className="w-full pl-11 pr-4 py-3 bg-[#1c1b1b]/60 border border-[#554240]/20 rounded-xl text-[#e5e2e1] placeholder-[#a38b88]/50 text-sm focus:outline-none focus:border-red-500/40 transition-colors"
           />
         </div>
         <div className="flex items-center gap-3 ml-4">
           <button
             onClick={() => { setShowCsvModal(true); setCsvData([]); setCsvFileName(''); setCsvResult(null); setCsvError(''); }}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl border border-[#554240]/20 bg-[#1c1b1b]/60 text-[#dcc0bd] text-sm font-medium hover:bg-[#1c1b1b] hover:text-sky-400 hover:border-sky-500/30 transition-all"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl border border-[#554240]/20 bg-[#1c1b1b]/60 text-[#dcc0bd] text-sm font-medium hover:bg-[#1c1b1b] hover:text-red-400 hover:border-red-500/30 transition-all"
           >
             <Upload size={16} />
             Import CSV
           </button>
           <button
             onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '', username: '' }); setModalError(''); }}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-sky-600/20 transition-all"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all"
           >
             <UserPlus size={16} />
             Add Staff
@@ -302,8 +302,8 @@ export default function UniversityStaffManagement() {
                 <tr key={staff.id} className="border-b border-[#554240]/10 hover:bg-[#1c1b1b]/40 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
-                        <span className="text-sky-400 text-sm font-semibold">{staff.name.charAt(0).toUpperCase()}</span>
+                      <div className="w-9 h-9 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                        <span className="text-red-400 text-sm font-semibold">{staff.name.charAt(0).toUpperCase()}</span>
                       </div>
                       <span className="text-[#e5e2e1] font-medium text-sm">{staff.name}</span>
                     </div>
@@ -340,7 +340,7 @@ export default function UniversityStaffManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
           <div className="bg-[#181717] border border-[#554240]/20 rounded-2xl p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-[#e5e2e1] mb-6 flex items-center gap-3">
-              <UserPlus size={20} className="text-sky-400" />
+              <UserPlus size={20} className="text-red-400" />
               Add University Staff
             </h2>
 
@@ -351,7 +351,7 @@ export default function UniversityStaffManagement() {
                   type="text"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-sky-500/40"
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40"
                   placeholder="John Doe"
                 />
               </div>
@@ -361,7 +361,7 @@ export default function UniversityStaffManagement() {
                   type="text"
                   value={formData.phone}
                   onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-sky-500/40"
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40"
                   placeholder="9876543210"
                   maxLength={10}
                 />
@@ -372,7 +372,7 @@ export default function UniversityStaffManagement() {
                   type="text"
                   value={formData.username}
                   onChange={e => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-sky-500/40"
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40"
                   placeholder="johndoe"
                 />
               </div>
@@ -384,7 +384,7 @@ export default function UniversityStaffManagement() {
 
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setShowAddModal(false)} className="px-5 py-2.5 rounded-xl border border-[#554240]/20 text-[#dcc0bd] text-sm font-medium hover:bg-[#1c1b1b] transition-colors">Cancel</button>
-              <button onClick={handleAdd} disabled={modalLoading} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-sky-600/20 transition-all disabled:opacity-50">
+              <button onClick={handleAdd} disabled={modalLoading} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all disabled:opacity-50">
                 {modalLoading ? 'Creating...' : 'Create Staff'}
               </button>
             </div>
@@ -397,10 +397,10 @@ export default function UniversityStaffManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCsvModal(false)}>
           <div className="bg-[#181717] border border-[#554240]/20 rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-[#e5e2e1] mb-2 flex items-center gap-3">
-              <FileSpreadsheet size={20} className="text-sky-400" />
+              <FileSpreadsheet size={20} className="text-red-400" />
               Import Staff from CSV
             </h2>
-            <p className="text-[#a38b88] text-sm mb-6">Upload a CSV file with columns: <code className="bg-[#0e0e0e] px-2 py-0.5 rounded text-sky-400 text-xs">name,phone,username</code></p>
+            <p className="text-[#a38b88] text-sm mb-6">Upload a CSV file with columns: <code className="bg-[#0e0e0e] px-2 py-0.5 rounded text-red-400 text-xs">name,phone,username</code></p>
 
             <div className="flex-1 overflow-y-auto">
               {/* Upload Area */}
@@ -408,7 +408,7 @@ export default function UniversityStaffManagement() {
                 <div className="space-y-4">
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-[#554240]/30 rounded-2xl p-12 text-center cursor-pointer hover:border-sky-500/40 hover:bg-sky-500/5 transition-all"
+                    className="border-2 border-dashed border-[#554240]/30 rounded-2xl p-12 text-center cursor-pointer hover:border-red-500/40 hover:bg-red-500/5 transition-all"
                   >
                     <Upload size={40} className="mx-auto text-[#a38b88] mb-4" />
                     <p className="text-[#e5e2e1] font-medium">Click to upload CSV file</p>
@@ -416,7 +416,7 @@ export default function UniversityStaffManagement() {
                   </div>
                   <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvFileSelect} className="hidden" />
 
-                  <button onClick={downloadTemplate} className="flex items-center gap-2 text-sky-400 text-sm font-medium hover:text-sky-300 transition-colors">
+                  <button onClick={downloadTemplate} className="flex items-center gap-2 text-red-400 text-sm font-medium hover:text-red-300 transition-colors">
                     <Download size={14} />
                     Download CSV template
                   </button>
@@ -428,7 +428,7 @@ export default function UniversityStaffManagement() {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[#e5e2e1] text-sm font-medium">
-                      📄 {csvFileName} — <span className="text-sky-400">{csvData.length} entries</span>
+                      📄 {csvFileName} — <span className="text-red-400">{csvData.length} entries</span>
                     </p>
                     <button onClick={() => { setCsvData([]); setCsvFileName(''); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-[#a38b88] text-sm hover:text-red-400 transition-colors">Clear</button>
                   </div>
@@ -499,7 +499,7 @@ export default function UniversityStaffManagement() {
                 {csvResult ? 'Done' : 'Cancel'}
               </button>
               {csvData.length > 0 && !csvResult && (
-                <button onClick={handleCsvUpload} disabled={csvUploading} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-sky-600/20 transition-all disabled:opacity-50">
+                <button onClick={handleCsvUpload} disabled={csvUploading} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all disabled:opacity-50">
                   {csvUploading ? 'Importing...' : `Import ${csvData.length} Staff`}
                 </button>
               )}
