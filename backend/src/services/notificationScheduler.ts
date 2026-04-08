@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import pool from '../config/db';
 import { notifyUniversityUsers, triggerRestaurantOpen, triggerRestaurantClosingSoon } from '../controllers/notificationController';
+import { sendEventReminderNotification } from './emailService';
 
 /**
  * The restaurants table stores opening_time / closing_time as raw TIME values
@@ -128,6 +129,49 @@ export const startNotificationScheduler = () => {
             }
         } catch (error) {
             console.error('[Scheduler] Stale notification cleanup error:', error);
+        }
+    });
+
+    // ─── Auto-Event Details Email Reminder ───
+    // Run daily at 10:00 AM server time to email admins about events exactly 2 days from now.
+    cron.schedule('0 10 * * *', async () => {
+        try {
+            const query = `
+                SELECT e.*, u.name as creator_name, u.phone as creator_phone,
+                       COALESCE(json_agg(
+                           json_build_object(
+                               'item_name', mi.name,
+                               'quantity', ei.quantity,
+                               'price_at_time', ei.price_at_time
+                           )
+                       ) FILTER (WHERE ei.id IS NOT NULL), '[]') as items
+                FROM event_pre_orders e
+                LEFT JOIN users u ON e.user_id = u.id
+                LEFT JOIN event_pre_order_items ei ON ei.event_order_id = e.id
+                LEFT JOIN menu_items mi ON ei.menu_item_id = mi.id
+                WHERE e.event_date = CURRENT_DATE + INTERVAL '2 days'
+                  AND e.status IN ('upcoming', 'pending')
+                GROUP BY e.id, u.name, u.phone
+            `;
+            const { rows } = await pool.query(query);
+
+            if (rows.length > 0) {
+                console.log(`[Scheduler] Found ${rows.length} event(s) coming up in 2 days. Sending reminders...`);
+                for (const event of rows) {
+                    await sendEventReminderNotification({
+                        event_name: event.event_name,
+                        event_date: event.event_date instanceof Date ? event.event_date.toISOString().split('T')[0] : event.event_date,
+                        event_time: event.event_time,
+                        member_count: event.member_count,
+                        staff_name: event.staff_name,
+                        staff_email: event.staff_email,
+                        total_amount: Number(event.total_amount),
+                        items: event.items || []
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('[Scheduler] Event reminder error:', error);
         }
     });
 

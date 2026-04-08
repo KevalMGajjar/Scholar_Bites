@@ -166,3 +166,68 @@ export const sendNewEventNotification = async (data: EventNotificationData): Pro
 
     await transporter.sendMail(mailOptions);
 };
+
+export const sendEventReminderNotification = async (data: EventNotificationData): Promise<void> => {
+    const adminEmail = process.env.SMTP_USER;
+    if (!adminEmail) {
+        console.warn('[Email] SMTP_USER not set, skipping event reminder');
+        return;
+    }
+
+    const itemRows = data.items.map(i =>
+        `<tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #2a2a2a; color: #e5e2e1;">${i.item_name}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #2a2a2a; color: #a38b88; text-align: center;">${i.quantity}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #2a2a2a; color: #a38b88; text-align: right;">₹${(i.price_at_time * i.quantity).toFixed(2)}</td>
+        </tr>`
+    ).join('');
+
+    const mailOptions = {
+        from: `"Ahmedabad University Canteen" <${adminEmail}>`,
+        to: adminEmail,
+        subject: `⏰ Reminder: Upcoming Event in 2 Days - ${data.event_name}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; background-color: #0c0f18; padding: 20px; color: #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto; box-sizing: border-box;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #e5e2e1; font-size: 22px; font-weight: 700; margin: 0; font-family: 'Manrope', Arial, sans-serif;">Event Reminder</h1>
+                    <p style="color: #f0513e; font-size: 13px; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Action Required in 48 Hours</p>
+                </div>
+                
+                <div style="background-color: #1c1b1b; border: 1px solid #554240; border-radius: 16px; padding: 24px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); box-sizing: border-box;">
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 16px;">
+                        <tr><td style="color: #a38b88; padding: 4px 0; font-size: 13px;">Event Name</td><td style="color: #e5e2e1; padding: 4px 0; font-weight: 600; text-align: right;">${data.event_name}</td></tr>
+                        <tr><td style="color: #a38b88; padding: 4px 0; font-size: 13px;">Date</td><td style="color: #e5e2e1; padding: 4px 0; font-weight: 600; text-align: right;">${data.event_date}</td></tr>
+                        <tr><td style="color: #a38b88; padding: 4px 0; font-size: 13px;">Time</td><td style="color: #e5e2e1; padding: 4px 0; font-weight: 600; text-align: right;">${data.event_time}</td></tr>
+                        <tr><td style="color: #a38b88; padding: 4px 0; font-size: 13px;">Members</td><td style="color: #e5e2e1; padding: 4px 0; font-weight: 600; text-align: right;">${data.member_count}</td></tr>
+                        <tr><td style="color: #a38b88; padding: 4px 0; font-size: 13px;">Staff</td><td style="color: #e5e2e1; padding: 4px 0; font-weight: 600; text-align: right;">${data.staff_name}</td></tr>
+                        <tr><td style="color: #a38b88; padding: 4px 0; font-size: 13px;">Contact</td><td style="color: #e5e2e1; padding: 4px 0; font-weight: 600; text-align: right;">${data.staff_email}</td></tr>
+                    </table>
+
+                    <div style="border-top: 1px solid #554240; padding-top: 16px;">
+                        <p style="color: #f0513e; font-weight: 600; font-size: 14px; margin: 0 0 12px 0;">Food Items</p>
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                            <tr style="border-bottom: 2px solid #554240;">
+                                <th style="padding: 8px 12px; text-align: left; color: #a38b88; font-size: 12px;">Item</th>
+                                <th style="padding: 8px 12px; text-align: center; color: #a38b88; font-size: 12px;">Qty</th>
+                                <th style="padding: 8px 12px; text-align: right; color: #a38b88; font-size: 12px;">Total</th>
+                            </tr>
+                            ${itemRows}
+                        </table>
+                    </div>
+
+                    <div style="border-top: 1px solid #554240; margin-top: 16px; padding-top: 12px; text-align: right;">
+                        <span style="color: #a38b88; font-size: 14px;">Grand Total: </span>
+                        <span style="color: #f0513e; font-weight: 800; font-size: 20px;">₹${data.total_amount.toFixed(2)}</span>
+                    </div>
+                </div>
+                
+                <p style="color: #554240; font-size: 11px; text-align: center; margin-top: 32px; line-height: 1.6;">
+                    This is an automated notification from the University Canteen system.
+                </p>
+            </div>
+        `,
+    };
+
+    await transporter.sendMail(mailOptions);
+};
+

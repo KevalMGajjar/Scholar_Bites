@@ -76,6 +76,9 @@ export default function Events() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
 
+  // Event detail modal
+  const [viewEvent, setViewEvent] = useState<EventPreOrder | null>(null);
+
   const handleUpdateFunds = async (deanId: string, action: 'add' | 'deduct') => {
     let amount = Number(fundInputs[deanId]);
     if (!fundInputs[deanId] || isNaN(amount) || amount <= 0) return;
@@ -613,132 +616,194 @@ export default function Events() {
                       <p>Select a different date or schedule a new event to see details here.</p>
                     </div>
                   ) : (
-                    selectedEvents.map(evt => {
-                      const eventDate = new Date(evt.event_date);
-                      const statusColor = evt.status === 'upcoming' || evt.status === 'pending'
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/10'
-                        : evt.status === 'completed' || evt.status === 'approved'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10'
-                        : 'bg-red-500/10 text-red-400 border-red-500/10';
-
-                      return (
-                      <div key={evt.id} className="bg-white/[0.02] border border-white/10 rounded-xl transition-all hover:bg-white/[0.04] overflow-hidden">
-                        {/* Header */}
-                        <div className="p-5 pb-4">
-                          <div className="flex justify-between items-start mb-1">
-                            <h4 className="text-white font-bold text-lg leading-tight">{evt.event_name}</h4>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border shrink-0 ml-2 ${statusColor}`}>
-                              {evt.status}
-                            </span>
-                          </div>
-                          <p className="text-slate-500 text-xs font-mono mt-1">ID: {evt.id.slice(0, 8)}…</p>
+                    selectedEvents.map(evt => (
+                      <div key={evt.id} className="bg-white/[0.02] border border-white/10 p-5 rounded-xl transition-all hover:bg-white/[0.04]">
+                        <div className="flex justify-between items-start mb-3">
+                          <h4 className="text-white font-semibold text-lg">{evt.event_name}</h4>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
+                            evt.status === 'upcoming' || evt.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                          }`}>
+                            {evt.status}
+                          </span>
                         </div>
-
-                        {/* Detail Grid */}
-                        <div className="px-5 pb-4">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5">
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Date</p>
-                              <p className="text-sm text-white font-medium">{eventDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                            </div>
-                            <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5">
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Time</p>
-                              <p className="text-sm text-white font-medium flex items-center gap-1.5"><Clock size={13} className="text-rose-400" />{evt.event_time || '—'}</p>
-                            </div>
-                            <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5">
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Members</p>
-                              <p className="text-sm text-white font-medium flex items-center gap-1.5"><Users size={13} className="text-rose-400" />{evt.member_count}</p>
-                            </div>
-                            <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5">
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Total Amount</p>
-                              <p className="text-sm text-emerald-400 font-bold font-mono">₹{Number(evt.total_amount).toLocaleString('en-IN')}</p>
-                            </div>
+                        
+                        <div className="space-y-3 mt-4">
+                          <div className="flex items-center gap-3 text-sm text-slate-300">
+                            <Clock size={16} className="text-rose-400" />
+                            <span>{evt.event_time || '—'}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-slate-300">
+                            <Users size={16} className="text-rose-400" />
+                            <span>{evt.member_count} Members</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-slate-300">
+                            <UserPlus size={16} className="text-rose-400" />
+                            <span>{evt.staff_name} ({evt.staff_email})</span>
                           </div>
                         </div>
 
-                        {/* Contact Info */}
-                        <div className="px-5 pb-4">
-                          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-2">Staff Contact</p>
-                          <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5 space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <UserPlus size={14} className="text-rose-400 shrink-0" />
-                              <span className="text-white font-medium">{evt.staff_name}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Mail size={14} className="text-rose-400 shrink-0" />
-                              <span className="text-slate-300 truncate">{evt.staff_email}</span>
-                            </div>
-                          </div>
+                        <div className="mt-5 pt-4 border-t border-white/5">
+                          <button
+                            onClick={() => setViewEvent(evt)}
+                            className="w-full text-sm bg-[#8B1C28] hover:bg-rose-800 text-white py-2 rounded-lg font-semibold transition-colors"
+                          >
+                            View Full Details
+                          </button>
                         </div>
-
-                        {/* Creator Info */}
-                        <div className="px-5 pb-4">
-                          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-2">Created By</p>
-                          <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5 space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <Users size={14} className="text-rose-400 shrink-0" />
-                              <span className="text-white font-medium">{evt.creator_name || 'Unknown'}</span>
-                            </div>
-                            {evt.creator_phone && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Phone size={14} className="text-rose-400 shrink-0" />
-                                <span className="text-slate-300">{evt.creator_phone}</span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2 text-sm">
-                              <Clock size={14} className="text-slate-500 shrink-0" />
-                              <span className="text-slate-400 text-xs">Created {new Date(evt.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Ordered Items */}
-                        {evt.items && evt.items.length > 0 && (
-                          <div className="px-5 pb-4">
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
-                              <ShoppingCart size={12} /> Ordered Items ({evt.items.length})
-                            </p>
-                            <div className="bg-white/[0.02] rounded-lg border border-white/5 overflow-hidden">
-                              {evt.items.map((item, idx) => (
-                                <div key={item.id} className={`flex items-center gap-3 px-3 py-2.5 ${idx > 0 ? 'border-t border-white/5' : ''}`}>
-                                  {item.item_image ? (
-                                    <img src={item.item_image} alt={item.item_name} className="w-9 h-9 rounded-lg object-cover border border-white/10" />
-                                  ) : (
-                                    <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                                      <ShoppingCart size={14} className="text-slate-600" />
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-white font-medium truncate">{item.item_name}</p>
-                                    <p className="text-xs text-slate-500">Qty: {item.quantity} × ₹{Number(item.price_at_time).toFixed(2)}</p>
-                                  </div>
-                                  <span className="text-sm text-emerald-400 font-bold font-mono shrink-0">
-                                    ₹{(item.quantity * Number(item.price_at_time)).toFixed(2)}
-                                  </span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between items-center px-3 py-2.5 border-t border-white/10 bg-white/[0.03]">
-                                <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Order Total</span>
-                                <span className="text-sm text-white font-bold font-mono">₹{Number(evt.total_amount).toLocaleString('en-IN')}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Action Button */}
-                        {(evt.status === 'pending' || evt.status === 'upcoming') && (
-                          <div className="px-5 pb-5 pt-1">
-                            <button className="w-full text-sm bg-[#8B1C28] hover:bg-rose-800 text-white py-2.5 rounded-lg font-semibold transition-colors">
-                              Review Application
-                            </button>
-                          </div>
-                        )}
                       </div>
-                    );}
-                    )
+                    ))
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ EVENT DETAIL MODAL ═══════════════ */}
+      {viewEvent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewEvent(null)}>
+          <div className="bg-[#0d1220] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-[0_25px_80px_rgba(0,0,0,0.6)] relative custom-scrollbar" onClick={e => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#8B1C28] via-rose-500 to-[#8B1C28] rounded-t-2xl" />
+            
+            {/* Modal Header */}
+            <div className="p-6 pb-4 flex justify-between items-start border-b border-white/5">
+              <div>
+                <h3 className="text-xl font-bold text-white">{viewEvent.event_name}</h3>
+                <p className="text-slate-500 text-xs font-mono mt-1">Order ID: {viewEvent.id}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+                  viewEvent.status === 'upcoming' || viewEvent.status === 'pending'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/10'
+                    : viewEvent.status === 'completed' || viewEvent.status === 'approved'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10'
+                    : 'bg-red-500/10 text-red-400 border-red-500/10'
+                }`}>
+                  {viewEvent.status}
+                </span>
+                <button onClick={() => setViewEvent(null)} className="text-slate-500 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Detail Grid */}
+            <div className="p-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Event Date</p>
+                  <p className="text-sm text-white font-semibold">{new Date(viewEvent.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                </div>
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Event Time</p>
+                  <p className="text-sm text-white font-semibold flex items-center gap-1.5"><Clock size={14} className="text-rose-400" />{viewEvent.event_time || '—'}</p>
+                </div>
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Members</p>
+                  <p className="text-sm text-white font-semibold flex items-center gap-1.5"><Users size={14} className="text-rose-400" />{viewEvent.member_count}</p>
+                </div>
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Total Amount</p>
+                  <p className="text-lg text-emerald-400 font-bold font-mono">₹{Number(viewEvent.total_amount).toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+
+              {/* Staff & Creator */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">Staff Contact</p>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <UserPlus size={15} className="text-rose-400 shrink-0" />
+                      <span className="text-white font-medium">{viewEvent.staff_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <Mail size={15} className="text-rose-400 shrink-0" />
+                      <span className="text-slate-300">{viewEvent.staff_email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">Created By</p>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <Users size={15} className="text-rose-400 shrink-0" />
+                      <span className="text-white font-medium">{viewEvent.creator_name || 'Unknown'}</span>
+                    </div>
+                    {viewEvent.creator_phone && (
+                      <div className="flex items-center gap-2.5 text-sm">
+                        <Phone size={15} className="text-rose-400 shrink-0" />
+                        <span className="text-slate-300">{viewEvent.creator_phone}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <Clock size={15} className="text-slate-500 shrink-0" />
+                      <span className="text-slate-400 text-xs">
+                        Created {new Date(viewEvent.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ordered Items */}
+              {viewEvent.items && viewEvent.items.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5">
+                    <ShoppingCart size={13} /> Ordered Items ({viewEvent.items.length})
+                  </p>
+                  <div className="bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-white/[0.02]">
+                          <th className="text-left py-3 px-4 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Item</th>
+                          <th className="text-center py-3 px-4 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Qty</th>
+                          <th className="text-right py-3 px-4 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Unit Price</th>
+                          <th className="text-right py-3 px-4 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {viewEvent.items.map(item => (
+                          <tr key={item.id} className="hover:bg-white/[0.02]">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                {item.item_image ? (
+                                  <img src={item.item_image} alt={item.item_name} className="w-10 h-10 rounded-lg object-cover border border-white/10" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                                    <ShoppingCart size={14} className="text-slate-600" />
+                                  </div>
+                                )}
+                                <span className="text-sm text-white font-medium">{item.item_name}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center text-sm text-slate-300 font-mono">{item.quantity}</td>
+                            <td className="py-3 px-4 text-right text-sm text-slate-400 font-mono">₹{Number(item.price_at_time).toFixed(2)}</td>
+                            <td className="py-3 px-4 text-right text-sm text-emerald-400 font-bold font-mono">₹{(item.quantity * Number(item.price_at_time)).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t border-white/10 bg-white/[0.03]">
+                          <td colSpan={3} className="py-3 px-4 text-right text-xs text-slate-400 font-semibold uppercase tracking-wider">Grand Total</td>
+                          <td className="py-3 px-4 text-right text-base text-white font-bold font-mono">₹{Number(viewEvent.total_amount).toLocaleString('en-IN')}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                onClick={() => setViewEvent(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:border-white/20 font-semibold text-sm transition-all"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
