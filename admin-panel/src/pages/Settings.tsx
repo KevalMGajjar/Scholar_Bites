@@ -39,7 +39,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [uniSuccess, setUniSuccess] = useState('');
   const [uniError, setUniError] = useState('');
-  const [uniSettings, setUniSettings] = useState<any>(null);
+
   const [groupOrderVisible, setGroupOrderVisible] = useState(false);
 
   // ── Staff state ──
@@ -84,7 +84,7 @@ export default function Settings() {
       setLogoPreview(res.data.logo_url || null); 
 
       const settingsRes = await api.get(`/admin/settings/${user.university_id}`);
-      setUniSettings(settingsRes.data);
+
       setGroupOrderVisible(settingsRes.data.group_order_visible_students);
     }
     catch (err) { console.error(err); setUniError('Failed to load university profile or settings'); }
