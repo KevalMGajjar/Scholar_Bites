@@ -17,17 +17,17 @@ class PhoneScreen extends StatefulWidget {
 
 class _PhoneScreenState extends State<PhoneScreen> {
   final _phoneController = TextEditingController();
-  final _usernameController = TextEditingController();
+  final _nameController = TextEditingController();
   final _phoneFocusNode = FocusNode();
-  final _usernameFocusNode = FocusNode();
+  final _nameFocusNode = FocusNode();
   bool _isLoading = false;
 
   @override
   void dispose() {
     _phoneController.dispose();
-    _usernameController.dispose();
+    _nameController.dispose();
     _phoneFocusNode.dispose();
-    _usernameFocusNode.dispose();
+    _nameFocusNode.dispose();
     super.dispose();
   }
 
@@ -45,13 +45,13 @@ class _PhoneScreenState extends State<PhoneScreen> {
     
     if (mounted) {
       setState(() => _isLoading = false);
-      final username = _usernameController.text.trim();
+      final name = _nameController.text.trim();
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => OtpScreen(
             phoneNumber: phone,
-            username: username.isNotEmpty ? username : null,
+            displayName: name.isNotEmpty ? name : null,
           ),
         ),
       );
@@ -113,7 +113,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
               ).animate().fade(delay: 200.ms, duration: 600.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic),
               const SizedBox(height: 8),
               Text(
-                "Enter your phone number and an optional username.",
+                "Enter your phone number and an optional display name.",
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   color: const Color(0xFF4A0E13).withValues(alpha: 0.7),
@@ -137,14 +137,13 @@ class _PhoneScreenState extends State<PhoneScreen> {
               const SizedBox(height: 20),
 
               CustomTextField(
-                controller: _usernameController,
-                hintText: 'Username (optional)',
+                controller: _nameController,
+                hintText: 'Your Name (optional)',
                 prefixIcon: Icons.person_outline_rounded,
-                focusNode: _usernameFocusNode,
+                focusNode: _nameFocusNode,
                 keyboardType: TextInputType.text,
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._]')),
-                  LengthLimitingTextInputFormatter(30),
+                  LengthLimitingTextInputFormatter(50),
                 ],
               ).animate().fade(delay: 700.ms, duration: 600.ms).slideX(begin: -0.1, end: 0, curve: Curves.easeOutCubic),
               

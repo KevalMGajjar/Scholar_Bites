@@ -229,13 +229,8 @@ export default function Settings() {
                   </label>
                 </div>
                 
-                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                  <h4 className="text-[13px] font-bold text-amber-400 mb-1 flex items-center gap-1.5"><Lock size={12} /> Staff Access Code</h4>
-                  <p className="text-[11px] text-amber-500/70 mb-2">Used by university staff to authenticate in the mobile app. Rotates daily automatically.</p>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[18px] font-bold text-white tracking-[0.2em]">{uniSettings?.staff_access_code || '------'}</span>
-                  </div>
-                </div>
+                
+                {/* Staff Access Code removed — staff are now pre-created by admin */}
               </div>
             </div>
 

@@ -58,7 +58,6 @@ class TokenStorage {
     await _storage.delete(key: 'user_name');
     await _storage.delete(key: 'user_email');
     await _storage.delete(key: 'user_phone');
-    await _storage.delete(key: 'user_username');
   }
 
   static Future<void> saveUserId(String id) async {
@@ -118,11 +117,4 @@ class TokenStorage {
     return await _storage.read(key: 'user_type');
   }
 
-  static Future<void> saveUsername(String username) async {
-    await _storage.write(key: 'user_username', value: username);
-  }
-
-  static Future<String?> getUsername() async {
-    return await _storage.read(key: 'user_username');
-  }
 }

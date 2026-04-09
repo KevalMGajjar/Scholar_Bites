@@ -65,7 +65,7 @@ export const loginOtp = async (req: Request, res: Response) => {
         const table = role === 'student' ? 'users' : 'staff';
         await saveActiveToken(user.id, token, table);
 
-        res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, username: user.username || null, university_id: user.university_id, university_name: user.university_name, role, user_type: user.user_type || 'student' } });
+        res.json({ token, user: { id: user.id, name: user.name, phone: user.phone, university_id: user.university_id, university_name: user.university_name, role, user_type: user.user_type || 'student' } });
     } catch (error: any) {
         console.error('[Auth] loginOtp error:', error.message);
         res.status(500).json({ message: 'Server error' });
@@ -73,16 +73,16 @@ export const loginOtp = async (req: Request, res: Response) => {
 };
 
 export const registerOtp = async (req: Request, res: Response) => {
-    const { phone, username } = req.body;
+    const { phone, name: inputName } = req.body;
     // Single-university mode: always assign to Ahmedabad University
     const university_id = AHMEDABAD_UNIVERSITY_ID;
 
     try {
-        const name = username || `Student ${phone}`;
+        const name = inputName || `Student ${phone}`;
 
         const result = await pool.query(
-            'INSERT INTO users (name, university_id, phone, username) VALUES ($1, $2, $3, $4) RETURNING id, name, phone, university_id, username',
-            [name, university_id, phone, username || null]
+            'INSERT INTO users (name, university_id, phone) VALUES ($1, $2, $3) RETURNING id, name, phone, university_id',
+            [name, university_id, phone]
         );
 
         const user = result.rows[0];
@@ -145,7 +145,7 @@ export const staffLogin = async (req: Request, res: Response) => {
     }
 
     // ─── Brute-force check ───
-    const lockSeconds = checkBruteForce(email.toLowerCase());
+    const lockSeconds = await checkBruteForce(email.toLowerCase());
     if (lockSeconds > 0) {
         auditLog({ action: 'LOGIN_LOCKED', details: `Account locked, ${lockSeconds}s remaining`, resource: `email:${email}`, ip });
         return res.status(423).json({ message: `Account temporarily locked. Try again in ${Math.ceil(lockSeconds / 60)} minutes.` });
@@ -164,14 +164,14 @@ export const staffLogin = async (req: Request, res: Response) => {
 
         // ─── Generic error to prevent user enumeration ───
         if (!staff) {
-            recordFailedLogin(email.toLowerCase());
+            await recordFailedLogin(email.toLowerCase());
             auditLog({ action: 'LOGIN_FAILED', details: 'Email not found', resource: `email:${email}`, ip });
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
         const isValidPassword = await bcrypt.compare(password, staff.password_hash);
         if (!isValidPassword) {
-            const locked = recordFailedLogin(email.toLowerCase());
+            const locked = await recordFailedLogin(email.toLowerCase());
             auditLog({ userId: staff.id, action: 'LOGIN_FAILED', details: locked ? 'Wrong password → locked' : 'Wrong password', resource: `email:${email}`, ip });
             return res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -189,7 +189,7 @@ export const staffLogin = async (req: Request, res: Response) => {
         }
 
         // ─── Credentials valid: generate OTP ───
-        clearFailedLogins(email.toLowerCase());
+        await clearFailedLogins(email.toLowerCase());
 
         // Invalidate any existing unused OTPs for this staff
         await pool.query(

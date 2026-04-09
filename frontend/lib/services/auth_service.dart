@@ -114,9 +114,6 @@ class AuthService {
           await TokenStorage.saveUserEmail(userModel.email);
           await TokenStorage.savePhone(phone);
           await TokenStorage.saveUserType(userModel.userType);
-          if (userModel.username.isNotEmpty) {
-            await TokenStorage.saveUsername(userModel.username);
-          }
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);
@@ -137,14 +134,14 @@ class AuthService {
 
   static Future<UserModel?> registerOtp({
     required String phone,
-    String? username,
+    String? name,
   }) async {
     try {
       final response = await _dio.post(
         '/auth/register-otp',
         data: {
           'phone': phone,
-          if (username != null && username.isNotEmpty) 'username': username,
+          if (name != null && name.isNotEmpty) 'name': name,
           // university_id is auto-assigned by backend (single-university mode)
         },
       );
@@ -161,9 +158,6 @@ class AuthService {
           await TokenStorage.saveUserEmail(userModel.email);
           await TokenStorage.savePhone(phone);
           await TokenStorage.saveUserType(userModel.userType);
-          if (userModel.username.isNotEmpty) {
-            await TokenStorage.saveUsername(userModel.username);
-          }
 
           final userBox = Hive.box<UserModel>('userBox');
           await userBox.put('currentUser', userModel);

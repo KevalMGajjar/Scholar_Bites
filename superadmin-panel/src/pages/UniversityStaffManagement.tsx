@@ -5,7 +5,6 @@ import { Users, Upload, UserPlus, Trash2, AlertTriangle, Download, FileSpreadshe
 interface UniversityStaff {
   id: string;
   name: string;
-  username: string | null;
   phone: string;
   user_type: string;
   created_at: string;
@@ -14,7 +13,6 @@ interface UniversityStaff {
 interface CsvEntry {
   name: string;
   phone: string;
-  username: string;
 }
 
 interface BulkResult {
@@ -31,7 +29,7 @@ export default function UniversityStaffManagement() {
 
   // Add Modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', username: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
 
@@ -86,10 +84,9 @@ export default function UniversityStaffManagement() {
       await api.post('/superadmin/university-staff', {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
-        username: formData.username.trim() || undefined,
       });
       setShowAddModal(false);
-      setFormData({ name: '', phone: '', username: '' });
+      setFormData({ name: '', phone: '' });
       setSuccessMsg('Staff member created successfully');
       fetchStaff();
     } catch (err: any) {
@@ -119,7 +116,6 @@ export default function UniversityStaffManagement() {
       const header = lines[0].toLowerCase().split(',').map(h => h.trim());
       const nameIdx = header.findIndex(h => h === 'name');
       const phoneIdx = header.findIndex(h => h === 'phone');
-      const usernameIdx = header.findIndex(h => h === 'username');
 
       if (nameIdx === -1 || phoneIdx === -1) {
         setCsvError('CSV must have "name" and "phone" columns');
@@ -133,7 +129,6 @@ export default function UniversityStaffManagement() {
           entries.push({
             name: cols[nameIdx],
             phone: cols[phoneIdx],
-            username: usernameIdx !== -1 ? cols[usernameIdx] || '' : '',
           });
         }
       }
@@ -165,7 +160,7 @@ export default function UniversityStaffManagement() {
   };
 
   const downloadTemplate = () => {
-    const csv = 'name,phone,username\nJohn Doe,9876543210,johnd\nJane Smith,9123456789,janes\n';
+    const csv = 'name,phone\nJohn Doe,9876543210\nJane Smith,9123456789\n';
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -196,8 +191,7 @@ export default function UniversityStaffManagement() {
   // ── Filtered list ──
   const filtered = staffList.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.phone.includes(searchQuery) ||
-    (s.username || '').toLowerCase().includes(searchQuery.toLowerCase())
+    s.phone.includes(searchQuery)
   );
 
   return (
@@ -241,9 +235,9 @@ export default function UniversityStaffManagement() {
           </p>
         </div>
         <div className="bg-[#1c1b1b]/60 border border-[#554240]/15 rounded-2xl p-5">
-          <p className="text-[#a38b88] text-xs font-medium uppercase tracking-wider">With Username</p>
+          <p className="text-[#a38b88] text-xs font-medium uppercase tracking-wider">Active Staff</p>
           <p className="text-3xl font-bold text-[#e5e2e1] mt-1">
-            {staffList.filter(s => s.username).length}
+            {staffList.length}
           </p>
         </div>
       </div>
@@ -254,7 +248,7 @@ export default function UniversityStaffManagement() {
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#a38b88]" />
           <input
             type="text"
-            placeholder="Search by name, phone, or username..."
+            placeholder="Search by name or phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3 bg-[#1c1b1b]/60 border border-[#554240]/20 rounded-xl text-[#e5e2e1] placeholder-[#a38b88]/50 text-sm focus:outline-none focus:border-red-500/40 transition-colors"
@@ -269,7 +263,7 @@ export default function UniversityStaffManagement() {
             Import CSV
           </button>
           <button
-            onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '', username: '' }); setModalError(''); }}
+            onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '' }); setModalError(''); }}
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all"
           >
             <UserPlus size={16} />
@@ -284,7 +278,6 @@ export default function UniversityStaffManagement() {
           <thead>
             <tr className="border-b border-[#554240]/15">
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Name</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Username</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Phone</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Created</th>
               <th className="text-right px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Actions</th>
@@ -292,9 +285,9 @@ export default function UniversityStaffManagement() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="text-center py-16 text-[#a38b88]">Loading...</td></tr>
+              <tr><td colSpan={4} className="text-center py-16 text-[#a38b88]">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-16 text-[#a38b88]">
+              <tr><td colSpan={4} className="text-center py-16 text-[#a38b88]">
                 {searchQuery ? 'No matching staff found' : 'No university staff members yet. Click "Add Staff" or "Import CSV" to get started.'}
               </td></tr>
             ) : (
@@ -307,13 +300,6 @@ export default function UniversityStaffManagement() {
                       </div>
                       <span className="text-[#e5e2e1] font-medium text-sm">{staff.name}</span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {staff.username ? (
-                      <span className="text-[#e5e2e1] text-sm font-mono bg-[#0e0e0e]/60 px-2 py-1 rounded-md">@{staff.username}</span>
-                    ) : (
-                      <span className="text-[#a38b88]/50 text-sm italic">—</span>
-                    )}
                   </td>
                   <td className="px-6 py-4 text-[#dcc0bd] text-sm font-mono">+91 {staff.phone}</td>
                   <td className="px-6 py-4 text-[#a38b88] text-sm">
@@ -366,16 +352,6 @@ export default function UniversityStaffManagement() {
                   maxLength={10}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Username (optional)</label>
-                <input
-                  type="text"
-                  value={formData.username}
-                  onChange={e => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40"
-                  placeholder="johndoe"
-                />
-              </div>
             </div>
 
             {modalError && (
@@ -400,7 +376,7 @@ export default function UniversityStaffManagement() {
               <FileSpreadsheet size={20} className="text-red-400" />
               Import Staff from CSV
             </h2>
-            <p className="text-[#a38b88] text-sm mb-6">Upload a CSV file with columns: <code className="bg-[#0e0e0e] px-2 py-0.5 rounded text-red-400 text-xs">name,phone,username</code></p>
+            <p className="text-[#a38b88] text-sm mb-6">Upload a CSV file with columns: <code className="bg-[#0e0e0e] px-2 py-0.5 rounded text-red-400 text-xs">name,phone</code></p>
 
             <div className="flex-1 overflow-y-auto">
               {/* Upload Area */}
@@ -439,7 +415,6 @@ export default function UniversityStaffManagement() {
                           <th className="text-left px-4 py-2 text-xs text-[#a38b88]">#</th>
                           <th className="text-left px-4 py-2 text-xs text-[#a38b88]">Name</th>
                           <th className="text-left px-4 py-2 text-xs text-[#a38b88]">Phone</th>
-                          <th className="text-left px-4 py-2 text-xs text-[#a38b88]">Username</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -448,7 +423,6 @@ export default function UniversityStaffManagement() {
                             <td className="px-4 py-2 text-[#a38b88]">{i + 1}</td>
                             <td className="px-4 py-2 text-[#e5e2e1]">{row.name}</td>
                             <td className="px-4 py-2 text-[#dcc0bd] font-mono">{row.phone}</td>
-                            <td className="px-4 py-2 text-[#dcc0bd]">{row.username || '—'}</td>
                           </tr>
                         ))}
                       </tbody>

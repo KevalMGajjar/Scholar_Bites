@@ -841,7 +841,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   File? _profileImage;
   String _userPhone = '';
-  String _username = '';
   double _walletBalance = 0.0;
 
   @override
@@ -852,11 +851,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserProfile() async {
     final phone = await TokenStorage.getPhone();
-    final username = await TokenStorage.getUsername();
     if (mounted) {
       setState(() {
         _userPhone = phone ?? '';
-        _username = username ?? '';
       });
     }
     // Fetch wallet balance for the menu card
@@ -1059,27 +1056,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Phone Number
               Text(
-                _username.isNotEmpty ? '@$_username' : (_userPhone.isNotEmpty ? '+91 $_userPhone' : 'Student'),
+                _userPhone.isNotEmpty ? '+91 $_userPhone' : 'Student',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                 ),
               ).animate().fadeIn(delay: 150.ms, duration: 300.ms),
-
-              // Show phone below username if username exists
-              if (_username.isNotEmpty && _userPhone.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '+91 $_userPhone',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ).animate().fadeIn(delay: 200.ms, duration: 300.ms),
-                ),
 
               const SizedBox(height: 22),
             ],

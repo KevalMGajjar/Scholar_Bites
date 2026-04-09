@@ -11,7 +11,7 @@ import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
 export const getUniversityStaff = async (req: Request, res: Response) => {
     try {
         const result = await pool.query(
-            `SELECT u.id, u.name, u.username, u.phone, u.user_type, u.created_at,
+            `SELECT u.id, u.name, u.phone, u.user_type, u.created_at,
                     uni.name as university_name
              FROM users u
              LEFT JOIN universities uni ON u.university_id = uni.id
@@ -27,7 +27,7 @@ export const getUniversityStaff = async (req: Request, res: Response) => {
 
 /** Create a single university staff user */
 export const createUniversityStaff = async (req: Request, res: Response) => {
-    const { name, phone, username } = req.body;
+    const { name, phone } = req.body;
 
     if (!name || !phone) {
         return res.status(400).json({ message: 'Name and phone number are required' });
@@ -49,10 +49,10 @@ export const createUniversityStaff = async (req: Request, res: Response) => {
         }
 
         const result = await pool.query(
-            `INSERT INTO users (name, phone, username, university_id, user_type)
-             VALUES ($1, $2, $3, $4, 'university_staff')
-             RETURNING id, name, phone, username, user_type, created_at`,
-            [name.trim(), cleanPhone, username?.trim() || null, AHMEDABAD_UNIVERSITY_ID]
+            `INSERT INTO users (name, phone, university_id, user_type)
+             VALUES ($1, $2, $3, 'university_staff')
+             RETURNING id, name, phone, user_type, created_at`,
+            [name.trim(), cleanPhone, AHMEDABAD_UNIVERSITY_ID]
         );
 
         res.status(201).json(result.rows[0]);
@@ -85,7 +85,7 @@ export const bulkCreateUniversityStaff = async (req: Request, res: Response) => 
         await client.query('BEGIN');
 
         for (const entry of staff) {
-            const { name, phone, username } = entry;
+            const { name, phone } = entry;
 
             if (!name || !phone) {
                 skipped.push({ phone: phone || '?', name: name || '?', reason: 'Missing name or phone' });
@@ -107,10 +107,10 @@ export const bulkCreateUniversityStaff = async (req: Request, res: Response) => 
                 }
 
                 const result = await client.query(
-                    `INSERT INTO users (name, phone, username, university_id, user_type)
-                     VALUES ($1, $2, $3, $4, 'university_staff')
-                     RETURNING id, name, phone, username, user_type, created_at`,
-                    [name.trim(), cleanPhone, username?.trim() || null, AHMEDABAD_UNIVERSITY_ID]
+                    `INSERT INTO users (name, phone, university_id, user_type)
+                     VALUES ($1, $2, $3, 'university_staff')
+                     RETURNING id, name, phone, user_type, created_at`,
+                    [name.trim(), cleanPhone, AHMEDABAD_UNIVERSITY_ID]
                 );
 
                 created.push(result.rows[0]);

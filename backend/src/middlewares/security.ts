@@ -86,77 +86,100 @@ export const validateUuidParams = (...paramNames: string[]) => {
 };
 
 // ═══════════════════════════════════════════════════════
-// Brute-Force Protection — Failed Login Tracking
+// Brute-Force Protection — Database-Backed Lockout
 // ═══════════════════════════════════════════════════════
-const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+import pool from '../config/db';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 /** Check if an account is locked. Returns seconds remaining if locked, 0 if not. */
-export function checkBruteForce(identifier: string): number {
-    const record = loginAttempts.get(identifier);
-    if (!record) return 0;
-    if (record.lockedUntil > Date.now()) {
-        return Math.ceil((record.lockedUntil - Date.now()) / 1000);
+export async function checkBruteForce(identifier: string): Promise<number> {
+    const key = identifier.toLowerCase();
+    try {
+        const result = await pool.query(
+            `SELECT locked_until FROM locked_accounts WHERE identifier = $1 AND locked_until > NOW()`,
+            [key]
+        );
+        if (result.rows.length > 0) {
+            const lockedUntil = new Date(result.rows[0].locked_until).getTime();
+            return Math.ceil((lockedUntil - Date.now()) / 1000);
+        }
+        return 0;
+    } catch (err) {
+        console.error('[Security] checkBruteForce DB error:', err);
+        return 0; // Fail open — don't lock users out on DB error
     }
-    // Lock expired — reset
-    if (record.lockedUntil > 0 && record.lockedUntil <= Date.now()) {
-        loginAttempts.delete(identifier);
-    }
-    return 0;
 }
 
 /** Record a failed login attempt. Returns true if account is now locked. */
-export function recordFailedLogin(identifier: string): boolean {
-    const record = loginAttempts.get(identifier) || { count: 0, lockedUntil: 0 };
-    record.count += 1;
-    if (record.count >= MAX_ATTEMPTS) {
-        record.lockedUntil = Date.now() + LOCKOUT_MS;
-        loginAttempts.set(identifier, record);
-        return true;
+export async function recordFailedLogin(identifier: string): Promise<boolean> {
+    const key = identifier.toLowerCase();
+    try {
+        const result = await pool.query(
+            `INSERT INTO locked_accounts (identifier, attempt_count, locked_until)
+             VALUES ($1, 1, NULL)
+             ON CONFLICT (identifier) DO UPDATE
+             SET attempt_count = locked_accounts.attempt_count + 1,
+                 updated_at = NOW()
+             RETURNING attempt_count`,
+            [key]
+        );
+        const count = result.rows[0].attempt_count;
+        if (count >= MAX_ATTEMPTS) {
+            const lockedUntil = new Date(Date.now() + LOCKOUT_MS);
+            await pool.query(
+                `UPDATE locked_accounts SET locked_until = $1 WHERE identifier = $2`,
+                [lockedUntil, key]
+            );
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error('[Security] recordFailedLogin DB error:', err);
+        return false;
     }
-    loginAttempts.set(identifier, record);
-    return false;
 }
 
 /** Clear failed login attempts on successful login */
-export function clearFailedLogins(identifier: string): void {
-    loginAttempts.delete(identifier);
+export async function clearFailedLogins(identifier: string): Promise<void> {
+    const key = identifier.toLowerCase();
+    try {
+        await pool.query(`DELETE FROM locked_accounts WHERE identifier = $1`, [key]);
+    } catch (err) {
+        console.error('[Security] clearFailedLogins DB error:', err);
+    }
 }
 
 /** Unlock a specific locked account. Returns true if an account was unlocked. */
-export function unlockAccount(identifier: string): boolean {
+export async function unlockAccount(identifier: string): Promise<boolean> {
     const key = identifier.toLowerCase();
-    if (loginAttempts.has(key)) {
-        loginAttempts.delete(key);
-        return true;
+    try {
+        const result = await pool.query(
+            `DELETE FROM locked_accounts WHERE identifier = $1 RETURNING identifier`,
+            [key]
+        );
+        return (result.rowCount ?? 0) > 0;
+    } catch (err) {
+        console.error('[Security] unlockAccount DB error:', err);
+        return false;
     }
-    return false;
 }
 
 /** Get all currently locked accounts with their lock expiry times. */
-export function getLockedAccounts(): { email: string; lockedUntil: Date; remainingSeconds: number }[] {
-    const now = Date.now();
-    const locked: { email: string; lockedUntil: Date; remainingSeconds: number }[] = [];
-    for (const [key, val] of loginAttempts.entries()) {
-        if (val.lockedUntil > now) {
-            locked.push({
-                email: key,
-                lockedUntil: new Date(val.lockedUntil),
-                remainingSeconds: Math.ceil((val.lockedUntil - now) / 1000),
-            });
-        }
+export async function getLockedAccounts(): Promise<{ email: string; lockedUntil: Date; remainingSeconds: number }[]> {
+    try {
+        const result = await pool.query(
+            `SELECT identifier, locked_until FROM locked_accounts WHERE locked_until > NOW() ORDER BY locked_until DESC`
+        );
+        const now = Date.now();
+        return result.rows.map((row: any) => ({
+            email: row.identifier,
+            lockedUntil: new Date(row.locked_until),
+            remainingSeconds: Math.ceil((new Date(row.locked_until).getTime() - now) / 1000),
+        }));
+    } catch (err) {
+        console.error('[Security] getLockedAccounts DB error:', err);
+        return [];
     }
-    return locked;
 }
-
-// Clean up expired entries every 30 minutes
-setInterval(() => {
-    const now = Date.now();
-    for (const [key, val] of loginAttempts.entries()) {
-        if (val.lockedUntil > 0 && val.lockedUntil <= now) {
-            loginAttempts.delete(key);
-        }
-    }
-}, 30 * 60 * 1000);

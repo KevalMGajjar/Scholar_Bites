@@ -60,7 +60,7 @@ app.use('/api/admin/login/google', authLimiter);
 app.use('/api/admin/password/request-otp', otpLimiter);
 
 // ─── Staff Auth Rate Limiting ───
-app.use('/api/auth/verify-staff-code', authLimiter);
+// Staff code verification removed — staff are now pre-created by admin
 app.use('/api/auth/login-otp-staff', authLimiter);
 app.use('/api/auth/register-otp-staff', authLimiter);
 app.use('/api/dean/login', authLimiter);

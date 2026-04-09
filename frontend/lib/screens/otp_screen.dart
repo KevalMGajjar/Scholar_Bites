@@ -10,12 +10,12 @@ import 'home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phoneNumber;
-  final String? username;
+  final String? displayName;
   
   const OtpScreen({
     super.key, 
     required this.phoneNumber, 
-    this.username,
+    this.displayName,
   });
 
   @override
@@ -64,11 +64,11 @@ class _OtpScreenState extends State<OtpScreen> {
           (route) => false,
         );
       } else {
-        // New user — register with optional username
+        // New user — register with optional name
         try {
           final newUser = await AuthService.registerOtp(
             phone: widget.phoneNumber,
-            username: widget.username,
+            name: widget.displayName,
           );
           setState(() => _isLoading = false);
           
@@ -95,7 +95,7 @@ class _OtpScreenState extends State<OtpScreen> {
         try {
           final newUser = await AuthService.registerOtp(
             phone: widget.phoneNumber,
-            username: widget.username,
+            name: widget.displayName,
           );
           setState(() => _isLoading = false);
           

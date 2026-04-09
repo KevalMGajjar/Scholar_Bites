@@ -8,7 +8,6 @@ class UserModel {
   final String universityId;
   final String universityName;
   final String userType;
-  final String username;
 
   UserModel({
     required this.id,
@@ -18,7 +17,6 @@ class UserModel {
     required this.universityId,
     this.universityName = '',
     this.userType = 'student',
-    this.username = '',
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -30,7 +28,6 @@ class UserModel {
       universityId: json['university_id']?.toString() ?? '',
       universityName: json['university_name']?.toString() ?? '',
       userType: json['user_type']?.toString() ?? 'student',
-      username: json['username']?.toString() ?? '',
     );
   }
 
@@ -43,7 +40,6 @@ class UserModel {
       'university_id': universityId,
       'university_name': universityName,
       'user_type': userType,
-      'username': username,
     };
   }
 }
@@ -67,13 +63,13 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       universityId: fields[4] as String? ?? '',
       universityName: fields[5] as String? ?? '',
       userType: fields[6] as String? ?? 'student',
-      username: fields[7] as String? ?? '',
+      // Field 7 (username) is deprecated — silently ignored on read
     );
   }
 
   @override
   void write(BinaryWriter writer, UserModel obj) {
-    writer.writeByte(8); // number of fields
+    writer.writeByte(7); // number of fields
     writer.writeByte(0); writer.write(obj.id);
     writer.writeByte(1); writer.write(obj.name);
     writer.writeByte(2); writer.write(obj.email);
@@ -81,7 +77,5 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
     writer.writeByte(4); writer.write(obj.universityId);
     writer.writeByte(5); writer.write(obj.universityName);
     writer.writeByte(6); writer.write(obj.userType);
-    writer.writeByte(7); writer.write(obj.username);
   }
 }
-

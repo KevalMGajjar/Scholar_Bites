@@ -19,7 +19,7 @@ interface SystemHealth {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [staffAccessCode, setStaffAccessCode] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,12 +28,10 @@ export default function Dashboard() {
 
   const fetchHealth = async () => {
     try {
-      const [healthRes, settingsRes] = await Promise.all([
+      const [healthRes] = await Promise.all([
          api.get('/superadmin/system-health'),
-         api.get('/admin/settings/453dcc78-486d-4d80-b59a-b5c578260bc4').catch(() => ({ data: { staff_access_code: 'ERROR' } }))
       ]);
       setHealth(healthRes.data);
-      setStaffAccessCode(settingsRes.data.staff_access_code);
     } catch (error) {
       console.error('Failed to fetch system health', error);
     } finally {
@@ -58,10 +56,6 @@ export default function Dashboard() {
           <p className="text-[#a38b88] text-sm">Real-time load and anomaly detection for Ahmedabad University Canteen.</p>
         </div>
         <div className="flex gap-4">
-          <div className="bg-[#1c1b1b] border border-[#554240]/30 rounded-xl px-5 py-2.5 flex items-center gap-3">
-             <span className="text-[#a38b88] text-xs font-bold uppercase tracking-wider">Staff Code</span>
-             <span className="text-[#e5e2e1] font-mono font-bold tracking-[0.2em]">{staffAccessCode || '------'}</span>
-          </div>
           <button onClick={() => navigate('/refunds')} className="btn-secondary px-6 py-2.5 flex items-center gap-2">
             Refund Queue <ArrowRight size={16} />
           </button>

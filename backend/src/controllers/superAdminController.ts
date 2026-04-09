@@ -288,7 +288,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
 /** GET /api/superadmin/locked-accounts — list all currently locked accounts */
 export const getLockedAccountsList = async (_req: Request, res: Response) => {
     try {
-        const locked = getBruteForceLocked();
+        const locked = await getBruteForceLocked();
         res.json({ lockedAccounts: locked });
     } catch (error) {
         console.error('Error fetching locked accounts:', error);
@@ -307,7 +307,7 @@ export const unlockAccountHandler = async (req: Request, res: Response) => {
     }
 
     try {
-        const wasLocked = unlockBruteForce(email);
+        const wasLocked = await unlockBruteForce(email);
 
         if (!wasLocked) {
             return res.status(404).json({ message: 'This account is not currently locked.' });
