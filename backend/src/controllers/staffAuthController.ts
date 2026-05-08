@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
+import { invalidateEmailConfig } from '../config/emailConfig';
 
 // ═══════════════════════════════════════════════════════════════
 // University Settings Endpoints (for admin panel)
@@ -35,21 +36,27 @@ export const getUniversitySettings = async (req: Request, res: Response) => {
 /** Update university settings (admin only) */
 export const updateUniversitySettings = async (req: Request, res: Response) => {
     const { university_id } = req.params;
-    const { group_order_visible_students } = req.body;
+    const { group_order_visible_students, system_email, admin_email, super_admin_email } = req.body;
 
     try {
         const result = await pool.query(
             `UPDATE university_settings
              SET group_order_visible_students = COALESCE($1, group_order_visible_students),
+                 system_email = COALESCE($2, system_email),
+                 admin_email = COALESCE($3, admin_email),
+                 super_admin_email = COALESCE($4, super_admin_email),
                  updated_at = NOW()
-             WHERE university_id = $2
+             WHERE university_id = $5
              RETURNING *`,
-            [group_order_visible_students, university_id]
+            [group_order_visible_students, system_email, admin_email, super_admin_email, university_id]
         );
 
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Settings not found' });
         }
+
+        // Invalidate cached email config so new values take effect immediately
+        invalidateEmailConfig();
 
         res.json(result.rows[0]);
     } catch (error: any) {

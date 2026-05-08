@@ -5,7 +5,7 @@ dotenv.config();
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://postgres:root@localhost:5432/canteen_db',
-    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+    ssl: false
 });
 
 const createTablesQuery = `

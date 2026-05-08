@@ -20,6 +20,7 @@ interface MenuItem {
 interface Restaurant {
   id: string;
   name: string;
+  is_event_restaurant?: boolean;
 }
 
 export default function MenuItems() {
@@ -108,11 +109,16 @@ export default function MenuItems() {
             <span className="text-white font-bold">{items.length}</span> items in the current restaurant
           </p>
         </div>
-        <div className="flex gap-2.5">
+        <div className="flex gap-2.5 items-center">
           <select value={selectedRestaurant} onChange={(e) => setSelectedRestaurant(e.target.value)}
             className="px-4 py-2.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-slate-300 text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none pr-8 transition-all">
             {restaurants.map((r) => (<option key={r.id} value={r.id} className="bg-[#0c0f18]">{r.name}</option>))}
           </select>
+          {restaurants.find(r => r.id === selectedRestaurant)?.is_event_restaurant && (
+            <span className="px-3 py-1.5 rounded-xl bg-purple-500/10 text-purple-400 text-[11px] font-bold border border-purple-500/20 tracking-wide whitespace-nowrap">
+              🍽️ Catering Only
+            </span>
+          )}
           <button onClick={openCreate}
             className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[13px] font-bold hover:shadow-lg hover:shadow-indigo-500/20 transition-all btn-press flex items-center gap-2">
             <Plus size={15} /> Add Item

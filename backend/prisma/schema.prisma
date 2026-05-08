@@ -43,6 +43,9 @@ model UniversitySettings {
   staff_access_code           String   @db.VarChar(20)       // Auto-rotated every 24 hours
   staff_code_rotated_at       DateTime @default(now()) @db.Timestamptz
   group_order_visible_students Boolean @default(false)       // Toggle for student group order access
+  system_email                String?  @db.VarChar(255)      // Email used to send all system mails
+  admin_email                 String?  @db.VarChar(255)      // Admin contact email
+  super_admin_email           String?  @db.VarChar(255)      // Super admin contact email
   created_at                  DateTime @default(now()) @db.Timestamptz
   updated_at                  DateTime @default(now()) @updatedAt @db.Timestamptz
 
@@ -55,16 +58,19 @@ model UniversitySettings {
 // 1.5. restaurants Table (Vendors/Stalls within University)
 // ═══════════════════════════════════════════════════════════════
 model Restaurant {
-  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  university_id     String   @db.Uuid
-  name              String   @db.VarChar(100)
-  logo_url          String?
-  cover_url         String?
-  rating            Float    @default(0.0)
-  tags              String[] @default([]) // e.g. ["Healthy", "Fast Food"]
-  is_open           Boolean  @default(true)
-  prep_time_minutes Int      @default(15)
-  created_at        DateTime @default(now()) @db.Timestamptz
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  university_id         String   @db.Uuid
+  name                  String   @db.VarChar(100)
+  logo_url              String?
+  cover_url             String?
+  rating                Float    @default(0.0)
+  tags                  String[] @default([]) // e.g. ["Healthy", "Fast Food"]
+  is_open               Boolean  @default(true)
+  prep_time_minutes     Int      @default(15)
+  is_event_restaurant   Boolean  @default(false) // Catering-only restaurant
+  opening_time          DateTime? @db.Time       // Daily open time
+  closing_time          DateTime? @db.Time       // Daily close time
+  created_at            DateTime @default(now()) @db.Timestamptz
 
   university    University      @relation(fields: [university_id], references: [id])
   menuItems     MenuItem[]
@@ -411,10 +417,13 @@ model StaffPreOrderItem {
 // ═══════════════════════════════════════════════════════════════
 enum EventStatus {
   upcoming
+  pending
+  approved
   confirmed
   preparing
   completed
   cancelled
+  rejected
 }
 
 model EventPreOrder {
@@ -429,6 +438,7 @@ model EventPreOrder {
   staff_email      String      @db.VarChar(255)
   status           EventStatus @default(upcoming)
   total_amount     Decimal     @default(0.00) @db.Decimal(10, 2)
+  rejection_reason String?                    // Reason for rejection by admin
   created_at       DateTime    @default(now()) @db.Timestamptz
 
   user       User                @relation(fields: [user_id], references: [id])

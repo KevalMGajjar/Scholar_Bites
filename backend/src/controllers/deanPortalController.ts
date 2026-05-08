@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import pool from '../config/db';
 import { generateToken } from '../utils/jwt';
+import { sendVoucherEmail } from '../services/emailService';
 
 // ═══════════════════════════════════════════════════════════════
 // Dean Portal Controller — Standalone dean-facing endpoints
@@ -106,7 +107,7 @@ export const getDeanProfile = async (req: Request, res: Response) => {
 /** Generate a coupon code for budget distribution */
 export const generateCoupon = async (req: Request, res: Response) => {
     const deanId = (req as any).user?.id;
-    const { amount } = req.body;
+    const { amount, staff_email } = req.body;
     const parsedAmount = Number(amount);
 
     if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -120,7 +121,7 @@ export const generateCoupon = async (req: Request, res: Response) => {
     try {
         // Check remaining budget
         const deanResult = await pool.query(
-            'SELECT total_budget, used_budget FROM deans WHERE id = $1',
+            'SELECT total_budget, used_budget, name, school_name FROM deans WHERE id = $1',
             [deanId]
         );
 
@@ -128,7 +129,8 @@ export const generateCoupon = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Dean not found' });
         }
 
-        const remaining = Number(deanResult.rows[0].total_budget) - Number(deanResult.rows[0].used_budget);
+        const dean = deanResult.rows[0];
+        const remaining = Number(dean.total_budget) - Number(dean.used_budget);
 
         if (parsedAmount > remaining) {
             return res.status(400).json({
@@ -144,10 +146,10 @@ export const generateCoupon = async (req: Request, res: Response) => {
         expiresAt.setDate(expiresAt.getDate() + 30);
 
         const result = await pool.query(
-            `INSERT INTO dean_coupons (dean_id, code, amount, expires_at)
-             VALUES ($1, $2, $3, $4)
+            `INSERT INTO dean_coupons (dean_id, code, amount, expires_at, staff_email)
+             VALUES ($1, $2, $3, $4, $5)
              RETURNING *`,
-            [deanId, code, parsedAmount, expiresAt]
+            [deanId, code, parsedAmount, expiresAt, staff_email || null]
         );
 
         // Update used_budget on dean
@@ -157,12 +159,25 @@ export const generateCoupon = async (req: Request, res: Response) => {
         );
 
         const coupon = result.rows[0];
+
+        // Send voucher email to staff (non-blocking)
+        if (staff_email) {
+            sendVoucherEmail({
+                to: staff_email,
+                code,
+                amount: parsedAmount,
+                deanName: dean.name,
+                schoolName: dean.school_name,
+                expiresAt,
+            }).catch((err: any) => console.warn('[DeanPortal] Voucher email failed:', err.message));
+        }
+
         res.status(201).json({
             coupon: {
                 ...coupon,
                 amount: Number(coupon.amount),
             },
-            used_budget: String(Number(deanResult.rows[0].used_budget) + parsedAmount)
+            used_budget: String(Number(dean.used_budget) + parsedAmount)
         });
     } catch (error: any) {
         console.error('[DeanPortal] generateCoupon error:', error.message);
@@ -243,7 +258,7 @@ export const getFundDistribution = async (req: Request, res: Response) => {
         }
 
         const coupons = await pool.query(
-            `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at, dc.event_name,
+            `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at, dc.event_name, dc.staff_email,
                     u.name as redeemed_by_name, u.phone as redeemed_by_phone, u.user_type as redeemed_by_role
              FROM dean_coupons dc
              LEFT JOIN users u ON dc.redeemed_by = u.id
@@ -260,19 +275,37 @@ export const getFundDistribution = async (req: Request, res: Response) => {
         const active = allCoupons.filter((c: any) => c.status === 'active');
         const totalActive = active.reduce((s: number, c: any) => s + Number(c.amount), 0);
 
-        // Demographic distributions based on redeemed role
-        const distMap: Record<string, { count: number; totalAmount: number }> = {};
+        // Per-user demographic breakdown
+        const userMap: Record<string, { name: string; phone: string; role: string; count: number; totalAmount: number; events: string[] }> = {};
         redeemed.forEach((c: any) => {
-            const role = c.redeemed_by_role || 'unknown';
-            if (!distMap[role]) distMap[role] = { count: 0, totalAmount: 0 };
-            distMap[role].count += 1;
-            distMap[role].totalAmount += Number(c.amount);
+            const key = c.redeemed_by_phone || c.redeemed_by_name || 'unknown';
+            if (!userMap[key]) {
+                userMap[key] = {
+                    name: c.redeemed_by_name || 'Unknown',
+                    phone: c.redeemed_by_phone || '-',
+                    role: c.redeemed_by_role || 'unknown',
+                    count: 0,
+                    totalAmount: 0,
+                    events: [],
+                };
+            }
+            userMap[key].count += 1;
+            userMap[key].totalAmount += Number(c.amount);
+            if (c.event_name) userMap[key].events.push(c.event_name);
         });
 
-        const distributionsArray = Object.entries(distMap).map(([role, data]) => ({
-            role,
-            count: data.count,
-            totalAmount: data.totalAmount
+        const distributionsArray = Object.values(userMap).sort((a, b) => b.totalAmount - a.totalAmount);
+
+        // Role-level aggregation
+        const roleMap: Record<string, { count: number; totalAmount: number }> = {};
+        redeemed.forEach((c: any) => {
+            const role = c.redeemed_by_role || 'unknown';
+            if (!roleMap[role]) roleMap[role] = { count: 0, totalAmount: 0 };
+            roleMap[role].count += 1;
+            roleMap[role].totalAmount += Number(c.amount);
+        });
+        const roleSummary = Object.entries(roleMap).map(([role, data]) => ({
+            role, count: data.count, totalAmount: data.totalAmount
         }));
 
         const d = deanResult.rows[0];
@@ -294,7 +327,8 @@ export const getFundDistribution = async (req: Request, res: Response) => {
                 ...c,
                 amount: Number(c.amount),
             })),
-            distributions: distributionsArray
+            distributions: distributionsArray,
+            roleSummary,
         });
     } catch (error: any) {
         console.error('[DeanPortal] getFundDistribution error:', error.message);

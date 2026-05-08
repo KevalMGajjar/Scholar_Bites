@@ -12,8 +12,8 @@ export const getRestaurantsByUniversity = async (req: Request, res: Response) =>
     }
 
     try {
-        // Return all public restaurants, completely hiding 'Event Management' which is private/restricted
-        const query = "SELECT * FROM restaurants WHERE university_id = $1 AND name NOT ILIKE '%event management%' AND name NOT ILIKE '%club events%' ORDER BY rating DESC, name";
+        // Return all public restaurants, hiding event/catering restaurants from the mobile app
+        const query = "SELECT * FROM restaurants WHERE university_id = $1 AND (is_event_restaurant IS NULL OR is_event_restaurant = false) ORDER BY rating DESC, name";
         const result = await pool.query(query, [university_id]);
         res.json(result.rows);
     } catch (error) {
@@ -23,18 +23,20 @@ export const getRestaurantsByUniversity = async (req: Request, res: Response) =>
 };
 
 export const createRestaurant = async (req: Request, res: Response) => {
-    const { university_id, name, rating, tags, is_open, opening_time, closing_time } = req.body;
+    const { university_id, name, rating, tags, is_open, opening_time, closing_time, is_event_restaurant } = req.body;
     let { logo_url, cover_url } = req.body;
 
     if (!university_id || !name) {
         return res.status(400).json({ message: 'University ID and name are required' });
     }
 
+    const isEvent = is_event_restaurant === true || is_event_restaurant === 'true';
+
     try {
         const result = await pool.query(
-            `INSERT INTO restaurants (university_id, name, logo_url, cover_url, rating, tags, is_open, opening_time, closing_time) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-            [university_id, name, logo_url, cover_url, rating || 0.0, tags || [], is_open ?? true, opening_time || null, closing_time || null]
+            `INSERT INTO restaurants (university_id, name, logo_url, cover_url, rating, tags, is_open, opening_time, closing_time, is_event_restaurant) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [university_id, name, logo_url, cover_url, isEvent ? 0 : (rating || 0.0), isEvent ? [] : (tags || []), is_open ?? true, isEvent ? null : (opening_time || null), isEvent ? null : (closing_time || null), isEvent]
         );
         let r = result.rows[0];
 
@@ -86,7 +88,7 @@ export const getAllRestaurants = async (req: Request, res: Response) => {
 // ─── Update Restaurant ───
 export const updateRestaurant = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, rating, tags, is_open, prep_time_minutes, opening_time, closing_time } = req.body;
+    const { name, rating, tags, is_open, prep_time_minutes, opening_time, closing_time, is_event_restaurant } = req.body;
     let { logo_url, cover_url } = req.body;
 
     try {
@@ -125,6 +127,7 @@ export const updateRestaurant = async (req: Request, res: Response) => {
         if (prep_time_minutes !== undefined) { updates.push(`prep_time_minutes = $${idx++}`); params.push(prep_time_minutes); }
         if (opening_time !== undefined) { updates.push(`opening_time = $${idx++}`); params.push(opening_time || null); }
         if (closing_time !== undefined) { updates.push(`closing_time = $${idx++}`); params.push(closing_time || null); }
+        if (is_event_restaurant !== undefined) { updates.push(`is_event_restaurant = $${idx++}`); params.push(is_event_restaurant === true || is_event_restaurant === 'true'); }
 
         if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
 

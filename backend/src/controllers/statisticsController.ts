@@ -14,11 +14,22 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
         // - Staff role: ALWAYS locked to their restaurant (ignore query param)
         // - Admin role: use query param if provided, otherwise show all
         let restaurantId: string | null = null;
+        let isEventRestaurant = false;
         if (staffRole === 'staff') {
             if (!staffRestaurantId) return res.status(403).json({ message: 'Staff member not assigned to a restaurant' });
             restaurantId = staffRestaurantId;
         } else if (req.query.restaurant_id) {
             restaurantId = req.query.restaurant_id as string;
+        }
+
+        // Check if the selected restaurant is the event restaurant
+        if (restaurantId) {
+            const eventCheck = await pool.query(
+                'SELECT is_event_restaurant FROM restaurants WHERE id = $1', [restaurantId]
+            );
+            if (eventCheck.rows.length > 0 && eventCheck.rows[0].is_event_restaurant) {
+                isEventRestaurant = true;
+            }
         }
 
         // Helper: build WHERE clause with optional restaurant filter
@@ -167,24 +178,85 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
             return { hour: i, orders: found ? found.orders : 0 };
         });
 
+        // ═══ EVENT PRE-ORDER STATS (when no filter OR event restaurant selected) ═══
+        let combinedStatus = { ...ordersByStatus };
+        let combinedRevenue = totalRevenue;
+        let combinedOrdersToday = todayResult.rows[0].orders_today;
+        let combinedRevenueToday = parseFloat(todayResult.rows[0].revenue_today);
+        let totalEventOrders = 0;
+        let eventRevenue = 0;
+
+        const baseBestSellers = bestSellersResult.rows.map((r: any) => ({
+            name: r.name, image_url: r.image_url, price: parseFloat(r.price),
+            total_sold: r.total_sold, total_revenue: parseFloat(r.total_revenue),
+        }));
+        let allBestSellers = [...baseBestSellers];
+
+        if (!restaurantId || isEventRestaurant) {
+            const eventStatusResult = await pool.query(
+                `SELECT status, COUNT(*)::int as count FROM event_pre_orders WHERE university_id = $1 GROUP BY status`, [uniId]
+            );
+            const eventByStatus: Record<string, number> = {};
+            eventStatusResult.rows.forEach((r: any) => { eventByStatus[r.status] = r.count; });
+
+            const eventRevenueResult = await pool.query(
+                `SELECT COALESCE(SUM(total_amount), 0)::numeric as total FROM event_pre_orders WHERE university_id = $1 AND status NOT IN ('cancelled', 'rejected')`, [uniId]
+            );
+            eventRevenue = parseFloat(eventRevenueResult.rows[0].total);
+
+            const eventTodayResult = await pool.query(
+                `SELECT COUNT(*)::int as count, COALESCE(SUM(total_amount), 0)::numeric as revenue
+                 FROM event_pre_orders WHERE university_id = $1 AND created_at >= CURRENT_DATE AND status NOT IN ('cancelled', 'rejected')`, [uniId]
+            );
+
+            const eventBestSellersResult = await pool.query(
+                `SELECT m.name, m.image_url, m.price,
+                        SUM(ei.quantity)::int as total_sold,
+                        SUM(ei.quantity * ei.price_at_time)::numeric as total_revenue
+                 FROM event_pre_order_items ei
+                 JOIN menu_items m ON ei.menu_item_id = m.id
+                 JOIN event_pre_orders eo ON ei.event_order_id = eo.id
+                 WHERE eo.university_id = $1 AND eo.status NOT IN ('cancelled', 'rejected')
+                 GROUP BY m.id, m.name, m.image_url, m.price
+                 ORDER BY total_sold DESC LIMIT 5`, [uniId]
+            );
+
+            for (const eb of eventBestSellersResult.rows) {
+                const existing = allBestSellers.find(b => b.name === eb.name);
+                if (existing) {
+                    existing.total_sold += eb.total_sold;
+                    existing.total_revenue += parseFloat(eb.total_revenue);
+                } else {
+                    allBestSellers.push({
+                        name: eb.name, image_url: eb.image_url, price: parseFloat(eb.price),
+                        total_sold: eb.total_sold, total_revenue: parseFloat(eb.total_revenue),
+                    });
+                }
+            }
+            allBestSellers.sort((a, b) => b.total_sold - a.total_sold);
+
+            totalEventOrders = Object.values(eventByStatus).reduce((a: number, b: number) => a + b, 0);
+            combinedRevenue = totalRevenue + eventRevenue;
+            combinedOrdersToday = todayResult.rows[0].orders_today + eventTodayResult.rows[0].count;
+            combinedRevenueToday = parseFloat(todayResult.rows[0].revenue_today) + parseFloat(eventTodayResult.rows[0].revenue);
+
+            for (const [status, count] of Object.entries(eventByStatus)) {
+                combinedStatus[status] = (combinedStatus[status] || 0) + count;
+            }
+        }
+
         res.json({
-            orders_by_status: ordersByStatus,
-            total_revenue: totalRevenue,
+            orders_by_status: combinedStatus,
+            total_revenue: combinedRevenue,
             monthly_revenue: monthlyResult.rows.map((r: any) => ({
                 month: r.month,
                 revenue: parseFloat(r.revenue),
                 orders: r.orders,
             })),
-            best_sellers: bestSellersResult.rows.map((r: any) => ({
-                name: r.name,
-                image_url: r.image_url,
-                price: parseFloat(r.price),
-                total_sold: r.total_sold,
-                total_revenue: parseFloat(r.total_revenue),
-            })),
+            best_sellers: allBestSellers.slice(0, 10),
             avg_order_value: avgOrderValue,
-            orders_today: todayResult.rows[0].orders_today,
-            revenue_today: parseFloat(todayResult.rows[0].revenue_today),
+            orders_today: combinedOrdersToday,
+            revenue_today: combinedRevenueToday,
             total_customers: customersResult.rows[0].total_customers,
             daily_orders: dailyResult.rows.map((r: any) => ({
                 label: r.label,
@@ -194,6 +266,8 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
             })),
             peak_hours: peakHours,
             restaurant_filtered: !!restaurantId,
+            event_orders_total: totalEventOrders,
+            event_revenue: eventRevenue,
         });
     } catch (error) {
         console.error('Error fetching statistics:', error);

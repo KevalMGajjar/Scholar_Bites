@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Plus, Store, Clock, Star, Edit2, X } from 'lucide-react';
+import { Plus, Store, Clock, Star, Edit2, X, CalendarHeart } from 'lucide-react';
 
 interface Restaurant {
   id: string;
@@ -14,6 +14,7 @@ interface Restaurant {
   prep_time_minutes: number;
   opening_time: string | null;
   closing_time: string | null;
+  is_event_restaurant: boolean;
 }
 
 export default function Restaurants() {
@@ -22,7 +23,7 @@ export default function Restaurants() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Restaurant | null>(null);
-  const [form, setForm] = useState({ name: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
+  const [form, setForm] = useState({ name: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00', is_event_restaurant: false });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -38,14 +39,14 @@ export default function Restaurants() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00' });
+    setForm({ name: '', rating: 4.5, tags: '', prep_time_minutes: 15, opening_time: '09:00', closing_time: '22:00', is_event_restaurant: false });
     setLogoFile(null); setCoverFile(null); setLogoPreview(null); setCoverPreview(null);
     setShowForm(true);
   };
 
   const openEdit = (r: Restaurant) => {
     setEditing(r);
-    setForm({ name: r.name, rating: r.rating, tags: (r.tags || []).join(', '), prep_time_minutes: r.prep_time_minutes || 15, opening_time: r.opening_time ? r.opening_time.substring(0, 5) : '09:00', closing_time: r.closing_time ? r.closing_time.substring(0, 5) : '22:00' });
+    setForm({ name: r.name, rating: r.rating, tags: (r.tags || []).join(', '), prep_time_minutes: r.prep_time_minutes || 15, opening_time: r.opening_time ? r.opening_time.substring(0, 5) : '09:00', closing_time: r.closing_time ? r.closing_time.substring(0, 5) : '22:00', is_event_restaurant: r.is_event_restaurant || false });
     setLogoFile(null); setCoverFile(null); setLogoPreview(r.logo_url || null); setCoverPreview(r.cover_url || null);
     setShowForm(true);
   };
@@ -55,11 +56,14 @@ export default function Restaurants() {
     const fd = new FormData();
     fd.append('name', form.name);
     if (!editing) fd.append('university_id', user?.university_id || '');
-    fd.append('rating', form.rating.toString());
-    fd.append('tags', `{${form.tags}}`);
-    fd.append('prep_time_minutes', form.prep_time_minutes.toString());
-    fd.append('opening_time', form.opening_time);
-    fd.append('closing_time', form.closing_time);
+    fd.append('is_event_restaurant', form.is_event_restaurant.toString());
+    if (!form.is_event_restaurant) {
+      fd.append('rating', form.rating.toString());
+      fd.append('tags', `{${form.tags}}`);
+      fd.append('prep_time_minutes', form.prep_time_minutes.toString());
+      fd.append('opening_time', form.opening_time);
+      fd.append('closing_time', form.closing_time);
+    }
     if (logoFile) fd.append('logo', logoFile);
     if (coverFile) fd.append('cover', coverFile);
     try {
@@ -119,12 +123,30 @@ export default function Restaurants() {
       {/* ── Form Modal ── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in" onClick={() => setShowForm(false)}>
-          <div className="bg-[#0c0f18] border border-white/[0.06] rounded-3xl p-8 w-full max-w-lg shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#0c0f18] border border-white/[0.06] rounded-3xl p-8 w-full max-w-lg shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-[22px] font-extrabold text-white tracking-[-0.02em]">{editing ? 'Edit Restaurant' : 'New Restaurant'}</h2>
               <button onClick={() => setShowForm(false)} className="p-2 rounded-xl hover:bg-white/5 text-slate-600 hover:text-white transition-all"><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Event Restaurant Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <CalendarHeart size={18} className={form.is_event_restaurant ? 'text-purple-400' : 'text-slate-600'} />
+                  <div>
+                    <p className="text-white text-[13px] font-bold">Event / Catering Restaurant</p>
+                    <p className="text-slate-600 text-[11px] mt-0.5">Items will only appear in the catering menu</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, is_event_restaurant: !form.is_event_restaurant })}
+                  className={`relative w-12 h-6 rounded-full transition-all duration-300 ${form.is_event_restaurant ? 'bg-purple-500' : 'bg-white/[0.08]'}`}
+                >
+                  <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300 ${form.is_event_restaurant ? 'left-[26px]' : 'left-0.5'}`} />
+                </button>
+              </div>
+
               <div><label className={labelClass}>Restaurant Name <span className="text-red-400">*</span></label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className={inputClass} placeholder="e.g. Sizzling Wok" /></div>
               <div className="grid grid-cols-2 gap-5">
@@ -137,18 +159,25 @@ export default function Restaurants() {
                   <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }}
                     className={`${inputClass} file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-indigo-500/10 file:text-indigo-400 hover:file:bg-indigo-500/20 cursor-pointer`} /></div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div><label className={labelClass}>Rating</label><input type="number" step="0.1" min="0" max="5" value={form.rating} onChange={(e) => setForm({ ...form, rating: parseFloat(e.target.value) })} className={inputClass} /></div>
-                <div><label className={labelClass}>Prep Time</label><input type="number" value={form.prep_time_minutes} onChange={(e) => setForm({ ...form, prep_time_minutes: parseInt(e.target.value) })} className={inputClass} /></div>
-                <div><label className={labelClass}>Tags</label><input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} className={inputClass} placeholder="Pizza, Fast" /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className={labelClass}>Opens</label><input type="time" value={form.opening_time} onChange={(e) => setForm({ ...form, opening_time: e.target.value })} className={inputClass} /></div>
-                <div><label className={labelClass}>Closes</label><input type="time" value={form.closing_time} onChange={(e) => setForm({ ...form, closing_time: e.target.value })} className={inputClass} /></div>
-              </div>
-              <p className="text-[11px] text-indigo-400/60 font-medium -mt-2 flex items-center gap-1.5">
-                <Clock size={11} /> Restaurant will auto-open at opening time & auto-close at closing time. Orders are blocked 5 min before close.
-              </p>
+
+              {/* Only show these fields for non-event restaurants */}
+              {!form.is_event_restaurant && (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><label className={labelClass}>Prep Time</label><input type="number" value={form.prep_time_minutes} onChange={(e) => setForm({ ...form, prep_time_minutes: parseInt(e.target.value) })} className={inputClass} /></div>
+                    <div><label className={labelClass}>Tags</label><input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} className={inputClass} placeholder="Pizza, Fast" /></div>
+                    <div><label className={labelClass}>Rating</label><input type="number" step="0.1" min="0" max="5" value={form.rating} onChange={(e) => setForm({ ...form, rating: parseFloat(e.target.value) })} className={inputClass} /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className={labelClass}>Opens</label><input type="time" value={form.opening_time} onChange={(e) => setForm({ ...form, opening_time: e.target.value })} className={inputClass} /></div>
+                    <div><label className={labelClass}>Closes</label><input type="time" value={form.closing_time} onChange={(e) => setForm({ ...form, closing_time: e.target.value })} className={inputClass} /></div>
+                  </div>
+                  <p className="text-[11px] text-indigo-400/60 font-medium -mt-2 flex items-center gap-1.5">
+                    <Clock size={11} /> Restaurant will auto-open at opening time & auto-close at closing time. Orders are blocked 5 min before close.
+                  </p>
+                </>
+              )}
+
               <div className="flex gap-3 pt-4 border-t border-white/[0.04] mt-2">
                 <button type="submit" className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-bold text-[14px] hover:shadow-lg hover:shadow-indigo-500/20 transition-all btn-press">
                   {editing ? 'Save Changes' : 'Create Restaurant'}
@@ -176,6 +205,14 @@ export default function Restaurants() {
               <div className="absolute top-3 right-3 flex gap-1.5 translate-y-[-8px] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                 <button onClick={() => openEdit(r)} className="p-2 rounded-xl bg-black/50 backdrop-blur-md text-white hover:text-indigo-400 border border-white/[0.08] transition-colors btn-press"><Edit2 size={14} /></button>
               </div>
+              {/* Event Badge */}
+              {r.is_event_restaurant && (
+                <div className="absolute top-3 left-3">
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest backdrop-blur-md bg-purple-500/15 text-purple-400 border border-purple-500/20 flex items-center gap-1.5">
+                    <CalendarHeart size={11} /> Catering
+                  </span>
+                </div>
+              )}
               {/* Status */}
               <div className="absolute bottom-3 right-3">
                 {(() => { const open = computeIsOpen(r); return (
@@ -195,20 +232,27 @@ export default function Restaurants() {
               <div className="mt-6">
                 <h3 className="text-white font-extrabold text-[17px] tracking-[-0.02em] leading-tight">{r.name}</h3>
                 <div className="flex items-center gap-3 mt-2.5 flex-wrap">
-                  <span className="flex items-center gap-1 text-amber-400 text-[12px] font-bold bg-amber-500/8 px-2 py-0.5 rounded-lg">
-                    <Star size={12} className="fill-amber-400" /> {r.rating}
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-500 text-[12px] font-medium">
-                    <Clock size={12} /> {r.prep_time_minutes} min
-                  </span>
-                  {r.opening_time && r.closing_time && (
-                    <span className="flex items-center gap-1 text-indigo-400/60 text-[11px] font-semibold">
-                      {r.opening_time.substring(0, 5)} – {r.closing_time.substring(0, 5)}
-                    </span>
+                  {!r.is_event_restaurant && (
+                    <>
+                      <span className="flex items-center gap-1 text-amber-400 text-[12px] font-bold bg-amber-500/8 px-2 py-0.5 rounded-lg">
+                        <Star size={12} className="fill-amber-400" /> {r.rating}
+                      </span>
+                      <span className="flex items-center gap-1 text-slate-500 text-[12px] font-medium">
+                        <Clock size={12} /> {r.prep_time_minutes} min
+                      </span>
+                      {r.opening_time && r.closing_time && (
+                        <span className="flex items-center gap-1 text-indigo-400/60 text-[11px] font-semibold">
+                          {r.opening_time.substring(0, 5)} – {r.closing_time.substring(0, 5)}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {r.is_event_restaurant && (
+                    <span className="text-purple-400/70 text-[12px] font-medium">Catering menu only</span>
                   )}
                 </div>
               </div>
-              {(r.tags?.length > 0) && (
+              {!r.is_event_restaurant && (r.tags?.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mt-4">
                   {r.tags.map((tag, idx) => (
                     <span key={idx} className="px-2 py-0.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-slate-500 text-[10px] font-bold tracking-widest uppercase">{tag}</span>

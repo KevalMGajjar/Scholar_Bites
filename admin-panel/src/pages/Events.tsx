@@ -42,7 +42,7 @@ interface EventPreOrder {
 }
 
 export default function Events() {
-  const [activeTab, setActiveTab] = useState<'deans' | 'calendar' | 'funds'>('deans');
+  const [activeTab, setActiveTab] = useState<'deans' | 'calendar' | 'funds' | 'requests'>('deans');
   const [deans, setDeans] = useState<Dean[]>([]);
   const [events, setEvents] = useState<EventPreOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +79,12 @@ export default function Events() {
   // Event detail modal
   const [viewEvent, setViewEvent] = useState<EventPreOrder | null>(null);
 
+  // Requests tab
+  const [pendingRequests, setPendingRequests] = useState<EventPreOrder[]>([]);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
   const handleUpdateFunds = async (deanId: string, action: 'add' | 'deduct') => {
     let amount = Number(fundInputs[deanId]);
     if (!fundInputs[deanId] || isNaN(amount) || amount <= 0) return;
@@ -101,6 +107,13 @@ export default function Events() {
     fetchData();
   }, [activeTab]);
 
+  // Pre-fetch pending count for badge on initial load
+  useEffect(() => {
+    api.get('/admin/events').then(({ data }) => {
+      setPendingRequests(data.filter((e: EventPreOrder) => e.status === 'pending' || e.status === 'upcoming'));
+    }).catch(() => {});
+  }, []);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -110,11 +123,44 @@ export default function Events() {
       } else if (activeTab === 'calendar') {
         const { data } = await api.get('/admin/events');
         setEvents(data);
+      } else if (activeTab === 'requests') {
+        const { data } = await api.get('/admin/events');
+        setPendingRequests(data.filter((e: EventPreOrder) => e.status === 'pending' || e.status === 'upcoming'));
       }
     } catch (error) {
       alert('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await api.patch(`/admin/events/${id}/status`, { status: 'approved' });
+      setPendingRequests(prev => prev.filter(r => r.id !== id));
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to approve');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (!rejectReason.trim()) {
+      alert('Please provide a reason for rejection');
+      return;
+    }
+    setActionLoading(id);
+    try {
+      await api.patch(`/admin/events/${id}/status`, { status: 'rejected', rejection_reason: rejectReason.trim() });
+      setPendingRequests(prev => prev.filter(r => r.id !== id));
+      setRejectingId(null);
+      setRejectReason('');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to reject');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -257,15 +303,20 @@ export default function Events() {
           <p className="text-slate-400 mt-1">Manage deans, event pre-orders, and budgets.</p>
         </div>
         <div className="flex bg-[#0a0c14] p-1 rounded-xl border border-white/5 shadow-inner">
-          {(['deans', 'calendar', 'funds'] as const).map(tab => (
+          {(['deans', 'calendar', 'requests', 'funds'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all relative ${
                 activeTab === tab ? 'bg-[#8B1C28] text-white shadow-lg shadow-[#8B1C28]/20' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {tab === 'deans' ? 'Deans' : tab === 'calendar' ? 'Events Calendar' : 'Fund Distribution'}
+              {tab === 'deans' ? 'Deans' : tab === 'calendar' ? 'Events Calendar' : tab === 'requests' ? 'Requests' : 'Fund Distribution'}
+              {tab === 'requests' && pendingRequests.length > 0 && activeTab !== 'requests' && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-[10px] font-bold text-black rounded-full flex items-center justify-center animate-pulse">
+                  {pendingRequests.length}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -806,6 +857,145 @@ export default function Events() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════ REQUESTS TAB ═══════════════════════ */}
+      {activeTab === 'requests' && (
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white flex items-center gap-3">
+              <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/10">
+                <AlertCircle size={18} className="text-amber-400" />
+              </div>
+              Pending Catering Requests
+              <span className="bg-amber-500/15 text-amber-400 text-xs px-2.5 py-1 rounded-full border border-amber-500/10">
+                {pendingRequests.length} pending
+              </span>
+            </h2>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-8 h-8 border-2 border-[#8B1C28] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : pendingRequests.length === 0 ? (
+            <div className="bg-[#0a0c16] rounded-2xl p-16 text-center border border-white/5">
+              <CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-500/30" />
+              <h3 className="text-lg font-bold text-white mb-2">All Clear</h3>
+              <p className="text-slate-500">No pending catering requests to review.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingRequests.map((req) => (
+                <div key={req.id} className="bg-[#0a0c16] rounded-2xl border border-white/5 overflow-hidden hover:border-amber-500/20 transition-all">
+                  {/* Request Header */}
+                  <div className="p-6 pb-4 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-3">
+                        <h3 className="text-lg font-bold text-white">{req.event_name}</h3>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/10">
+                          {req.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                          <Calendar size={14} className="text-rose-400 shrink-0" />
+                          {new Date(req.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                          <Clock size={14} className="text-rose-400 shrink-0" />
+                          {req.event_time || '—'}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                          <Users size={14} className="text-rose-400 shrink-0" />
+                          {req.member_count} members
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-emerald-400 font-bold font-mono">
+                          ₹{Number(req.total_amount).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+                        <span className="flex items-center gap-1.5"><UserPlus size={12} /> {req.staff_name}</span>
+                        <span className="flex items-center gap-1.5"><Mail size={12} /> {req.staff_email}</span>
+                        {req.creator_phone && <span className="flex items-center gap-1.5"><Phone size={12} /> {req.creator_phone}</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Preview */}
+                  {req.items && req.items.length > 0 && (
+                    <div className="px-6 pb-3">
+                      <div className="flex flex-wrap gap-2">
+                        {req.items.map(item => (
+                          <span key={item.id} className="text-xs bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-slate-400">
+                            {item.quantity}x {item.item_name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="px-6 py-4 border-t border-white/5 bg-white/[0.01]">
+                    {rejectingId === req.id ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Reason for Rejection</label>
+                          <textarea
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            rows={2}
+                            placeholder="e.g. Budget constraints, overlapping events, insufficient notice period..."
+                            className="w-full bg-[#060810] border border-red-500/20 rounded-xl py-3 px-4 text-white text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all placeholder:text-slate-600 outline-none resize-none"
+                          />
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleReject(req.id)}
+                            disabled={actionLoading === req.id || !rejectReason.trim()}
+                            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-red-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {actionLoading === req.id ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <X size={16} />}
+                            Confirm Rejection
+                          </button>
+                          <button
+                            onClick={() => { setRejectingId(null); setRejectReason(''); }}
+                            className="px-6 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:border-white/20 font-semibold text-sm transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleApprove(req.id)}
+                          disabled={actionLoading === req.id}
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {actionLoading === req.id ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle2 size={16} />}
+                          Approve Request
+                        </button>
+                        <button
+                          onClick={() => setRejectingId(req.id)}
+                          className="flex-1 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                        >
+                          <X size={16} /> Reject
+                        </button>
+                        <button
+                          onClick={() => setViewEvent(req)}
+                          className="px-4 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 text-slate-400 hover:text-white text-sm font-semibold transition-all"
+                        >
+                          Details
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

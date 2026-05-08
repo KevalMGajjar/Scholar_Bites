@@ -3,4 +3,4 @@
  * Single-university mode: all new users and staff are assigned
  * to Ahmedabad University automatically.
  */
-export const AHMEDABAD_UNIVERSITY_ID = '453dcc78-486d-4d80-b59a-b5c578260bc4';
+export const AHMEDABAD_UNIVERSITY_ID = 'f6cc7c6c-9534-45c7-8658-8855f2ad087b';

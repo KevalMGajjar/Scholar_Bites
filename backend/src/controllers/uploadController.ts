@@ -1,19 +1,15 @@
 import { Request } from 'express';
 import multer from 'multer';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const region = process.env.AWS_REGION || 'ap-south-1';
-const bucketName = process.env.AWS_S3_BUCKET_NAME || '';
-
-const s3 = new S3Client({
-    region,
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
-});
+// Ensure uploads directory exists
+const uploadDir = path.resolve(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const storage = multer.memoryStorage();
 
@@ -33,22 +29,23 @@ export const upload = multer({
 });
 
 /**
- * Uploads a buffer to S3 and returns the public URL
+ * Saves a buffer to local filesystem and returns the public URL.
+ * Drop-in replacement for the original S3 upload — same function name,
+ * so no other file in the project needs to change.
  */
 export const uploadToS3 = async (fileBuffer: Buffer, mimetype: string, key: string): Promise<string> => {
-    if (!bucketName) {
-        throw new Error('AWS_S3_BUCKET_NAME is not properly configured');
+    const safeKey = key.replace(/[^a-zA-Z0-9._\-\/\\]/g, '_');
+    const filePath = path.join(uploadDir, safeKey);
+
+    // Ensure subdirectory exists
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
-    
-    const command = new PutObjectCommand({
-        Bucket: bucketName,
-        Key: key,
-        Body: fileBuffer,
-        ContentType: mimetype,
-    });
 
-    await s3.send(command);
+    fs.writeFileSync(filePath, fileBuffer);
 
-    // Return the stable public URL
-    return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+    // Return URL served by Express static middleware (app.ts already has /uploads route)
+    const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3000}`;
+    return `${serverUrl}/uploads/${safeKey}`;
 };

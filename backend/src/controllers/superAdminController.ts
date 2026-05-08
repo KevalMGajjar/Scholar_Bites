@@ -85,8 +85,12 @@ export const addStaffMember = async (req: Request, res: Response) => {
 
         const passwordHash = await bcrypt.hash(password, 10);
 
-        // We assume single university so we fetch the AU id
-        const uniId = '453dcc78-486d-4d80-b59a-b5c578260bc4';
+        // Dynamically fetch the first university
+        const uniResult = await pool.query('SELECT id FROM universities LIMIT 1');
+        if (uniResult.rows.length === 0) {
+            return res.status(500).json({ message: 'No university found in the system.' });
+        }
+        const uniId = uniResult.rows[0].id;
 
         const newStaff = await pool.query(`
             INSERT INTO staff (university_id, name, email, password_hash, role)

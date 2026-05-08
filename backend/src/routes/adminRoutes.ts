@@ -38,7 +38,7 @@ router.post('/refund-requests/:id/approve', authorizeRole(['super_admin']), appr
 router.post('/refund-requests/:id/reject', authorizeRole(['super_admin']), rejectRefund);
 
 // ─── Restaurants (Admin only) ───
-router.get('/restaurants/:university_id', authorizeRole(['admin', 'super_admin']), getAllRestaurants);
+router.get('/restaurants/:university_id', authorizeRole(['staff', 'admin', 'super_admin']), getAllRestaurants);
 router.post('/restaurants', authorizeRole(['admin', 'super_admin']), upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), createRestaurant);
 router.patch('/restaurants/:id', authorizeRole(['admin', 'super_admin']), upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), updateRestaurant);
 router.delete('/restaurants/:id', authorizeRole(['admin', 'super_admin']), deleteRestaurant);

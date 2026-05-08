@@ -74,14 +74,14 @@ export default function Settings() {
 
   const fetchUniversity = useCallback(async () => {
     if (!user?.university_id) return;
-    try { 
-      const res = await api.get(`/university/${user.university_id}`); 
-      setUniversity(res.data); 
-      setName(res.data.name); 
-      setAddress(res.data.address || ''); 
-      setSupportPhone(res.data.support_phone || ''); 
-      setSupportEmail(res.data.support_email || ''); 
-      setLogoPreview(res.data.logo_url || null); 
+    try {
+      const res = await api.get(`/university/${user.university_id}`);
+      setUniversity(res.data);
+      setName(res.data.name);
+      setAddress(res.data.address || '');
+      setSupportPhone(res.data.support_phone || '');
+      setSupportEmail(res.data.support_email || '');
+      setLogoPreview(res.data.logo_url || null);
 
       const settingsRes = await api.get(`/admin/settings/${user.university_id}`);
 
@@ -106,12 +106,14 @@ export default function Settings() {
     setSaving(true); setUniError(''); setUniSuccess('');
     const fd = new FormData(); fd.append('name', name); fd.append('address', address); fd.append('support_phone', supportPhone); fd.append('support_email', supportEmail);
     if (logoFile) fd.append('logo', logoFile);
-    try { 
-      await api.patch(`/university/${user.university_id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); 
-      await api.patch(`/admin/settings/${user.university_id}`, { group_order_visible_students: groupOrderVisible });
-      setUniSuccess('Profile & settings updated successfully!'); 
-      setLogoFile(null); 
-      fetchUniversity(); 
+    try {
+      await api.patch(`/university/${user.university_id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.patch(`/admin/settings/${user.university_id}`, {
+        group_order_visible_students: groupOrderVisible,
+      });
+      setUniSuccess('Profile & settings updated successfully!');
+      setLogoFile(null);
+      fetchUniversity();
     }
     catch (err: any) { setUniError(err.response?.data?.message || 'Update failed'); }
     finally { setSaving(false); }
@@ -213,7 +215,7 @@ export default function Settings() {
               <div><label className={labelClass}><Mail size={11} className="text-indigo-400" /> Support Email</label>
                 <input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="help@university.edu" className={inputClass} /></div>
             </div>
-            
+
             {/* System Toggles & Secrets */}
             <div className="pt-6 border-t border-white/[0.04]">
               <h3 className="text-white font-bold text-[13px] mb-4">System Settings</h3>
@@ -228,8 +230,8 @@ export default function Settings() {
                     <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
                   </label>
                 </div>
-                
-                
+
+
                 {/* Staff Access Code removed — staff are now pre-created by admin */}
               </div>
             </div>
@@ -248,7 +250,7 @@ export default function Settings() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-[16px] font-bold text-white flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-500/8 text-blue-400 border border-blue-500/12"><Users size={16} /></div>
-            Staff Accounts
+            Canteen Staff Accounts
           </h2>
           <button onClick={() => { setShowAddStaff(!showAddStaff); setStaffError(''); setStaffSuccess(''); }}
             className="px-4 py-2 rounded-xl bg-indigo-500/8 border border-indigo-500/12 text-indigo-400 text-[12px] font-bold hover:bg-indigo-500/15 transition-all btn-press flex items-center gap-2">
