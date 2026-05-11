@@ -114,11 +114,25 @@ export const generateCoupon = async (req: Request, res: Response) => {
         return res.status(400).json({ message: 'Valid positive amount is required' });
     }
 
+    if (!staff_email) {
+        return res.status(400).json({ message: 'Staff email is required' });
+    }
+
     if (parsedAmount < 10) {
         return res.status(400).json({ message: 'Minimum coupon amount is ₹10' });
     }
 
     try {
+        // Verify staff exists in university_staff section
+        const staffResult = await pool.query(
+            "SELECT id FROM users WHERE email = $1 AND user_type = 'university_staff'",
+            [staff_email]
+        );
+
+        if (staffResult.rows.length === 0) {
+            return res.status(404).json({ message: 'The particular staff is not registered' });
+        }
+
         // Check remaining budget
         const deanResult = await pool.query(
             'SELECT total_budget, used_budget, name, school_name FROM deans WHERE id = $1',

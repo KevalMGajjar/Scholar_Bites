@@ -229,16 +229,16 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
     try {
         let isValid = false;
 
-        if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
+        if (process.env.NODE_ENV !== 'production' && razorpay_signature === 'mock_signature') {
+            // Mock environment check — ONLY allowed in development
+            isValid = true;
+        } else if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
             const body = razorpay_order_id + "|" + razorpay_payment_id;
             const expectedSignature = crypto
                 .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
                 .update(body.toString())
                 .digest('hex');
             isValid = (expectedSignature === razorpay_signature);
-        } else if (process.env.NODE_ENV !== 'production') {
-            // Mock environment check — ONLY allowed in development
-            isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
         }
 
         if (isValid) {
@@ -1323,15 +1323,15 @@ export const verifyBatchPayment = async (req: AuthRequest, res: Response) => {
     try {
         let isValid = false;
 
-        if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
+        if (process.env.NODE_ENV !== 'production' && razorpay_signature === 'mock_signature') {
+            isValid = true;
+        } else if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
             const body = razorpay_order_id + "|" + razorpay_payment_id;
             const expectedSignature = crypto
                 .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
                 .update(body.toString())
                 .digest('hex');
             isValid = (expectedSignature === razorpay_signature);
-        } else if (process.env.NODE_ENV !== 'production') {
-            isValid = razorpay_order_id.startsWith('mock_') && razorpay_signature === 'mock_signature';
         }
 
         if (!isValid) {

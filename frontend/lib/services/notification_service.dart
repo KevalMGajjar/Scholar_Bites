@@ -32,65 +32,74 @@ class NotificationService {
     if (_initialized) return;
     _initialized = true;
 
-    // Request permissions
-    await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    // Initialize local notifications for foreground display
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-    await _localNotifs.initialize(
-      settings: const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
-    );
-
-    // Create Android notification channel
-    if (Platform.isAndroid) {
-      const channel = AndroidNotificationChannel(
-        'scholar_bites_notifications',
-        'Ahmedabad University Canteen',
-        description: 'Notifications from Ahmedabad University Canteen',
-        importance: Importance.high,
+    try {
+      // Request permissions
+      await _fcm.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
       );
-      await _localNotifs
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+
+      // Initialize local notifications for foreground display
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+      await _localNotifs.initialize(
+        settings: const InitializationSettings(
+          android: androidSettings,
+          iOS: iosSettings,
+        ),
+      );
+
+      // Create Android notification channel
+      if (!kIsWeb && Platform.isAndroid) {
+        const channel = AndroidNotificationChannel(
+          'scholar_bites_notifications',
+          'Scholar Bites Notifications',
+          description: 'Used for order updates and essential app alerts',
+          importance: Importance.high,
+        );
+        await _localNotifs
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
+      }
+    } catch (e) {
+      if (kDebugMode) print('[NotificationService] Initialization skipped/failed on this platform: $e');
+      return; // Skip FCM listeners on unsupported platforms
     }
 
     // Listen for foreground messages
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    try {
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-    // Listen for interacting with notification when app is in background
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageInteraction);
+      // Listen for interacting with notification when app is in background
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageInteraction);
 
-    // Listen for interacting with notification when app is fully terminated
-    _fcm.getInitialMessage().then((message) {
-      if (message != null) {
-        // Need a slight delay to ensure UI is ready before showing popup
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _handleMessageInteraction(message);
-        });
-      }
-    });
+      // Listen for interacting with notification when app is fully terminated
+      _fcm.getInitialMessage().then((message) {
+        if (message != null) {
+          // Need a slight delay to ensure UI is ready before showing popup
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _handleMessageInteraction(message);
+          });
+        }
+      });
 
-    // Listen for token refresh — only register if user is logged in
-    _fcm.onTokenRefresh.listen((newToken) async {
-      final jwt = await TokenStorage.getToken();
-      if (jwt != null) {
-        registerToken(newToken);
-      }
-    });
+      // Listen for token refresh — only register if user is logged in
+      _fcm.onTokenRefresh.listen((newToken) async {
+        final jwt = await TokenStorage.getToken();
+        if (jwt != null) {
+          registerToken(newToken);
+        }
+      });
+    } catch (e) {
+      if (kDebugMode) print('[NotificationService] FCM listeners failed: $e');
+    }
   }
 
   /// Handle foreground FCM messages — show as local notification
@@ -166,7 +175,9 @@ class NotificationService {
 
   /// Cancel cart reminder (e.g., when checked out or cart cleared)
   Future<void> cancelCartReminder() async {
-    await _localNotifs.cancel(id: 999);
+    try {
+      await _localNotifs.cancel(id: 999);
+    } catch (_) {}
   }
 
   // ─── API Methods (all guarded: skip if no JWT) ───

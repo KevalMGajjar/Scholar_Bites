@@ -29,8 +29,10 @@ void main() async {
   // Initialize timezones for local notifications
   tz.initializeTimeZones();
 
-  // Register FCM background handler
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  // Register FCM background handler (may fail on unsupported platforms like Windows)
+  try {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (_) {}
 
   // Initialize Hive
   await Hive.initFlutter();
