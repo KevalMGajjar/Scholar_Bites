@@ -64,6 +64,7 @@ class PaymentService {
       _razorpay.open(options);
     } catch (e) {
       debugPrint('❌ Error opening Razorpay: $e');
+      onFailure(PaymentFailureResponse(0, 'Error: $e. Are you testing on Windows/Web? Razorpay UI only supports Android/iOS.', {}));
     }
   }
 

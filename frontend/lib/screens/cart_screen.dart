@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -31,6 +33,7 @@ class _CartScreenState extends State<CartScreen> {
   bool _isProcessingPayment = false;
   String? _currentOrderToken;
   String? _currentDbOrderId;
+  String? _currentRazorpayOrderId;
   String _currentRestaurantName = 'the counter';
   double _walletBalance = 0.0;
   bool _isLoadingBalance = true;
@@ -47,6 +50,16 @@ class _CartScreenState extends State<CartScreen> {
   String? _closingRestaurantName;
   bool _restaurantClosed = false;
   bool _isEventManagementOrder = false;
+
+  /// Returns true on platforms where Razorpay SDK is not available
+  bool _isDesktopOrWeb() {
+    if (kIsWeb) return true;
+    try {
+      return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
@@ -252,6 +265,14 @@ class _CartScreenState extends State<CartScreen> {
 
   void _handlePaymentError(PaymentFailureResponse response) {
     debugPrint('❌ RAZORPAY ERROR: code=${response.code}, message=${response.message}');
+    
+    // Fallback for Windows/Web testing where Razorpay UI isn't supported
+    if (response.message != null && response.message!.contains('Are you testing on Windows/Web?')) {
+      final cart = Provider.of<CartProvider>(context, listen: false);
+      _showMockPaymentDialog(context, cart, _currentRazorpayOrderId ?? 'mock_order');
+      return;
+    }
+
     _processFailedOrder(response.message ?? 'Payment was cancelled');
   }
 
@@ -343,6 +364,7 @@ class _CartScreenState extends State<CartScreen> {
       }
 
       final String orderId = orderResponse['payment_id']; // The Razorpay order ID
+      _currentRazorpayOrderId = orderId;
       // Use exact paise from backend if available, otherwise calculate from amount
       final int amountInPaise;
       if (orderResponse['amount_in_paise'] != null) {
@@ -356,7 +378,8 @@ class _CartScreenState extends State<CartScreen> {
       String userEmail = await TokenStorage.getUserEmail() ?? 'student@example.com';
       String userPhone = await TokenStorage.getPhone() ?? '9999999999';
 
-      if (orderId.startsWith('mock_')) {
+      if (orderId.startsWith('mock_') || _isDesktopOrWeb()) {
+        // Razorpay UI only works on Android/iOS. On desktop/web, show mock dialog.
         setState(() => _isProcessingPayment = false);
         _showMockPaymentDialog(context, cart, orderId);
         return;

@@ -11,7 +11,7 @@ import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
 export const getUniversityStaff = async (req: Request, res: Response) => {
     try {
         const result = await pool.query(
-            `SELECT u.id, u.name, u.phone, u.user_type, u.created_at,
+            `SELECT u.id, u.name, u.phone, u.email, u.user_type, u.created_at,
                     uni.name as university_name
              FROM users u
              LEFT JOIN universities uni ON u.university_id = uni.id
@@ -27,10 +27,10 @@ export const getUniversityStaff = async (req: Request, res: Response) => {
 
 /** Create a single university staff user */
 export const createUniversityStaff = async (req: Request, res: Response) => {
-    const { name, phone } = req.body;
+    const { name, phone, email } = req.body;
 
-    if (!name || !phone) {
-        return res.status(400).json({ message: 'Name and phone number are required' });
+    if (!name || !phone || !email) {
+        return res.status(400).json({ message: 'Name, phone number, and email are required' });
     }
 
     // Basic phone validation (10-digit Indian number)
@@ -49,10 +49,10 @@ export const createUniversityStaff = async (req: Request, res: Response) => {
         }
 
         const result = await pool.query(
-            `INSERT INTO users (name, phone, university_id, user_type)
-             VALUES ($1, $2, $3, 'university_staff')
-             RETURNING id, name, phone, user_type, created_at`,
-            [name.trim(), cleanPhone, AHMEDABAD_UNIVERSITY_ID]
+            `INSERT INTO users (name, phone, email, university_id, user_type)
+             VALUES ($1, $2, $3, $4, 'university_staff')
+             RETURNING id, name, phone, email, user_type, created_at`,
+            [name.trim(), cleanPhone, email || null, AHMEDABAD_UNIVERSITY_ID]
         );
 
         res.status(201).json(result.rows[0]);

@@ -87,7 +87,7 @@ export default function Dashboard() {
   const deleteCoupon = async (id: string, amount: string) => {
     if (!confirm('Are you sure you want to delete this unused coupon? The funds will be returned to your budget.')) return;
     try {
-      await api.delete(`/dean/coupons/${id}`);
+      await api.patch(`/dean/coupons/${id}/revoke`);
       toast.success('Coupon deleted, funds returned.');
       setCoupons(coupons.filter(c => c.id !== id));
       
@@ -185,12 +185,13 @@ export default function Dashboard() {
                     className="w-full bg-surface-lowest border border-ghost-border rounded-xl py-3 px-4 text-content-primary focus:border-primary-light focus:ring-1 focus:ring-primary-light transition-colors font-medium font-mono text-lg" />
                 </div>
                 <div>
-                  <label className="label-premium block mb-2 flex items-center gap-2"><Mail size={12} /> Staff Email <span className="text-content-tertiary font-normal">(optional)</span></label>
+                  <label className="label-premium block mb-2 flex items-center gap-2"><Mail size={12} /> Staff Email</label>
                   <input 
                     type="email" 
                     value={staffEmail} 
                     onChange={(e) => setStaffEmail(e.target.value)} 
                     placeholder="staff@ahduni.edu.in"
+                    required
                     className="w-full bg-surface-lowest border border-ghost-border rounded-xl py-3 px-4 text-content-primary focus:border-primary-light focus:ring-1 focus:ring-primary-light transition-colors font-medium text-sm placeholder:text-content-tertiary/50" 
                   />
                   <p className="text-[10px] text-content-tertiary mt-1.5 leading-relaxed">Voucher code & instructions will be emailed to this address</p>

@@ -6,6 +6,7 @@ interface UniversityStaff {
   id: string;
   name: string;
   phone: string;
+  email: string | null;
   user_type: string;
   created_at: string;
 }
@@ -29,7 +30,7 @@ export default function UniversityStaffManagement() {
 
   // Add Modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
 
@@ -84,9 +85,10 @@ export default function UniversityStaffManagement() {
       await api.post('/superadmin/university-staff', {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
+        email: formData.email.trim() || undefined,
       });
       setShowAddModal(false);
-      setFormData({ name: '', phone: '' });
+      setFormData({ name: '', phone: '', email: '' });
       setSuccessMsg('Staff member created successfully');
       fetchStaff();
     } catch (err: any) {
@@ -263,7 +265,7 @@ export default function UniversityStaffManagement() {
             Import CSV
           </button>
           <button
-            onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '' }); setModalError(''); }}
+            onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '', email: '' }); setModalError(''); }}
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all"
           >
             <UserPlus size={16} />
@@ -279,6 +281,7 @@ export default function UniversityStaffManagement() {
             <tr className="border-b border-[#554240]/15">
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Name</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Phone</th>
+              <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Email</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Created</th>
               <th className="text-right px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Actions</th>
             </tr>
@@ -302,6 +305,7 @@ export default function UniversityStaffManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-[#dcc0bd] text-sm font-mono">+91 {staff.phone}</td>
+                  <td className="px-6 py-4 text-[#dcc0bd] text-sm">{staff.email || '—'}</td>
                   <td className="px-6 py-4 text-[#a38b88] text-sm">
                     {new Date(staff.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
@@ -350,6 +354,17 @@ export default function UniversityStaffManagement() {
                   className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40"
                   placeholder="9876543210"
                   maxLength={10}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Email Address *</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40"
+                  placeholder="staff@university.edu"
                 />
               </div>
             </div>
