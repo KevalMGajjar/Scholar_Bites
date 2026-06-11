@@ -93,10 +93,31 @@ import pool from '../config/db';
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
+// ─── Self-healing table guard ───
+// The locked_accounts table is created by initDb, but on servers where the
+// migration hasn't run the lockout queries would silently fail-open and the
+// whole feature appears broken. We lazily ensure the table exists on first use.
+const LOCKED_ACCOUNTS_DDL = `
+  CREATE TABLE IF NOT EXISTS locked_accounts (
+    identifier VARCHAR(255) PRIMARY KEY,
+    attempt_count INT DEFAULT 0,
+    locked_until TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  );
+`;
+
+let lockedTableEnsured = false;
+async function ensureLockedAccountsTable(): Promise<void> {
+    if (lockedTableEnsured) return;
+    await pool.query(LOCKED_ACCOUNTS_DDL);
+    lockedTableEnsured = true;
+}
+
 /** Check if an account is locked. Returns seconds remaining if locked, 0 if not. */
 export async function checkBruteForce(identifier: string): Promise<number> {
     const key = identifier.toLowerCase();
     try {
+        await ensureLockedAccountsTable();
         const result = await pool.query(
             `SELECT locked_until FROM locked_accounts WHERE identifier = $1 AND locked_until > NOW()`,
             [key]
@@ -116,11 +137,23 @@ export async function checkBruteForce(identifier: string): Promise<number> {
 export async function recordFailedLogin(identifier: string): Promise<boolean> {
     const key = identifier.toLowerCase();
     try {
+        await ensureLockedAccountsTable();
+        // If a previous lock has already expired, restart the counter at 1 so a
+        // single post-expiry mistake doesn't immediately re-lock the account.
         const result = await pool.query(
             `INSERT INTO locked_accounts (identifier, attempt_count, locked_until)
              VALUES ($1, 1, NULL)
              ON CONFLICT (identifier) DO UPDATE
-             SET attempt_count = locked_accounts.attempt_count + 1,
+             SET attempt_count = CASE
+                     WHEN locked_accounts.locked_until IS NOT NULL AND locked_accounts.locked_until < NOW()
+                     THEN 1
+                     ELSE locked_accounts.attempt_count + 1
+                 END,
+                 locked_until = CASE
+                     WHEN locked_accounts.locked_until IS NOT NULL AND locked_accounts.locked_until < NOW()
+                     THEN NULL
+                     ELSE locked_accounts.locked_until
+                 END,
                  updated_at = NOW()
              RETURNING attempt_count`,
             [key]
@@ -145,6 +178,7 @@ export async function recordFailedLogin(identifier: string): Promise<boolean> {
 export async function clearFailedLogins(identifier: string): Promise<void> {
     const key = identifier.toLowerCase();
     try {
+        await ensureLockedAccountsTable();
         await pool.query(`DELETE FROM locked_accounts WHERE identifier = $1`, [key]);
     } catch (err) {
         console.error('[Security] clearFailedLogins DB error:', err);
@@ -155,6 +189,7 @@ export async function clearFailedLogins(identifier: string): Promise<void> {
 export async function unlockAccount(identifier: string): Promise<boolean> {
     const key = identifier.toLowerCase();
     try {
+        await ensureLockedAccountsTable();
         const result = await pool.query(
             `DELETE FROM locked_accounts WHERE identifier = $1 RETURNING identifier`,
             [key]
@@ -169,6 +204,7 @@ export async function unlockAccount(identifier: string): Promise<boolean> {
 /** Get all currently locked accounts with their lock expiry times. */
 export async function getLockedAccounts(): Promise<{ email: string; lockedUntil: Date; remainingSeconds: number }[]> {
     try {
+        await ensureLockedAccountsTable();
         const result = await pool.query(
             `SELECT identifier, locked_until FROM locked_accounts WHERE locked_until > NOW() ORDER BY locked_until DESC`
         );

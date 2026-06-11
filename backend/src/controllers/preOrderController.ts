@@ -28,9 +28,11 @@ export const createPreOrder = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
-        // Get university_id from user
+        // Get university_id + balance. FOR UPDATE locks the user row so two
+        // concurrent pre-orders can't both pass the balance check and overdraw
+        // the wallet (the deduct below is atomic, but the check above is not).
         const userResult = await client.query(
-            'SELECT university_id, wallet_balance FROM users WHERE id = $1',
+            'SELECT university_id, wallet_balance FROM users WHERE id = $1 FOR UPDATE',
             [userId]
         );
         if (userResult.rows.length === 0) throw new Error('User not found');
@@ -178,12 +180,17 @@ export const cancelPreOrder = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
+        // FOR UPDATE serialises concurrent cancels of the same pre-order. Without
+        // it, two requests both see status='pending' and BOTH refund the wallet
+        // (double refund). With it, the second waits, then sees status no longer
+        // 'pending' → 0 rows → 404, so the refund happens exactly once.
         const result = await client.query(
-            "SELECT * FROM staff_pre_orders WHERE id = $1 AND user_id = $2 AND status = 'pending'",
+            "SELECT * FROM staff_pre_orders WHERE id = $1 AND user_id = $2 AND status = 'pending' FOR UPDATE",
             [id, userId]
         );
 
         if (result.rows.length === 0) {
+            await client.query('ROLLBACK'); // close the open transaction on this path
             return res.status(404).json({ message: 'Pre-order not found or cannot be cancelled' });
         }
 

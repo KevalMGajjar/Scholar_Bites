@@ -3,7 +3,7 @@ import pool from '../config/db';
 import razorpay from '../config/razorpay';
 import crypto from 'crypto';
 import { AuthRequest } from '../middlewares/authMiddleware';
-import { emitNewOrder, emitStatusUpdate } from '../services/socketService';
+import { emitNewOrder, emitStatusUpdate, emitOrderBoardUpdate } from '../services/socketService';
 import { triggerOrderReady, triggerRefund } from './notificationController';
 import { auditLog, getRequestIp } from '../services/auditLogger';
 
@@ -85,8 +85,22 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     const { items, university_id } = req.body; // items: [{ menu_item_id, quantity }]
     const user_id = req.user.id;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: 'No items provided' });
+    }
+
+    // ── Validate every line item server-side ──
+    // The Zod schemas are not wired into the routes, so we MUST guard here.
+    // A negative/zero/fractional quantity would otherwise produce a negative
+    // line total → a negative order total → a wallet "deduction" that CREDITS
+    // the user. Enforce a positive integer quantity and a real item id.
+    for (const it of items) {
+        if (!it || typeof it.menu_item_id !== 'string' || !it.menu_item_id) {
+            return res.status(400).json({ message: 'Invalid item in order' });
+        }
+        if (!Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 50) {
+            return res.status(400).json({ message: 'Each item quantity must be a whole number between 1 and 50' });
+        }
     }
 
     const client = await pool.connect();
@@ -331,9 +345,9 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                     }
                 }
 
-                // 3. Mark order as preparing
+                // 3. Mark order as placed (paid, awaiting staff acceptance → "New Orders")
                 await client.query(
-                    "UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1",
+                    "UPDATE orders SET status = 'placed', updated_at = NOW() WHERE id = $1",
                     [order.id]
                 );
 
@@ -367,7 +381,7 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                 const fullOrder = fullOrderRes.rows[0] || order;
                 emitNewOrder(order.university_id, fullOrder);
 
-                res.json({ status: 'success', order: { ...order, status: 'preparing' } });
+                res.json({ status: 'success', order: { ...order, status: 'placed' } });
             } catch (stockError: any) {
                 await client.query('ROLLBACK');
                 console.warn(`[Order] verifyPayment stock conflict: ${stockError.message}`);
@@ -741,6 +755,25 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        // ─── Per-restaurant preparing capacity limit (only when accepting into 'preparing') ───
+        if (status === 'preparing' && currentOrder.status !== 'preparing' && currentOrder.restaurant_id) {
+            const limRes = await client.query('SELECT prep_limit FROM restaurants WHERE id = $1', [currentOrder.restaurant_id]);
+            const prepLimit = Number(limRes.rows[0]?.prep_limit) || 0;
+            if (prepLimit > 0) {
+                const cntRes = await client.query(
+                    `SELECT COUNT(*)::int AS c FROM orders WHERE restaurant_id = $1 AND status = 'preparing'`,
+                    [currentOrder.restaurant_id]
+                );
+                if (cntRes.rows[0].c >= prepLimit) {
+                    await client.query('ROLLBACK');
+                    return res.status(409).json({
+                        message: `Kitchen is at capacity — only ${prepLimit} order${prepLimit !== 1 ? 's' : ''} can be preparing at once. Finish one first.`,
+                        code: 'PREP_LIMIT_REACHED',
+                    });
+                }
+            }
+        }
+
         const result = await client.query(
             'UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
             [status, id]
@@ -749,8 +782,9 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
         const order = result.rows[0];
         await client.query('COMMIT');
 
-        // Emit to user via WebSocket
+        // Emit to the customer (their order tracking) and to all staff boards (live)
         emitStatusUpdate(currentOrder.user_id, order);
+        emitOrderBoardUpdate(currentOrder.university_id, order);
         
         // If the order just became ready, send an instant Push Notification
         if (currentOrder.status !== 'ready' && status === 'ready') {
@@ -822,7 +856,11 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
             params.push(effectiveRestaurantId);
         }
         if (search && typeof search === 'string' && search.trim()) {
-            const term = `%${search.trim()}%`;
+            // The pickup QR encodes `TOKEN:rotating-hmac` (the hmac changes every few
+            // seconds). If staff scan/paste that, match the order_token on just the
+            // stable TOKEN part before the ':'.
+            const raw = search.trim();
+            const term = `%${raw.includes(':') ? raw.split(':')[0] : raw}%`;
             query += ` AND (
                 o.order_token ILIKE $${pIdx} OR
                 u.name ILIKE $${pIdx} OR
@@ -852,7 +890,8 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
         if (status) { countQuery += ` AND o.status = $${cIdx++}`; countParams.push(status); }
         if (effectiveRestaurantId) { countQuery += ` AND o.restaurant_id = $${cIdx++}`; countParams.push(effectiveRestaurantId); }
         if (search && typeof search === 'string' && search.trim()) {
-            const term = `%${search.trim()}%`;
+            const raw = search.trim();
+            const term = `%${raw.includes(':') ? raw.split(':')[0] : raw}%`;
             countQuery += ` AND (
                 o.order_token ILIKE $${cIdx} OR
                 u.name ILIKE $${cIdx} OR
@@ -1174,8 +1213,22 @@ export const createMultiRestaurantOrder = async (req: AuthRequest, res: Response
     const { items, university_id } = req.body; // items: [{ menu_item_id, quantity }]
     const user_id = req.user.id;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: 'No items provided' });
+    }
+
+    // ── Validate every line item server-side ──
+    // The Zod schemas are not wired into the routes, so we MUST guard here.
+    // A negative/zero/fractional quantity would otherwise produce a negative
+    // line total → a negative order total → a wallet "deduction" that CREDITS
+    // the user. Enforce a positive integer quantity and a real item id.
+    for (const it of items) {
+        if (!it || typeof it.menu_item_id !== 'string' || !it.menu_item_id) {
+            return res.status(400).json({ message: 'Invalid item in order' });
+        }
+        if (!Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 50) {
+            return res.status(400).json({ message: 'Each item quantity must be a whole number between 1 and 50' });
+        }
     }
 
     const client = await pool.connect();
@@ -1399,8 +1452,8 @@ export const verifyBatchPayment = async (req: AuthRequest, res: Response) => {
                     }
                 }
 
-                // Mark as preparing
-                await client.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [order.id]);
+                // Mark as placed (paid, awaiting staff acceptance → "New Orders")
+                await client.query("UPDATE orders SET status = 'placed', updated_at = NOW() WHERE id = $1", [order.id]);
 
                 // Emit to staff
                 const fullOrderRes = await client.query(`

@@ -19,22 +19,16 @@ export const createEventPreOrder = async (req: AuthRequest, res: Response) => {
         return res.status(403).json({ message: 'Only university staff can create event orders' });
     }
 
-    const { event_name, event_date, event_time, member_count, staff_name, staff_email, items } = req.body;
+    const { event_name, event_date, event_time, member_count, staff_name, staff_email, items, special_requirements } = req.body;
 
     if (!event_name || !event_date || !event_time || !member_count || !staff_name || !staff_email) {
         return res.status(400).json({ message: 'All event details are required' });
     }
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: 'At least one food item is required' });
-    }
-
-    // Validate event date is in the future
-    const eventDateObj = new Date(event_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (eventDateObj < today) {
-        return res.status(400).json({ message: 'Event date must be in the future' });
+    const itemsArr = Array.isArray(items) ? items : [];
+    const hasCustomOrder = typeof special_requirements === 'string' && special_requirements.trim().length > 0;
+    if (itemsArr.length === 0 && !hasCustomOrder) {
+        return res.status(400).json({ message: 'Add at least one item or describe a custom order' });
     }
 
     const client = await pool.connect();
@@ -49,52 +43,101 @@ export const createEventPreOrder = async (req: AuthRequest, res: Response) => {
         if (userResult.rows.length === 0) throw new Error('User not found');
         const { university_id, wallet_balance } = userResult.rows[0];
 
-        // Calculate total from items
+        // Calculate total from items + gather lead-time / cutoff rules from each item's category
         let totalAmount = 0;
+        let maxLeadTime = 0;                        // minutes of advance notice required
+        let earliestCutoff: string | null = null;  // 'HH:MM:SS' same-day ordering deadline
         const validatedItems: any[] = [];
 
-        for (const item of items) {
+        for (const item of itemsArr) {
             if (!item.menu_item_id || !item.quantity || item.quantity < 1) {
                 throw new Error('Each item must have menu_item_id and quantity');
             }
 
+            // Resolve the category by id first, then fall back to matching the legacy
+            // category text by name within the same restaurant (items aren't always linked by category_id).
             const miResult = await client.query(
-                'SELECT id, name, price, is_available, restaurant_id FROM menu_items WHERE id = $1',
+                `SELECT mi.id, mi.name, mi.price, mi.is_available, mi.restaurant_id,
+                        COALESCE(c1.lead_time, c2.lead_time)     AS category_lead_time,
+                        COALESCE(c1.cutoff_time, c2.cutoff_time) AS category_cutoff_time
+                 FROM menu_items mi
+                 LEFT JOIN categories c1 ON mi.category_id = c1.id
+                 LEFT JOIN categories c2 ON c2.restaurant_id = mi.restaurant_id AND LOWER(c2.name) = LOWER(mi.category)
+                 WHERE mi.id = $1`,
                 [item.menu_item_id]
             );
 
             if (miResult.rows.length === 0) throw new Error(`Menu item not found`);
-            if (!miResult.rows[0].is_available) throw new Error(`${miResult.rows[0].name} is not available`);
+            const row = miResult.rows[0];
+            if (!row.is_available) throw new Error(`${row.name} is not available`);
 
-            const price = Number(miResult.rows[0].price);
+            const lt = Number(row.category_lead_time) || 0;
+            if (lt > maxLeadTime) maxLeadTime = lt;
+            if (row.category_cutoff_time) {
+                const cut = String(row.category_cutoff_time);
+                if (!earliestCutoff || cut < earliestCutoff) earliestCutoff = cut;
+            }
+
+            const price = Number(row.price);
             totalAmount += price * item.quantity;
 
             validatedItems.push({
                 menu_item_id: item.menu_item_id,
                 quantity: item.quantity,
                 price_at_time: price,
-                item_name: miResult.rows[0].name,
+                item_name: row.name,
             });
         }
 
-        // Check wallet balance
-        const currentBalance = Number(wallet_balance);
-        if (currentBalance < totalAmount) {
-            throw new Error(`Insufficient wallet balance. Need ₹${totalAmount.toFixed(2)}, have ₹${currentBalance.toFixed(2)}`);
+        // ── Enforce advance-notice (lead time) and same-day cutoff ──
+        // Interpreted in the server's local timezone — set TZ=Asia/Kolkata on the server.
+        const eventDateTime = new Date(`${event_date}T${String(event_time).slice(0, 5)}:00`);
+        if (isNaN(eventDateTime.getTime())) {
+            throw new Error('Invalid event date or time');
+        }
+        if (eventDateTime.getTime() < Date.now() + maxLeadTime * 60 * 1000) {
+            if (maxLeadTime <= 0) {
+                throw new Error('Event date & time must be in the future.');
+            }
+            const h = Math.floor(maxLeadTime / 60);
+            const m = maxLeadTime % 60;
+            const leadLabel = h > 0 ? `${h} hour${h !== 1 ? 's' : ''}${m ? ` ${m} min` : ''}` : `${m} min`;
+            throw new Error(`These items need at least ${leadLabel} of advance notice. Please pick a later time.`);
+        }
+        if (earliestCutoff) {
+            const now = new Date();
+            const eventDay = new Date(`${event_date}T00:00:00`);
+            const isToday = eventDay.getFullYear() === now.getFullYear()
+                && eventDay.getMonth() === now.getMonth()
+                && eventDay.getDate() === now.getDate();
+            if (isToday) {
+                const [ch, cm] = String(earliestCutoff).split(':').map(Number);
+                const cutoffToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ch || 0, cm || 0, 0);
+                if (now.getTime() > cutoffToday.getTime()) {
+                    throw new Error(`Same-day orders for these items close at ${String(earliestCutoff).slice(0, 5)}. Please choose another day.`);
+                }
+            }
         }
 
-        // Deduct from wallet
-        await client.query(
-            'UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2',
-            [totalAmount, userId]
-        );
+        // Wallet is only charged for itemised orders. A pure custom order has no
+        // price yet — the team quotes it later — so we skip the wallet entirely.
+        if (totalAmount > 0) {
+            const currentBalance = Number(wallet_balance);
+            if (currentBalance < totalAmount) {
+                throw new Error(`Insufficient wallet balance. Need ₹${totalAmount.toFixed(2)}, have ₹${currentBalance.toFixed(2)}`);
+            }
+            await client.query(
+                'UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2',
+                [totalAmount, userId]
+            );
+        }
 
         // Create event pre-order
         const orderResult = await client.query(
-            `INSERT INTO event_pre_orders (user_id, university_id, event_name, event_date, event_time, member_count, staff_name, staff_email, total_amount)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO event_pre_orders (user_id, university_id, event_name, event_date, event_time, member_count, staff_name, staff_email, total_amount, special_requirements)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *`,
-            [userId, university_id, event_name, event_date, event_time, member_count, staff_name, staff_email, totalAmount]
+            [userId, university_id, event_name, event_date, event_time, member_count, staff_name, staff_email, totalAmount, (special_requirements?.trim() || null)]
         );
 
         const eventOrder = orderResult.rows[0];
@@ -108,12 +151,14 @@ export const createEventPreOrder = async (req: AuthRequest, res: Response) => {
             );
         }
 
-        // Record wallet debit transaction
-        await client.query(
-            `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
-             VALUES ($1, $2, 'debit', $3, $4)`,
-            [userId, totalAmount, `Catering: ${event_name}`, eventOrder.id]
-        );
+        // Record wallet debit transaction (only when an amount was actually charged)
+        if (totalAmount > 0) {
+            await client.query(
+                `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
+                 VALUES ($1, $2, 'debit', $3, $4)`,
+                [userId, totalAmount, `Catering: ${event_name}`, eventOrder.id]
+            );
+        }
 
         await client.query('COMMIT');
 
@@ -168,7 +213,7 @@ export const getMyEventPreOrders = async (req: AuthRequest, res: Response) => {
              LEFT JOIN menu_items mi ON ei.menu_item_id = mi.id
              WHERE e.user_id = $1
              GROUP BY e.id
-             ORDER BY e.event_date DESC
+             ORDER BY e.created_at DESC
              LIMIT 50`,
             [userId]
         );
@@ -183,31 +228,42 @@ export const getMyEventPreOrders = async (req: AuthRequest, res: Response) => {
     }
 };
 
-/** Cancel an upcoming event pre-order */
+/** Cancel an event pre-order (by the requester) with an optional reason */
 export const cancelEventPreOrder = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     const { id } = req.params;
+    const { reason } = req.body;
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        const result = await client.query(
-            `UPDATE event_pre_orders SET status = 'cancelled'
-             WHERE id = $1 AND user_id = $2 AND status IN ('upcoming', 'pending')
-             RETURNING *`,
+        const sel = await client.query(
+            `SELECT * FROM event_pre_orders WHERE id = $1 AND user_id = $2 FOR UPDATE`,
             [id, userId]
         );
-
-        if (result.rows.length === 0) {
+        if (sel.rows.length === 0) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Event order not found or cannot be cancelled' });
+            return res.status(404).json({ message: 'Event order not found' });
+        }
+        const order = sel.rows[0];
+
+        // Cancellable before it's prepared/completed. Includes on_hold (quoted custom orders).
+        if (!['upcoming', 'pending', 'on_hold'].includes(order.status)) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ message: `This order can no longer be cancelled (status: ${order.status}).` });
         }
 
-        const order = result.rows[0];
-        const refundAmount = Number(order.total_amount);
+        // Refund only money that was actually charged. A custom/on-hold order has been
+        // quoted but not paid yet, so there is nothing to refund.
+        const wasCharged = order.status !== 'on_hold' && Number(order.total_amount) > 0;
+        const refundAmount = wasCharged ? Number(order.total_amount) : 0;
 
-        // Refund wallet
+        await client.query(
+            `UPDATE event_pre_orders SET status = 'cancelled', cancellation_reason = $1 WHERE id = $2`,
+            [(typeof reason === 'string' && reason.trim()) ? reason.trim() : null, id]
+        );
+
         if (refundAmount > 0) {
             await client.query(
                 'UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2',
@@ -222,7 +278,10 @@ export const cancelEventPreOrder = async (req: AuthRequest, res: Response) => {
 
         await client.query('COMMIT');
 
-        res.json({ message: 'Event order cancelled and refunded', event: order });
+        res.json({
+            message: refundAmount > 0 ? 'Order cancelled and refunded' : 'Order cancelled',
+            refunded: refundAmount,
+        });
     } catch (error: any) {
         await client.query('ROLLBACK');
         console.error('[EventOrder] cancelEventPreOrder error:', error.message);
@@ -235,15 +294,21 @@ export const cancelEventPreOrder = async (req: AuthRequest, res: Response) => {
 /** Update event pre-order status (admin) */
 export const updateEventStatus = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
-    const { status, rejection_reason } = req.body;
+    const { status, rejection_reason, total_amount } = req.body;
 
-    const validStatuses = ['pending', 'upcoming', 'confirmed', 'preparing', 'completed', 'cancelled', 'approved', 'rejected'];
+    const validStatuses = ['pending', 'upcoming', 'confirmed', 'preparing', 'completed', 'cancelled', 'approved', 'rejected', 'on_hold'];
     if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({ message: `Status must be one of: ${validStatuses.join(', ')}` });
     }
 
     if (status === 'rejected' && !rejection_reason) {
         return res.status(400).json({ message: 'Rejection reason is required' });
+    }
+
+    // Putting a (custom) order on hold = quoting it: a positive total is mandatory.
+    const holdAmount = Number(total_amount);
+    if (status === 'on_hold' && (!holdAmount || holdAmount <= 0)) {
+        return res.status(400).json({ message: 'A total amount is required to put an order on hold' });
     }
 
     const client = await pool.connect();
@@ -255,6 +320,11 @@ export const updateEventStatus = async (req: AuthRequest, res: Response) => {
             result = await client.query(
                 `UPDATE event_pre_orders SET status = $1::"EventStatus", rejection_reason = $2 WHERE id = $3 RETURNING *`,
                 [status, rejection_reason, id]
+            );
+        } else if (status === 'on_hold') {
+            result = await client.query(
+                `UPDATE event_pre_orders SET status = $1::"EventStatus", total_amount = $2, rejection_reason = NULL WHERE id = $3 RETURNING *`,
+                [status, holdAmount, id]
             );
         } else {
             result = await client.query(
@@ -313,6 +383,70 @@ export const updateEventStatus = async (req: AuthRequest, res: Response) => {
     }
 };
 
+/** Pay for an on-hold (custom) catering order from the wallet */
+export const payEventPreOrder = async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const orderRes = await client.query(
+            'SELECT * FROM event_pre_orders WHERE id = $1 AND user_id = $2 FOR UPDATE',
+            [id, userId]
+        );
+        if (orderRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Catering order not found' });
+        }
+
+        const order = orderRes.rows[0];
+        if (order.status !== 'on_hold') {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ message: 'This order is not awaiting payment.' });
+        }
+
+        const amount = Number(order.total_amount);
+        if (!(amount > 0)) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: 'This order has no amount to pay yet.' });
+        }
+
+        const userRes = await client.query('SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
+        const balance = Number(userRes.rows[0].wallet_balance);
+        if (balance < amount) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                message: `Insufficient wallet balance. Need ₹${amount.toFixed(2)}, have ₹${balance.toFixed(2)}. Redeem a voucher or top up to continue.`,
+            });
+        }
+
+        await client.query('UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2', [amount, userId]);
+        await client.query(
+            `INSERT INTO wallet_transactions (user_id, amount, type, description, reference_id)
+             VALUES ($1, $2, 'debit', $3, $4)`,
+            [userId, amount, `Catering payment: ${order.event_name}`, order.id]
+        );
+        const updated = await client.query(
+            `UPDATE event_pre_orders SET status = 'confirmed'::"EventStatus" WHERE id = $1 RETURNING *`,
+            [id]
+        );
+
+        await client.query('COMMIT');
+
+        auditLog({ userId, action: 'EVENT_PRE_ORDER', resource: `event:${id}`, details: `Paid ₹${amount.toFixed(2)} for custom catering`, ip: getRequestIp(req) });
+
+        res.json({ ...updated.rows[0], total_amount: Number(updated.rows[0].total_amount) });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('[EventOrder] payEventPreOrder error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    } finally {
+        client.release();
+    }
+};
+
 /** Get event menu items (from Club Events restaurant) */
 export const getEventMenuItems = async (req: AuthRequest, res: Response) => {
     const { university_id } = req.params;
@@ -331,10 +465,13 @@ export const getEventMenuItems = async (req: AuthRequest, res: Response) => {
         const restaurantIds = restResult.rows.map((r: any) => r.id);
 
         const result = await pool.query(
-            `SELECT id, name, description, price, category, image_url, is_available, stock_quantity
-             FROM menu_items
-             WHERE restaurant_id = ANY($1) AND is_available = true
-             ORDER BY category, name`,
+            `SELECT mi.id, mi.name, mi.description, mi.price, mi.category, mi.image_url,
+                    mi.is_available, mi.stock_quantity, mi.category_id, mi.is_veg,
+                    c.name as category_name, c.cutoff_time as category_cutoff_time, c.lead_time as category_lead_time
+             FROM menu_items mi
+             LEFT JOIN categories c ON mi.category_id = c.id
+             WHERE mi.restaurant_id = ANY($1) AND mi.is_available = true
+             ORDER BY c.name, mi.name`,
             [restaurantIds]
         );
 

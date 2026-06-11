@@ -1,47 +1,32 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext';
 import { Radio, ClipboardList, Store, UtensilsCrossed, BarChart3, Settings, LogOut, CalendarDays } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Live Orders', icon: <Radio size={18} />, roles: ['staff', 'admin', 'super_admin'] },
-  { path: '/orders', label: 'Order History', icon: <ClipboardList size={18} />, roles: ['admin', 'super_admin'] },
+  { path: '/orders', label: 'Order History', icon: <ClipboardList size={18} />, roles: ['staff', 'admin', 'super_admin'] },
   { path: '/restaurants', label: 'Restaurants', icon: <Store size={18} />, roles: ['admin', 'super_admin'] },
   { path: '/menu', label: 'Menu Items', icon: <UtensilsCrossed size={18} />, roles: ['admin', 'super_admin'] },
-  { path: '/events', label: 'Events & Deans', icon: <CalendarDays size={18} />, roles: ['admin', 'super_admin'] },
+  { path: '/events', label: 'Event Management', icon: <CalendarDays size={18} />, roles: ['admin', 'super_admin'] },
   { path: '/statistics', label: 'Statistics', icon: <BarChart3 size={18} />, roles: ['admin', 'super_admin'] },
   { path: '/settings', label: 'Settings', icon: <Settings size={18} />, roles: ['admin', 'super_admin'] },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
-  const { isConnected } = useSocket();
 
   return (
     <aside className="w-[260px] h-screen bg-[#080a10]/95 backdrop-blur-2xl border-r border-white/[0.04] flex flex-col fixed left-0 top-0 z-40 animate-slide-left">
       {/* ── Brand ── */}
       <div className="px-7 pt-8 pb-6">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 p-2 overflow-hidden animate-pulse-glow">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 p-2.5 overflow-hidden animate-pulse-glow">
             <img src="/admin/logo.png" alt="Logo" className="w-full h-full object-contain filter brightness-110" />
           </div>
           <div>
             <h1 className="text-[13px] font-extrabold text-white tracking-[-0.01em] leading-tight">Ahmedabad University Canteen</h1>
             <p className="text-[11px] font-semibold text-slate-500 tracking-widest uppercase mt-0.5">Admin</p>
           </div>
-        </div>
-      </div>
-
-      {/* ── System Status ── */}
-      <div className="mx-5 mb-6">
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-          <div className="relative flex h-2 w-2">
-            {isConnected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>}
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-          </div>
-          <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-            {isConnected ? 'Online' : 'Offline'}
-          </span>
         </div>
       </div>
 

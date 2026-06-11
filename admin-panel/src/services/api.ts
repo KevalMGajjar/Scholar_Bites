@@ -18,19 +18,17 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-logout on 401/403 — but NOT for auth-related endpoints
-// (login, verify-otp, google login return 401/403 for invalid credentials,
-//  which should be handled by the calling component, not trigger a redirect)
+// Auto-logout ONLY on 401 (not authenticated / token expired), NOT for auth
+// endpoints. A 403 means the token is valid but the role lacks permission for
+// that resource (e.g. a staff account hitting an admin-only endpoint) — that
+// must NOT log the user out, just deny the request.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const url = err.config?.url || '';
     const isAuthEndpoint = url.includes('/login') || url.includes('/verify-otp');
 
-    if (
-      (err.response?.status === 401 || err.response?.status === 403) &&
-      !isAuthEndpoint
-    ) {
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
       window.location.href = '/admin/login';

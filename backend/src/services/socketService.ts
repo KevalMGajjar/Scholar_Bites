@@ -45,6 +45,12 @@ export const emitStatusUpdate = (userId: string, order: any) => {
     getIO().to(`user_${userId}`).emit('status_update', order);
 };
 
+// Broadcast an order status change to all staff/admins of a university so their
+// Live Orders board updates instantly (move between columns / remove when done).
+export const emitOrderBoardUpdate = (universityId: string, order: any) => {
+    getIO().to(`staff_${universityId}`).emit('order_updated', order);
+};
+
 export const emitGroupUpdate = (groupCode: string, event: string, data: any) => {
     getIO().to(`group_${groupCode}`).emit(event, data);
 };

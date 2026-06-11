@@ -377,6 +377,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   static const _statusColors = {
     'pending': Color(0xFFF59E0B),
+    'placed': Color(0xFFF59E0B),
     'preparing': Color(0xFF3B82F6),
     'ready': Color(0xFF10B981),
     'completed': Color(0xFF6B7280),
@@ -385,6 +386,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   static const _statusIcons = {
     'pending': Icons.schedule_rounded,
+    'placed': Icons.receipt_long_rounded,
     'preparing': Icons.restaurant_rounded,
     'ready': Icons.check_circle_rounded,
     'completed': Icons.verified_rounded,

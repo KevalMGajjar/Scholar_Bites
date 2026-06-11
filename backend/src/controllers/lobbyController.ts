@@ -539,8 +539,22 @@ export const payShare = async (req: AuthRequest, res: Response) => {
             try {
                 await client.query('BEGIN');
 
-                // Check wallet balance
-                const userRes = await client.query('SELECT wallet_balance FROM users WHERE id = $1', [userId]);
+                // Lock the member row and re-check status UNDER the lock — the
+                // check above happened outside the transaction, so without this
+                // two concurrent wallet payments would both deduct (double-charge,
+                // possibly overdrawing to a negative balance).
+                const lockedMember = await client.query(
+                    'SELECT payment_status FROM group_order_members WHERE group_order_id = $1 AND user_id = $2 FOR UPDATE',
+                    [groupOrder.id, userId]
+                );
+                if (lockedMember.rows[0]?.payment_status === 'paid') {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ message: 'Already paid' });
+                }
+
+                // Check wallet balance (lock the user row so the balance can't
+                // be spent concurrently elsewhere).
+                const userRes = await client.query('SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
                 const balance = parseFloat(userRes.rows[0].wallet_balance);
 
                 if (balance < shareAmount) {
@@ -621,21 +635,23 @@ export const verifyShare = async (req: AuthRequest, res: Response) => {
 
     try {
         let isValid = false;
+        const isProd = process.env.NODE_ENV === 'production';
+        const hasSecret = !!process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder');
 
-        // Accept mock payments (frontend doesn't have Razorpay SDK checkout yet)
+        // Mock payments are a DEV-ONLY convenience. The client controls these
+        // fields, so accepting a `mock_` id in production would let any member
+        // mark their share paid for free — always require a real signature in prod.
         const isMockPayment = razorpay_payment_id.startsWith('mock_') || razorpay_order_id.startsWith('mock_');
 
-        if (isMockPayment) {
-            isValid = true;
-        } else if (process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_SECRET.includes('placeholder')) {
+        if (hasSecret) {
             const body = razorpay_order_id + "|" + razorpay_payment_id;
             const expectedSignature = crypto
                 .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
                 .update(body.toString())
                 .digest('hex');
             isValid = (expectedSignature === razorpay_signature);
-        } else {
-            // No valid secret configured — accept any
+        } else if (!isProd && isMockPayment) {
+            // No gateway configured in dev → allow mock checkout only.
             isValid = true;
         }
 
@@ -675,6 +691,20 @@ async function _checkAllPaid(groupOrder: any, code: string, paidUserId: string) 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // Lock the group row and ensure it hasn't already been finalized by a
+            // concurrent "last payment". Without this, two members paying at once
+            // both see pendingCount === 0 and finalize twice → double stock-decrement
+            // and duplicate kitchen tickets. The row lock serialises them; the second
+            // caller sees status != 'locked' and bails (finally releases the client).
+            const grpLock = await client.query(
+                "SELECT status FROM group_orders WHERE id = $1 FOR UPDATE",
+                [groupOrder.id]
+            );
+            if (!grpLock.rows[0] || grpLock.rows[0].status !== 'locked') {
+                await client.query('ROLLBACK');
+                return;
+            }
 
             await client.query("UPDATE group_orders SET status = 'paid' WHERE id = $1", [groupOrder.id]);
 
@@ -728,13 +758,13 @@ async function _checkAllPaid(groupOrder: any, code: string, paidUserId: string) 
                 }
             }
 
-            // Generate order tokens and set status to preparing
+            // Generate order tokens and set status to placed (→ "New Orders", awaiting acceptance)
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             let token = '';
             for (let i = 0; i < 4; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
 
             await client.query(
-                "UPDATE orders SET status = 'preparing', order_token = $1, updated_at = NOW() WHERE group_order_id = $2",
+                "UPDATE orders SET status = 'placed', order_token = $1, updated_at = NOW() WHERE group_order_id = $2",
                 [token, groupOrder.id]
             );
 

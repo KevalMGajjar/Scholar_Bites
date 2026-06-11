@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import { createLobby, joinLobby, leaveLobby, getLobbyState, addItemToLobby, removeItemFromLobby, lockLobby, unlockLobby, payShare, verifyShare, getActiveGroup } from '../controllers/lobbyController';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
+import { validate, joinLobbySchema, addItemToLobbySchema } from '../middlewares/validators';
 
 const router = Router();
 
 router.post('/create', authenticateJWT, createLobby);
-router.post('/join', authenticateJWT, joinLobby);
+router.post('/join', authenticateJWT, validate(joinLobbySchema), joinLobby);
 router.post('/leave', authenticateJWT, leaveLobby);
 router.get('/active', authenticateJWT, getActiveGroup);
 router.get('/:code/state', authenticateJWT, getLobbyState);
-router.post('/add-item', authenticateJWT, addItemToLobby);
+router.post('/add-item', authenticateJWT, validate(addItemToLobbySchema), addItemToLobby);
 router.post('/remove-item', authenticateJWT, removeItemFromLobby);
 router.post('/lock', authenticateJWT, lockLobby);
 router.post('/unlock', authenticateJWT, unlockLobby);

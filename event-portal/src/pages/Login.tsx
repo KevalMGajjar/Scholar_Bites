@@ -16,7 +16,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/dean/login', { email, password });
+      const res = await api.post('/event/login', { email, password });
       login(res.data.token, res.data.dean);
       navigate('/');
       toast.success('Welcome back!');
@@ -34,10 +34,10 @@ export default function Login() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 animate-fade-up">
         {/* Logo Area */}
-        <div className="w-20 h-20 mx-auto bg-transparent flex items-center justify-center p-2 mb-4 relative group overflow-hidden">
-          <img src="/dean/logo.png" alt="University Logo" className="w-full h-full object-contain filter brightness-110 drop-shadow-md z-10" />
+        <div className="w-24 h-24 mx-auto bg-surface-lowest/40 border border-ghost-border rounded-3xl flex items-center justify-center p-4 mb-4 relative group overflow-hidden shadow-lg">
+          <img src="/event/logo.png" alt="University Logo" className="w-full h-full object-contain filter brightness-110 drop-shadow-md z-10" />
         </div>
-        <h2 className="mt-2 text-center text-4xl font-display font-bold text-content-primary tracking-tight">Dean Portal</h2>
+        <h2 className="mt-2 text-center text-4xl font-display font-bold text-content-primary tracking-tight">Event Head Portal</h2>
         <p className="mt-2 text-center text-sm text-content-secondary font-medium">Please authenticate to access the ledger</p>
       </div>
 

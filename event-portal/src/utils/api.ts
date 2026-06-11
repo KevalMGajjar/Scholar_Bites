@@ -5,7 +5,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('dean_token');
+  const token = localStorage.getItem('event_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -16,10 +16,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('dean_token');
-      localStorage.removeItem('dean_user');
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/dean/login') {
-        window.location.href = '/dean/login';
+      localStorage.removeItem('event_token');
+      localStorage.removeItem('event_user');
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/event/login') {
+        window.location.href = '/event/login';
       }
     }
     return Promise.reject(error);

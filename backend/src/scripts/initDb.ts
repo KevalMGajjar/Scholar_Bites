@@ -8,7 +8,10 @@ const pool = new Pool({
     ssl: false
 });
 
-const createTablesQuery = `
+// Exported so the server can run the same idempotent schema at startup
+// (see src/db/ensureSchema.ts). Every statement is CREATE ... IF NOT EXISTS /
+// ADD COLUMN IF NOT EXISTS — safe to run on every boot, a no-op when present.
+export const createTablesQuery = `
   -- Enable UUID extension
   CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -193,6 +196,14 @@ const createTablesQuery = `
   CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
 
+  -- 10.1 Locked Accounts Table (brute-force lockout management)
+  CREATE TABLE IF NOT EXISTS locked_accounts (
+    identifier VARCHAR(255) PRIMARY KEY,
+    attempt_count INT DEFAULT 0,
+    locked_until TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
   -- Migrations for existing DBs
   ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS active_token TEXT;
@@ -242,6 +253,12 @@ const createTablesQuery = `
   -- Migration: Add restaurant_id to menu_items if missing
   ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE;
 
+  -- Migration: universities support contact columns (Prisma's University model
+  -- lacks these, so Prisma-provisioned DBs are missing them → 500 on save).
+  ALTER TABLE universities ADD COLUMN IF NOT EXISTS support_phone VARCHAR(50);
+  ALTER TABLE universities ADD COLUMN IF NOT EXISTS support_email VARCHAR(255);
+  ALTER TABLE universities ADD COLUMN IF NOT EXISTS address TEXT;
+
   -- Index for stale notification cleanup
   CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at);
 `;
@@ -260,4 +277,8 @@ const initDb = async () => {
     }
 };
 
-initDb();
+// Only auto-run when invoked directly as a script (e.g. `node dist/scripts/initDb.js`),
+// NOT when imported by the server for the shared createTablesQuery.
+if (require.main === module) {
+    initDb();
+}

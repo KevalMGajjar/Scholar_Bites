@@ -14,6 +14,11 @@ const transporter = nodemailer.createTransport({
     },
 });
 
+/** Verify the SMTP connection/credentials. Throws if unreachable or auth fails. */
+export const verifySmtp = async (): Promise<void> => {
+    await transporter.verify();
+};
+
 export const sendOtpEmail = async (to: string, otp: string): Promise<void> => {
     const { systemEmail } = await getEmailConfig();
     const mailOptions = {

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../config/db';
 import { uploadToS3 } from './uploadController';
 import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 export const createUniversity = async (req: Request, res: Response) => {
     const { name, address } = req.body;
@@ -173,6 +174,16 @@ export const updateUniversity = async (req: Request, res: Response) => {
                 `UPDATE universities SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`, params
             );
             if (result.rows.length === 0) return res.status(404).json({ message: 'University not found' });
+
+            const caller = (req as any).user;
+            auditLog({
+                userId: caller?.id,
+                action: 'UNIVERSITY_UPDATED',
+                resource: `university:${id}`,
+                details: `Updated: ${updates.map(u => u.split(' = ')[0]).join(', ')}`,
+                ip: getRequestIp(req),
+            });
+
             return res.json(result.rows[0]);
         }
         res.status(400).json({ message: 'No fields to update' });

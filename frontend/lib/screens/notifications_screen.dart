@@ -27,7 +27,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _fetchNotifications();
   }
 
@@ -78,6 +78,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   List<Map<String, dynamic>> _filterByType(String type) {
     if (type == 'all') return _notifications;
+    if (type == 'announcement') {
+      return _notifications
+          .where((n) => n['type'] == 'announcement')
+          .toList();
+    }
     if (type == 'food') {
       return _notifications
           .where((n) =>
@@ -111,6 +116,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         return Icons.check_circle_rounded;
       case 'refund':
         return Icons.account_balance_wallet_rounded;
+      case 'announcement':
+        return Icons.campaign_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -130,6 +137,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         return const Color(0xFF2E7D32);
       case 'refund':
         return const Color(0xFF6A1B9A);
+      case 'announcement':
+        return const Color(0xFFD4A017);
       default:
         return _maroon;
     }
@@ -203,10 +212,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               unselectedLabelStyle:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               padding: const EdgeInsets.all(4),
+              isScrollable: false,
               tabs: const [
                 Tab(text: 'All'),
+                Tab(text: 'Updates'),
                 Tab(text: 'Food'),
-                Tab(text: 'Restaurants'),
+                Tab(text: 'Spots'),
               ],
             ),
           ),
@@ -220,6 +231,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   controller: _tabController,
                   children: [
                     _buildNotificationList('all'),
+                    _buildNotificationList('announcement'),
                     _buildNotificationList('food'),
                     _buildNotificationList('restaurant'),
                   ],
@@ -284,6 +296,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     IconData icon;
 
     switch (type) {
+      case 'announcement':
+        title = 'no updates yet';
+        subtitle = 'official announcements from the\ncanteen team will show up here';
+        icon = Icons.campaign_rounded;
+        break;
       case 'food':
         title = 'no food alerts yet';
         subtitle = 'when your fav items drop back,\nyou\'ll know first bestie';

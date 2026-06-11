@@ -312,6 +312,8 @@ export const verifyLoginOtp = async (req: Request, res: Response) => {
         await saveActiveToken(record.sid, token, 'staff');
 
         auditLog({ userId: record.sid, action: 'LOGIN_OTP_VERIFIED', resource: `email:${record.email}`, ip });
+        // Canonical success event — dashboards & staff analytics key off LOGIN_SUCCESS
+        auditLog({ userId: record.sid, action: 'LOGIN_SUCCESS', details: `${record.role} signed in (OTP)`, resource: `email:${record.email}`, ip });
 
         res.json({
             token,
@@ -391,6 +393,8 @@ export const googleLogin = async (req: Request, res: Response) => {
         await saveActiveToken(staff.id, token, 'staff');
 
         auditLog({ userId: staff.id, action: 'LOGIN_GOOGLE_SUCCESS', resource: `email:${googleEmail}`, ip });
+        // Canonical success event — dashboards & staff analytics key off LOGIN_SUCCESS
+        auditLog({ userId: staff.id, action: 'LOGIN_SUCCESS', details: `${staff.role} signed in (Google)`, resource: `email:${googleEmail}`, ip });
 
         res.json({
             token,
@@ -645,6 +649,81 @@ export const deleteStaff = async (req: Request, res: Response) => {
         res.json({ message: 'Staff member removed' });
     } catch (error: any) {
         console.error('[Auth] deleteStaff error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Update Staff (Admin + Super Admin) ───
+export const updateStaff = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { name, email, role, password, restaurant_id } = req.body;
+    const caller = (req as any).user;
+    const ip = getRequestIp(req);
+
+    try {
+        // ─── IDOR: verify target staff belongs to same university ───
+        const target = await pool.query('SELECT id, university_id, role FROM staff WHERE id = $1', [id]);
+        if (target.rows.length === 0) {
+            return res.status(404).json({ message: 'Staff not found' });
+        }
+        if (target.rows[0].university_id !== caller.university_id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const effectiveRole = role !== undefined ? role : target.rows[0].role;
+
+        // ─── Role escalation prevention (mirror registerStaff) ───
+        if (effectiveRole === 'super_admin') {
+            return res.status(403).json({ message: 'Cannot assign super_admin via this endpoint' });
+        }
+        if (effectiveRole === 'admin' && caller?.role !== 'super_admin') {
+            return res.status(403).json({ message: 'Only super admins can create admin accounts' });
+        }
+        // Prevent an admin from changing their own role (lockout protection)
+        if (caller?.id === id && role !== undefined && role !== target.rows[0].role) {
+            return res.status(403).json({ message: 'You cannot change your own role' });
+        }
+        // Staff role requires a restaurant assignment
+        if (effectiveRole === 'staff' && restaurant_id !== undefined && !restaurant_id) {
+            return res.status(400).json({ message: 'Staff members must be assigned to a restaurant' });
+        }
+
+        const updates: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name); }
+        if (email !== undefined) { updates.push(`email = $${idx++}`); params.push(email); }
+        if (role !== undefined) { updates.push(`role = $${idx++}`); params.push(role); }
+        if (restaurant_id !== undefined) {
+            // Admins are not restaurant-scoped; clear it if the role isn't staff.
+            updates.push(`restaurant_id = $${idx++}`);
+            params.push(effectiveRole === 'staff' ? restaurant_id : null);
+        }
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+            updates.push(`password_hash = $${idx++}`);
+            params.push(hashedPassword);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ message: 'No fields to update' });
+        }
+
+        params.push(id);
+        const result = await pool.query(
+            `UPDATE staff SET ${updates.join(', ')} WHERE id = $${idx}
+             RETURNING id, name, email, role, university_id, restaurant_id`,
+            params
+        );
+
+        auditLog({ userId: caller?.id, action: 'STAFF_UPDATED', resource: `staff:${id}`, details: updates.map(u => u.split(' = ')[0]).join(', '), ip });
+        res.json(result.rows[0]);
+    } catch (error: any) {
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Email already registered' });
+        }
+        console.error('[Auth] updateStaff error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };

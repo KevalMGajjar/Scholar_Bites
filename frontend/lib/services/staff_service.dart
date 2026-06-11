@@ -77,6 +77,7 @@ class StaffService {
     required String staffName,
     required String staffEmail,
     required List<Map<String, dynamic>> items,
+    String? specialRequirements,
   }) async {
     try {
       final response = await _dio.post(
@@ -89,6 +90,8 @@ class StaffService {
           'staff_name': staffName,
           'staff_email': staffEmail,
           'items': items,
+          if (specialRequirements != null && specialRequirements.trim().isNotEmpty)
+            'special_requirements': specialRequirements.trim(),
         },
       );
       return response.data as Map<String, dynamic>;
@@ -97,10 +100,22 @@ class StaffService {
     }
   }
 
-  /// Cancel an event order
-  Future<void> cancelEventOrder(String orderId) async {
+  /// Pay for an on-hold (custom) catering order from wallet
+  Future<void> payEventOrder(String orderId) async {
     try {
-      await _dio.patch('/staff/event-orders/$orderId/cancel');
+      await _dio.patch('/staff/event-orders/$orderId/pay');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['message'] ?? 'Payment failed');
+    }
+  }
+
+  /// Cancel an event order (optionally with a reason)
+  Future<void> cancelEventOrder(String orderId, {String? reason}) async {
+    try {
+      await _dio.patch(
+        '/staff/event-orders/$orderId/cancel',
+        data: (reason != null && reason.trim().isNotEmpty) ? {'reason': reason.trim()} : null,
+      );
     } on DioException catch (e) {
       throw Exception(e.response?.data['message'] ?? 'Failed to cancel event order');
     }

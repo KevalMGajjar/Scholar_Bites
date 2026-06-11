@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, UserPlus, Table, Trash2, Mail, Lock, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Clock, Users, Pencil, X, Building2, Download, Phone, ShoppingCart } from 'lucide-react';
+import { Calendar, UserPlus, Table, Trash2, Mail, Lock, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Clock, Users, Pencil, X, Building2, Download, Phone, ShoppingCart, TrendingUp, Tag, Receipt, Printer } from 'lucide-react';
 import api from '../services/api';
 
 interface Dean {
@@ -22,6 +22,7 @@ interface EventItem {
   price_at_time: number;
   item_name: string;
   item_image?: string;
+  category?: string;
 }
 
 interface EventPreOrder {
@@ -38,11 +39,13 @@ interface EventPreOrder {
   created_at: string;
   creator_name?: string;
   creator_phone?: string;
+  special_requirements?: string;
+  cancellation_reason?: string;
   items: EventItem[];
 }
 
 export default function Events() {
-  const [activeTab, setActiveTab] = useState<'deans' | 'calendar' | 'funds' | 'requests'>('deans');
+  const [activeTab, setActiveTab] = useState<'deans' | 'calendar' | 'funds' | 'requests' | 'reports'>('deans');
   const [deans, setDeans] = useState<Dean[]>([]);
   const [events, setEvents] = useState<EventPreOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +57,42 @@ export default function Events() {
   const totalEvents = events.length;
   const pendingEvents = events.filter(e => e.status === 'pending').length;
   const completedEvents = events.filter(e => e.status === 'completed' || e.status === 'approved').length;
+
+  // ─── Reports aggregations (exclude rejected/cancelled from spend) ───
+  const reportEvents = events.filter(e => e.status !== 'rejected' && e.status !== 'cancelled');
+  const totalCateringSpend = reportEvents.reduce((s, e) => s + Number(e.total_amount), 0);
+  const avgPerEvent = reportEvents.length ? totalCateringSpend / reportEvents.length : 0;
+
+  const perHead = Object.values(reportEvents.reduce((acc, e) => {
+    const key = e.staff_email || e.staff_name || 'Unknown';
+    if (!acc[key]) acc[key] = { name: e.staff_name || 'Unknown', email: e.staff_email || '—', count: 0, total: 0 };
+    acc[key].count++;
+    acc[key].total += Number(e.total_amount);
+    return acc;
+  }, {} as Record<string, { name: string; email: string; count: number; total: number }>)).sort((a, b) => b.total - a.total);
+
+  const monthly = Object.values(reportEvents.reduce((acc, e) => {
+    const d = new Date(e.event_date);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (!acc[key]) acc[key] = { key, label: d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' }), count: 0, total: 0 };
+    acc[key].count++;
+    acc[key].total += Number(e.total_amount);
+    return acc;
+  }, {} as Record<string, { key: string; label: string; count: number; total: number }>)).sort((a, b) => a.key.localeCompare(b.key));
+
+  const categories = Object.entries(reportEvents.reduce((acc, e) => {
+    (e.items || []).forEach((it) => {
+      const cat = it.category || 'Uncategorized';
+      if (!acc[cat]) acc[cat] = { qty: 0, total: 0 };
+      acc[cat].qty += it.quantity;
+      acc[cat].total += it.quantity * Number(it.price_at_time);
+    });
+    return acc;
+  }, {} as Record<string, { qty: number; total: number }>)).map(([category, v]) => ({ category, ...v })).sort((a, b) => b.total - a.total);
+
+  const maxHeadTotal = Math.max(1, ...perHead.map(h => h.total));
+  const maxMonthTotal = Math.max(1, ...monthly.map(m => m.total));
+  const maxCatTotal = Math.max(1, ...categories.map(c => c.total));
 
   // New Dean form
   const [deanName, setDeanName] = useState('');
@@ -83,6 +122,8 @@ export default function Events() {
   const [pendingRequests, setPendingRequests] = useState<EventPreOrder[]>([]);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [holdingId, setHoldingId] = useState<string | null>(null);
+  const [holdAmount, setHoldAmount] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const handleUpdateFunds = async (deanId: string, action: 'add' | 'deduct') => {
@@ -120,7 +161,7 @@ export default function Events() {
       if (activeTab === 'deans' || activeTab === 'funds') {
         const { data } = await api.get('/admin/deans');
         setDeans(data);
-      } else if (activeTab === 'calendar') {
+      } else if (activeTab === 'calendar' || activeTab === 'reports') {
         const { data } = await api.get('/admin/events');
         setEvents(data);
       } else if (activeTab === 'requests') {
@@ -164,6 +205,25 @@ export default function Events() {
     }
   };
 
+  const handleHold = async (id: string) => {
+    const amt = Number(holdAmount);
+    if (!amt || amt <= 0) {
+      alert('Enter a valid total amount to quote.');
+      return;
+    }
+    setActionLoading(id);
+    try {
+      await api.patch(`/admin/events/${id}/status`, { status: 'on_hold', total_amount: amt });
+      setPendingRequests(prev => prev.filter(r => r.id !== id));
+      setHoldingId(null);
+      setHoldAmount('');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to put order on hold');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handeAddDean = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -174,15 +234,24 @@ export default function Events() {
       return;
     }
 
+    // Mirror the backend passwordSchema (validators.ts) — the API enforces these.
     if (deanPassword.length < 8) {
       setErrorMsg("Password must be at least 8 characters.");
+      return;
+    }
+    if (!/[A-Z]/.test(deanPassword)) {
+      setErrorMsg("Password must contain at least one uppercase letter.");
+      return;
+    }
+    if (!/[0-9]/.test(deanPassword)) {
+      setErrorMsg("Password must contain at least one number.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       await api.post('/admin/deans', { name: deanName, school_name: deanSchool, email: deanEmail, password: deanPassword });
-      setSuccessMsg('Dean registered successfully');
+      setSuccessMsg('Event Head registered successfully');
       setDeanName('');
       setDeanSchool('');
       setDeanEmail('');
@@ -190,19 +259,19 @@ export default function Events() {
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error: any) {
-      setErrorMsg(error.response?.data?.message || error.message || 'Failed to add dean');
+      setErrorMsg(error.response?.data?.message || error.message || 'Failed to add event head');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteDean = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this dean? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this event head? This action cannot be undone.')) return;
     try {
       await api.delete(`/admin/deans/${id}`);
       fetchData();
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to delete dean');
+      alert(error.response?.data?.message || 'Failed to delete event head');
     }
   };
 
@@ -232,7 +301,7 @@ export default function Events() {
       setDeans(prev => prev.map(d => d.id === editDean.id ? { ...d, ...res.data } : d));
       setEditDean(null);
     } catch (error: any) {
-      setEditError(error.response?.data?.message || 'Failed to update dean');
+      setEditError(error.response?.data?.message || 'Failed to update event head');
     } finally {
       setEditLoading(false);
     }
@@ -253,6 +322,125 @@ export default function Events() {
     }
   };
 
+  // Clean, print-to-PDF full catering report (maroon theme, matches the event portal look).
+  const downloadReportPdf = () => {
+    const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    const money = (n: number) => `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+    const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+    const delegateRows = perHead.map((h) => `<tr><td>${escapeHtml(h.name)}</td><td>${escapeHtml(h.email)}</td><td class="c">${h.count}</td><td class="r">${money(h.total)}</td></tr>`).join('');
+    const catRows = categories.map((c) => `<tr><td>${escapeHtml(c.category)}</td><td class="c">${c.qty}</td><td class="r">${money(c.total)}</td></tr>`).join('');
+    const eventRows = reportEvents.map((e) => `<tr><td>${escapeHtml(e.event_name)}</td><td>${escapeHtml(e.staff_name || '—')}</td><td>${fmtDate(e.event_date)}</td><td class="r">${money(Number(e.total_amount))}</td></tr>`).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Catering Report</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2a2a2a; margin: 0; padding: 0; }
+        .wrap { max-width: 820px; margin: 0 auto; padding: 32px; }
+        .head { background: #8B1C28; color: #fff; padding: 26px 32px; border-radius: 14px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .head h1 { margin: 0; font-size: 24px; letter-spacing: -0.5px; }
+        .head .sub { opacity: .85; font-size: 13px; margin-top: 4px; }
+        .metrics { display: flex; gap: 16px; margin: 24px 0; }
+        .metric { flex: 1; border: 1px solid #eee; border-radius: 12px; padding: 16px 18px; }
+        .metric .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #888; font-weight: 700; }
+        .metric .value { font-size: 22px; font-weight: 800; margin-top: 6px; color: #8B1C28; }
+        h2 { font-size: 15px; margin: 28px 0 10px; color: #8B1C28; border-bottom: 2px solid #f0e0e2; padding-bottom: 6px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        th { background: #faf3f4; text-align: left; padding: 9px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: #8B1C28; border-bottom: 1px solid #eedfe1; }
+        td { padding: 9px 12px; border-bottom: 1px solid #f3f3f3; }
+        td.r, th.r { text-align: right; } td.c, th.c { text-align: center; }
+        .foot { margin-top: 28px; font-size: 11px; color: #aaa; text-align: center; }
+        @media print { .wrap { padding: 0; } .head { border-radius: 0; } }
+      </style></head><body><div class="wrap">
+      <div class="head"><div><h1>Catering Report</h1><div class="sub">Full event catering summary</div></div><div style="text-align:right"><div class="sub">Generated</div><div style="font-weight:700">${today}</div></div></div>
+      <div class="metrics">
+        <div class="metric"><div class="label">Total Catering Spend</div><div class="value">${money(totalCateringSpend)}</div></div>
+        <div class="metric"><div class="label">Delegates</div><div class="value">${perHead.length}</div></div>
+        <div class="metric"><div class="label">Avg / Event</div><div class="value">${money(avgPerEvent)}</div></div>
+      </div>
+      <h2>Per Delegate Spending</h2>
+      <table><thead><tr><th>Delegate</th><th>Email</th><th class="c">Events</th><th class="r">Total</th></tr></thead><tbody>${delegateRows}</tbody></table>
+      <h2>Category-wise Consumption</h2>
+      <table><thead><tr><th>Category</th><th class="c">Units</th><th class="r">Total</th></tr></thead><tbody>${catRows}</tbody></table>
+      <h2>Events (${reportEvents.length})</h2>
+      <table><thead><tr><th>Event</th><th>Delegate</th><th>Date</th><th class="r">Amount</th></tr></thead><tbody>${eventRows}</tbody></table>
+      <div class="foot">University Canteen · Catering Report · ${today}</div>
+      </div></body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('Please allow pop-ups to download the report.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 400);
+  };
+
+  const escapeHtml = (s: string) =>
+    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const printInvoice = (evt: EventPreOrder) => {
+    const rows = (evt.items || []).map((it) => `
+      <tr>
+        <td>${escapeHtml(it.item_name)}${it.category ? `<span class="cat">${escapeHtml(it.category)}</span>` : ''}</td>
+        <td class="num">${it.quantity}</td>
+        <td class="num">₹${Number(it.price_at_time).toFixed(2)}</td>
+        <td class="num">₹${(it.quantity * Number(it.price_at_time)).toFixed(2)}</td>
+      </tr>`).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Interim Invoice — ${escapeHtml(evt.event_name)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 40px; }
+        .wrap { max-width: 720px; margin: 0 auto; }
+        .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #8B1C28; padding-bottom: 18px; }
+        .brand { font-size: 20px; font-weight: 800; color: #8B1C28; }
+        .brand small { display:block; font-size: 11px; font-weight: 600; color: #777; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+        .tag { text-align: right; }
+        .tag h1 { margin: 0; font-size: 24px; letter-spacing: 1px; }
+        .tag .pill { display:inline-block; margin-top:6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; padding: 3px 10px; border-radius: 999px; }
+        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin: 24px 0; font-size: 13px; }
+        .meta div span { color: #888; display:block; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+        .meta div b { font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+        th { text-align: left; background: #f5f3f0; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 10px; }
+        td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+        td.num, th.num { text-align: right; }
+        .cat { display:block; font-size: 11px; color: #999; margin-top: 2px; }
+        tfoot td { border: none; font-weight: 700; }
+        tfoot .grand { font-size: 18px; color: #8B1C28; }
+        .foot { margin-top: 28px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 14px; }
+        @media print { body { padding: 0; } }
+      </style></head><body><div class="wrap">
+      <div class="head">
+        <div class="brand">Ahmedabad University Canteen<small>Catering Services</small></div>
+        <div class="tag"><h1>INVOICE</h1><div class="pill">Interim</div></div>
+      </div>
+      <div class="meta">
+        <div><span>Event</span><b>${escapeHtml(evt.event_name)}</b></div>
+        <div><span>Invoice / Order ID</span><b>${escapeHtml(evt.id)}</b></div>
+        <div><span>Event Date</span><b>${new Date(evt.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · ${escapeHtml(evt.event_time || '—')}</b></div>
+        <div><span>Status</span><b>${escapeHtml(evt.status)}</b></div>
+        <div><span>Event Head</span><b>${escapeHtml(evt.staff_name || '—')}</b></div>
+        <div><span>Contact</span><b>${escapeHtml(evt.staff_email || '—')}</b></div>
+        <div><span>Members</span><b>${evt.member_count}</b></div>
+        <div><span>Generated</span><b>${new Date().toLocaleString('en-IN')}</b></div>
+      </div>
+      <table>
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4">No items</td></tr>'}</tbody>
+        <tfoot><tr><td colspan="3" class="num">Grand Total</td><td class="num grand">₹${Number(evt.total_amount).toLocaleString('en-IN')}</td></tr></tfoot>
+      </table>
+      <div class="foot">This is an interim invoice generated for internal review and is not a final tax invoice. Amounts are subject to change until the event is completed.</div>
+      </div></body></html>`;
+
+    const w = window.open('', '_blank', 'width=820,height=920');
+    if (!w) { alert('Please allow pop-ups to print the invoice.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 350);
+  };
+
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
 
@@ -265,8 +453,10 @@ export default function Events() {
   };
 
   const { firstDay, daysInMonth, year, month } = getDaysInMonth(currentMonth);
-  const calendarDays = Array.from({ length: 42 }, (_, i) => {
-    if (i < firstDay || i >= firstDay + daysInMonth) return null;
+  // Only render leading blanks (to align the 1st under the right weekday) + the
+  // actual days of the month — no trailing empty cells padding out to 6 rows.
+  const calendarDays = Array.from({ length: firstDay + daysInMonth }, (_, i) => {
+    if (i < firstDay) return null;
     return i - firstDay + 1;
   });
 
@@ -300,10 +490,10 @@ export default function Events() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Event Management</h1>
-          <p className="text-slate-400 mt-1">Manage deans, event pre-orders, and budgets.</p>
+          <p className="text-slate-400 mt-1">Manage event heads, event pre-orders, and budgets.</p>
         </div>
         <div className="flex bg-[#0a0c14] p-1 rounded-xl border border-white/5 shadow-inner">
-          {(['deans', 'calendar', 'requests', 'funds'] as const).map(tab => (
+          {(['deans', 'calendar', 'requests', 'funds', 'reports'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -311,7 +501,7 @@ export default function Events() {
                 activeTab === tab ? 'bg-[#8B1C28] text-white shadow-lg shadow-[#8B1C28]/20' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {tab === 'deans' ? 'Deans' : tab === 'calendar' ? 'Events Calendar' : tab === 'requests' ? 'Requests' : 'Fund Distribution'}
+              {tab === 'deans' ? 'Event Heads' : tab === 'calendar' ? 'Events Calendar' : tab === 'requests' ? 'Requests' : tab === 'funds' ? 'Fund Distribution' : 'Reports'}
               {tab === 'requests' && pendingRequests.length > 0 && activeTab !== 'requests' && (
                 <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-[10px] font-bold text-black rounded-full flex items-center justify-center animate-pulse">
                   {pendingRequests.length}
@@ -336,7 +526,7 @@ export default function Events() {
                   <div className="p-2 bg-[#8B1C28]/10 rounded-lg border border-rose-500/10">
                     <UserPlus size={18} className="text-rose-400" />
                   </div>
-                  Register New Dean
+                  Register New Event Head
                 </h2>
 
                 <form onSubmit={handeAddDean} className="space-y-4 relative z-10">
@@ -356,8 +546,8 @@ export default function Events() {
                   {[
                     { label: 'Full Name', icon: <UserPlus size={16} />, type: 'text', value: deanName, setter: setDeanName, placeholder: 'Dr. John Smith' },
                     { label: 'School / Department', icon: <Building2 size={16} />, type: 'text', value: deanSchool, setter: setDeanSchool, placeholder: 'School of Engineering' },
-                    { label: 'Email Address', icon: <Mail size={16} />, type: 'email', value: deanEmail, setter: setDeanEmail, placeholder: 'dean@university.edu' },
-                    { label: 'Default Password', icon: <Lock size={16} />, type: 'password', value: deanPassword, setter: setDeanPassword, placeholder: '••••••••' },
+                    { label: 'Email Address', icon: <Mail size={16} />, type: 'email', value: deanEmail, setter: setDeanEmail, placeholder: 'eventhead@university.edu' },
+                    { label: 'Default Password', icon: <Lock size={16} />, type: 'password', value: deanPassword, setter: setDeanPassword, placeholder: 'Min 8 chars, 1 uppercase, 1 number' },
                   ].map(field => (
                     <div key={field.label}>
                       <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
@@ -386,7 +576,7 @@ export default function Events() {
                     ) : (
                       <UserPlus size={16} />
                     )}
-                    {isSubmitting ? 'Registering...' : 'Register Dean'}
+                    {isSubmitting ? 'Registering...' : 'Register Event Head'}
                   </button>
                 </form>
               </div>
@@ -396,7 +586,7 @@ export default function Events() {
             <div className="flex-1">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white flex items-center gap-3">
-                  Registered Deans
+                  Registered Event Heads
                   <span className="bg-[#8B1C28]/20 text-rose-400 text-xs px-2.5 py-1 rounded-full border border-rose-500/10">
                     {deans.length} active
                   </span>
@@ -410,7 +600,7 @@ export default function Events() {
               ) : deans.length === 0 ? (
                 <div className="bg-[#0a0c16] rounded-2xl p-12 text-center border border-white/5">
                   <AlertCircle size={32} className="mx-auto mb-3 text-slate-600" />
-                  <p className="text-slate-500">No deans registered yet. Use the form to add one.</p>
+                  <p className="text-slate-500">No event heads registered yet. Use the form to add one.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -420,7 +610,7 @@ export default function Events() {
                       
                       <div className="flex items-start justify-between ml-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-bold text-lg truncate">{dean.name || 'Unnamed Dean'}</h3>
+                          <h3 className="text-white font-bold text-lg truncate">{dean.name || 'Unnamed Event Head'}</h3>
                           <p className="text-rose-400/80 text-sm font-medium mt-0.5 flex items-center gap-1.5">
                             <Building2 size={13} />
                             {dean.school_name || 'No School'}
@@ -443,14 +633,14 @@ export default function Events() {
                           <button
                             onClick={() => openEditModal(dean)}
                             className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                            title="Edit Dean"
+                            title="Edit Event Head"
                           >
                             <Pencil size={15} />
                           </button>
                           <button
                             onClick={() => handleDeleteDean(dean.id)}
                             className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                            title="Delete Dean"
+                            title="Delete Event Head"
                           >
                             <Trash2 size={15} />
                           </button>
@@ -474,7 +664,7 @@ export default function Events() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Pencil size={16} className="text-rose-400" />
-                Edit Dean Details
+                Edit Event Head Details
               </h3>
               <button onClick={() => setEditDean(null)} className="text-slate-500 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
                 <X size={18} />
@@ -638,7 +828,7 @@ export default function Events() {
                           <div 
                             key={evt.id} 
                             title={evt.event_name}
-                            className={`w-2 h-2 rounded-full ${evt.status === 'pending' || evt.status === 'upcoming' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'}`}
+                            className={`w-2 h-2 rounded-full ${evt.status === 'pending' || evt.status === 'upcoming' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : evt.status === 'on_hold' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]' : evt.status === 'cancelled' || evt.status === 'rejected' ? 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'}`}
                           />
                         ))}
                       </div>
@@ -672,7 +862,10 @@ export default function Events() {
                         <div className="flex justify-between items-start mb-3">
                           <h4 className="text-white font-semibold text-lg">{evt.event_name}</h4>
                           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
-                            evt.status === 'upcoming' || evt.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                            evt.status === 'upcoming' || evt.status === 'pending' ? 'bg-amber-500/10 text-amber-400'
+                              : evt.status === 'on_hold' ? 'bg-yellow-500/10 text-yellow-400'
+                              : evt.status === 'cancelled' || evt.status === 'rejected' ? 'bg-red-500/10 text-red-400'
+                              : 'bg-emerald-500/10 text-emerald-400'
                           }`}>
                             {evt.status}
                           </span>
@@ -727,6 +920,8 @@ export default function Events() {
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border ${
                   viewEvent.status === 'upcoming' || viewEvent.status === 'pending'
                     ? 'bg-amber-500/10 text-amber-400 border-amber-500/10'
+                    : viewEvent.status === 'on_hold'
+                    ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/10'
                     : viewEvent.status === 'completed' || viewEvent.status === 'approved'
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10'
                     : 'bg-red-500/10 text-red-400 border-red-500/10'
@@ -797,6 +992,30 @@ export default function Events() {
                   </div>
                 </div>
               </div>
+
+              {/* Cancelled by staff */}
+              {viewEvent.status === 'cancelled' && viewEvent.cancellation_reason && (
+                <div className="mb-6">
+                  <p className="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
+                    <X size={13} /> Cancelled by Staff — Reason
+                  </p>
+                  <div className="bg-red-500/[0.06] border border-red-500/20 rounded-xl p-4">
+                    <p className="text-sm text-red-200/90 whitespace-pre-wrap leading-relaxed">{viewEvent.cancellation_reason}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Order / Special Requirements */}
+              {viewEvent.special_requirements && (
+                <div className="mb-6">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
+                    <Pencil size={13} /> Custom Order / Special Requirements
+                  </p>
+                  <div className="bg-amber-500/[0.06] border border-amber-500/15 rounded-xl p-4">
+                    <p className="text-sm text-amber-200/90 whitespace-pre-wrap leading-relaxed">{viewEvent.special_requirements}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Ordered Items */}
               {viewEvent.items && viewEvent.items.length > 0 && (
@@ -897,6 +1116,11 @@ export default function Events() {
                         <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/10">
                           {req.status}
                         </span>
+                        {req.special_requirements && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-400/15 text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                            <Pencil size={10} /> Custom Order
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="flex items-center gap-2 text-sm text-slate-300">
@@ -936,6 +1160,19 @@ export default function Events() {
                     </div>
                   )}
 
+                  {/* Custom Order highlight */}
+                  {req.special_requirements && (
+                    <div className="px-6 pb-3">
+                      <div className="bg-amber-500/[0.08] border border-amber-500/25 rounded-xl p-3.5 flex items-start gap-2.5">
+                        <Pencil size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1">Custom Order / Special Requirements</p>
+                          <p className="text-sm text-amber-100/90 whitespace-pre-wrap leading-relaxed">{req.special_requirements}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="px-6 py-4 border-t border-white/5 bg-white/[0.01]">
                     {rejectingId === req.id ? (
@@ -967,6 +1204,37 @@ export default function Events() {
                           </button>
                         </div>
                       </div>
+                    ) : holdingId === req.id ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Quoted Total Amount (₹)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={holdAmount}
+                            onChange={(e) => setHoldAmount(e.target.value)}
+                            placeholder="e.g. 25000"
+                            className="w-full bg-[#060810] border border-amber-500/20 rounded-xl py-3 px-4 text-white text-sm font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder:text-slate-600 outline-none"
+                          />
+                          <p className="text-[11px] text-slate-500 mt-1.5">The requester will pay this from their wallet (voucher-funded or topped up) once on hold.</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleHold(req.id)}
+                            disabled={actionLoading === req.id || !holdAmount || Number(holdAmount) <= 0}
+                            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-[#1a1207] font-bold text-sm transition-all hover:shadow-lg hover:shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {actionLoading === req.id ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Clock size={16} />}
+                            Put On Hold
+                          </button>
+                          <button
+                            onClick={() => { setHoldingId(null); setHoldAmount(''); }}
+                            className="px-6 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:border-white/20 font-semibold text-sm transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex gap-3">
                         <button
@@ -977,6 +1245,14 @@ export default function Events() {
                           {actionLoading === req.id ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle2 size={16} />}
                           Approve Request
                         </button>
+                        {req.special_requirements && (
+                          <button
+                            onClick={() => { setHoldingId(req.id); setHoldAmount(req.total_amount ? String(req.total_amount) : ''); }}
+                            className="flex-1 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                          >
+                            <Clock size={16} /> Put On Hold
+                          </button>
+                        )}
                         <button
                           onClick={() => setRejectingId(req.id)}
                           className="flex-1 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 font-semibold text-sm transition-all flex items-center justify-center gap-2"
@@ -1010,9 +1286,9 @@ export default function Events() {
                   <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/10">
                     <Table size={18} className="text-emerald-400" />
                   </div>
-                  Dean Fund Distribution Ledger
+                  Event Head Fund Distribution Ledger
                 </h2>
-                <p className="text-slate-500 text-sm mt-1 ml-12">Financial overview of all dean budget allocations</p>
+                <p className="text-slate-500 text-sm mt-1 ml-12">Financial overview of all event head budget allocations</p>
               </div>
               <button
                 onClick={() => downloadCSV('funds')}
@@ -1044,7 +1320,7 @@ export default function Events() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white/[0.02]">
-                  <th className="py-4 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Dean</th>
+                  <th className="py-4 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Event Head</th>
                   <th className="py-4 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right">Allocated</th>
                   <th className="py-4 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right">Used</th>
                   <th className="py-4 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Utilization</th>
@@ -1062,7 +1338,7 @@ export default function Events() {
                 ) : deans.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-slate-500">
-                      No deans registered. Add deans from the Deans tab first.
+                      No event heads registered. Add event heads from the Event Heads tab first.
                     </td>
                   </tr>
                 ) : (
@@ -1134,6 +1410,176 @@ export default function Events() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════ REPORTS TAB ═══════════════════════ */}
+      {activeTab === 'reports' && (
+        <div className="flex flex-col gap-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-8 h-8 border-2 border-[#8B1C28] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : reportEvents.length === 0 ? (
+            <div className="bg-[#0a0c16] rounded-2xl p-16 text-center border border-white/5">
+              <Receipt size={48} className="mx-auto mb-4 text-slate-600" />
+              <h3 className="text-lg font-bold text-white mb-2">No catering data yet</h3>
+              <p className="text-slate-500">Reports populate once events are scheduled and approved.</p>
+            </div>
+          ) : (
+            <>
+              {/* Download toolbar */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-white">Catering Reports</h2>
+                  <p className="text-xs text-slate-500">Full event spending breakdown</p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <button onClick={downloadReportPdf} className="px-4 py-2.5 rounded-xl bg-[#8B1C28]/15 border border-[#8B1C28]/30 text-rose-300 text-[12px] font-bold hover:bg-[#8B1C28]/25 transition-all flex items-center gap-2 btn-press">
+                    <Printer size={14} /> Download PDF
+                  </button>
+                  <button onClick={() => downloadCSV('events')} className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[12px] font-bold hover:bg-emerald-500/20 transition-all flex items-center gap-2 btn-press">
+                    <Download size={14} /> Download Excel
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary Ribbon */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-xs">Total Catering Spend</span>
+                    <TrendingUp size={18} className="text-emerald-400" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-emerald-400 font-mono">₹{totalCateringSpend.toLocaleString('en-IN')}</h3>
+                  <p className="text-xs text-slate-500 mt-2">Across {reportEvents.length} active event{reportEvents.length !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-xs">Delegates</span>
+                    <Users size={18} className="text-rose-400" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-white">{perHead.length}</h3>
+                  <p className="text-xs text-slate-500 mt-2">Distinct delegates</p>
+                </div>
+                <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-xs">Avg / Event</span>
+                    <Receipt size={18} className="text-amber-400" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-white font-mono">₹{avgPerEvent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</h3>
+                  <p className="text-xs text-slate-500 mt-2">Mean catering cost per event</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Per Event Head Spending */}
+                <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-5">
+                    <div className="p-2 bg-rose-500/10 rounded-lg border border-rose-500/10"><Users size={16} className="text-rose-400" /></div>
+                    Per Delegate Spending
+                  </h2>
+                  <div className="space-y-4 max-h-[360px] overflow-y-auto pr-2 custom-scrollbar">
+                    {perHead.map((h) => (
+                      <div key={h.email}>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{h.name}</p>
+                            <p className="text-[11px] text-slate-500 truncate">{h.email} · {h.count} event{h.count !== 1 ? 's' : ''}</p>
+                          </div>
+                          <span className="text-sm font-bold text-emerald-400 font-mono shrink-0 ml-3">₹{h.total.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-[#8B1C28] to-rose-500 rounded-full" style={{ width: `${(h.total / maxHeadTotal) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Category-wise Consumption */}
+                <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-5">
+                    <div className="p-2 bg-indigo-500/10 rounded-lg border border-indigo-500/10"><Tag size={16} className="text-indigo-400" /></div>
+                    Category-wise Consumption
+                  </h2>
+                  <div className="space-y-4 max-h-[360px] overflow-y-auto pr-2 custom-scrollbar">
+                    {categories.map((c) => (
+                      <div key={c.category}>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <p className="text-sm font-semibold text-white truncate">{c.category}</p>
+                          <span className="text-xs text-slate-400 shrink-0 ml-3">
+                            <span className="font-mono text-slate-300">{c.qty}</span> units · <span className="font-mono text-emerald-400">₹{c.total.toLocaleString('en-IN')}</span>
+                          </span>
+                        </div>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full" style={{ width: `${(c.total / maxCatTotal) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly Catering Cost Analysis */}
+              <div className="bg-[#0a0c16] rounded-2xl border border-white/5 p-6">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-6">
+                  <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/10"><TrendingUp size={16} className="text-emerald-400" /></div>
+                  Monthly Catering Cost Analysis
+                </h2>
+                <div className="flex items-end gap-3 h-52 overflow-x-auto pb-2">
+                  {monthly.map((m) => (
+                    <div key={m.key} className="flex flex-col items-center justify-end gap-2 flex-1 min-w-[64px] h-full">
+                      <span className="text-[11px] font-bold text-emerald-400 font-mono">₹{m.total >= 1000 ? `${(m.total / 1000).toFixed(1)}k` : m.total}</span>
+                      <div className="w-full bg-gradient-to-t from-[#8B1C28] to-rose-500 rounded-t-lg transition-all hover:opacity-80" style={{ height: `${Math.max((m.total / maxMonthTotal) * 100, 3)}%` }} title={`${m.label}: ₹${m.total.toLocaleString('en-IN')} (${m.count} events)`} />
+                      <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">{m.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Per-Order Interim Invoices */}
+              <div className="bg-[#0a0c16] rounded-2xl border border-white/5 overflow-hidden">
+                <div className="p-6 border-b border-white/5 flex items-center gap-2">
+                  <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/10"><Receipt size={16} className="text-amber-400" /></div>
+                  <h2 className="text-lg font-bold text-white">Per-Order Interim Invoices</h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-white/[0.02]">
+                        <th className="py-3 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Event</th>
+                        <th className="py-3 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Delegate</th>
+                        <th className="py-3 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Date</th>
+                        <th className="py-3 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right">Amount</th>
+                        <th className="py-3 px-6 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right">Invoice</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.03]">
+                      {reportEvents.map((evt) => (
+                        <tr key={evt.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-4 px-6">
+                            <span className="text-sm font-semibold text-white">{evt.event_name}</span>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-slate-400">{evt.staff_name || '—'}</td>
+                          <td className="py-4 px-6 text-sm text-slate-400">{new Date(evt.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                          <td className="py-4 px-6 text-right text-sm font-bold text-emerald-400 font-mono">₹{Number(evt.total_amount).toLocaleString('en-IN')}</td>
+                          <td className="py-4 px-6 text-right">
+                            <button
+                              onClick={() => printInvoice(evt)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-white/20 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition-all"
+                            >
+                              <Printer size={13} /> Invoice
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

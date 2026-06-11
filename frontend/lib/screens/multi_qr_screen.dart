@@ -492,7 +492,7 @@ class _MultiQrScreenState extends State<MultiQrScreen> {
   }
 
   Widget _buildNotReadyOverlay(String status) {
-    final statusLabel = status == 'preparing' ? 'Being Prepared' : status;
+    final statusLabel = status == 'preparing' ? 'Being Prepared' : status == 'placed' ? 'awaiting confirmation' : status;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

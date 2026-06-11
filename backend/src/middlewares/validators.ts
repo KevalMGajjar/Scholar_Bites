@@ -46,12 +46,23 @@ const COMMON_PASSWORDS = new Set([
 // ═══════════════════════════════════════════════════════
 // Password Strength Validator
 // ═══════════════════════════════════════════════════════
-const passwordSchema = z.string()
+export const passwordSchema = z.string()
     .min(8, 'Password must be at least 8 characters')
     .max(128, 'Password must be at most 128 characters')
     .refine((pw) => /[A-Z]/.test(pw), 'Password must contain at least one uppercase letter')
     .refine((pw) => /[0-9]/.test(pw), 'Password must contain at least one number')
     .refine((pw) => !COMMON_PASSWORDS.has(pw.toLowerCase()), 'This password is too common. Please choose a stronger one.');
+
+/**
+ * Imperative helper for controllers that don't go through a route schema
+ * (e.g. super-admin staff creation, dean creation). Returns an error message
+ * string if the password is too weak, or null if it passes. Keeps the rule in
+ * ONE place so every account-creation path enforces identical strength.
+ */
+export const passwordStrengthError = (password: unknown): string | null => {
+    const result = passwordSchema.safeParse(password);
+    return result.success ? null : result.error.issues[0].message;
+};
 
 // ═══════════════════════════════════════════════════════
 // Auth Schemas
@@ -63,7 +74,9 @@ export const loginOtpSchema = z.object({
 
 export const registerOtpSchema = z.object({
     phone: z.string().regex(/^\d{10,15}$/, 'Phone must be 10-15 digits'),
-    university_id: z.string().uuid('Invalid university ID'),
+    // The controller reads { phone, name? }; university_id is assigned server-side
+    // (single-university mode), so it must NOT be required here.
+    name: z.string().min(1).max(100).optional(),
 });
 
 export const updateUniversitySchema = z.object({
@@ -82,21 +95,34 @@ export const registerStaffSchema = z.object({
     password: passwordSchema,
     name: z.string().min(1, 'Name is required').max(100),
     role: z.enum(['staff', 'admin'] as const), // super_admin cannot be created via this endpoint
-    university_id: z.string().uuid('Invalid university ID'),
+    // Staff accounts carry a restaurant_id; the controller defaults university_id
+    // server-side, so it is optional here. Both are uuid when present.
+    restaurant_id: z.string().uuid('Invalid restaurant ID').optional(),
+    university_id: z.string().uuid('Invalid university ID').optional(),
 });
 
 // ═══════════════════════════════════════════════════════
 // Menu Schemas
 // ═══════════════════════════════════════════════════════
 
+// All values arrive as strings via multipart FormData. The schema mirrors EXACTLY
+// what the admin panel sends for POST /admin/menu (and what the controller reads):
+//   name, description, price, category(may be ''), category_id?(uuid), restaurant_id,
+//   stock_quantity, is_veg('true'|'false'), nutritional_info(JSON string).
+// The image arrives as req.file (handled by multer), not in the body.
+// NOTE: validate() runs AFTER multer so req.body is populated, and it replaces
+// req.body with the parsed result — so every field the controller reads must be here.
 export const addMenuItemSchema = z.object({
     name: z.string().min(1).max(100),
     description: z.string().max(1000).optional(),
     price: z.union([z.string(), z.number()]).transform((v) => String(v)),
-    category: z.string().min(1).max(50),
+    category: z.string().max(50).optional(),          // may be '' when no category chosen
+    category_id: z.string().uuid().optional(),         // only sent when a category is selected
     restaurant_id: z.string().uuid(),
     stock_quantity: z.union([z.string(), z.number()]).transform((v) => Number(v)).optional(),
-    nutritional_info: z.string().optional(), // JSON string from FormData
+    is_veg: z.union([z.string(), z.boolean()]).optional(), // controller accepts 'true'/'false' or boolean
+    image_url: z.string().optional(),                  // not sent on create (image comes via req.file)
+    nutritional_info: z.string().optional(),           // JSON string from FormData
 });
 
 // ═══════════════════════════════════════════════════════
@@ -112,7 +138,7 @@ export const createOrderSchema = z.object({
 });
 
 export const updateOrderStatusSchema = z.object({
-    status: z.enum(['pending', 'preparing', 'ready', 'completed', 'cancelled'] as const),
+    status: z.enum(['pending', 'placed', 'preparing', 'ready', 'completed', 'cancelled'] as const),
 });
 
 // ═══════════════════════════════════════════════════════
@@ -150,7 +176,8 @@ export const joinLobbySchema = z.object({
 });
 
 export const addItemToLobbySchema = z.object({
-    group_id: z.string().uuid(),
+    // The controller identifies the lobby by its short `code`, not a uuid group_id.
+    code: z.string().min(4).max(10),
     menu_item_id: z.string().uuid(),
     quantity: z.number().int().min(1).max(50),
 });
@@ -160,5 +187,7 @@ export const addItemToLobbySchema = z.object({
 // ═══════════════════════════════════════════════════════
 
 export const registerFcmTokenSchema = z.object({
-    token: z.string().min(1, 'FCM token is required').max(500),
+    // The controller and the mobile app both use `fcm_token` (NOT `token`).
+    // Generous max — real FCM registration tokens can exceed 500 chars.
+    fcm_token: z.string().min(1, 'FCM token is required').max(4096),
 });

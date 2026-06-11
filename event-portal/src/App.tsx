@@ -20,7 +20,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/dean">
+    <BrowserRouter basename="/event">
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />

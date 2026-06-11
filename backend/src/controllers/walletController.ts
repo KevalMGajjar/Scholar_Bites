@@ -123,10 +123,16 @@ export const verifyTopUp = async (req: AuthRequest, res: Response) => {
             try {
                 await client.query('BEGIN');
 
+                // Lock the user row first so concurrent verifies of the same
+                // payment are serialised — otherwise the SELECT-then-INSERT
+                // existence check below is racy and can double-credit the wallet
+                // (reference_id has no UNIQUE constraint).
+                await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+
                 // Check if reference already exists to prevent double-crediting
                 const existingResult = await client.query(
-                    'SELECT id FROM wallet_transactions WHERE reference_id = $1',
-                    [razorpay_order_id]
+                    'SELECT id FROM wallet_transactions WHERE reference_id = $1 AND type = $2',
+                    [razorpay_order_id, 'credit']
                 );
                 
                 if (existingResult.rows.length > 0) {
@@ -198,9 +204,13 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Fetch the order and validate ownership + status
+        // 1. Lock and fetch the order, then validate ownership + status.
+        // FOR UPDATE is REQUIRED: without it, two concurrent wallet payments for
+        // the same order can both pass the status check and double-charge the
+        // wallet / double-decrement stock. Locking serialises them so the second
+        // request re-reads status = 'placed' and is rejected below.
         const orderResult = await client.query(
-            'SELECT id, total_amount, status, payment_id, user_id, university_id, order_token FROM orders WHERE id = $1',
+            'SELECT id, total_amount, status, payment_id, user_id, university_id, restaurant_id, order_token FROM orders WHERE id = $1 FOR UPDATE',
             [order_id]
         );
 
@@ -313,9 +323,9 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
             }
         }
 
-        // 6. Mark order as preparing (payment + stock confirmed)
+        // 6. Mark order as placed (paid + stock confirmed → "New Orders", awaiting staff acceptance)
         await client.query(
-            "UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1",
+            "UPDATE orders SET status = 'placed', updated_at = NOW() WHERE id = $1",
             [order_id]
         );
 
@@ -349,7 +359,7 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response) => {
                 GROUP BY o.id, u.name, u.phone, r.name
             `, [order_id]);
 
-            const fullOrder = fullOrderRes.rows[0] || { ...order, status: 'preparing' };
+            const fullOrder = fullOrderRes.rows[0] || { ...order, status: 'placed' };
             emitNewOrder(order.university_id, fullOrder);
         } catch (_) {
             // Socket service may not be available, ignore

@@ -1,13 +1,35 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { UserPlus, Activity, LogIn, ShieldOff, Unlock, Trash2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Activity, LogIn, ShieldOff, Unlock, Trash2, AlertTriangle, Eye, EyeOff, Pencil } from 'lucide-react';
+
+// Mirrors the backend passwordSchema (validators.ts). The API enforces this on
+// /superadmin/staff create + update, so validate here for an immediate message.
+const PASSWORD_RULE = 'At least 8 characters, with 1 uppercase letter and 1 number.';
+function passwordRuleError(pw: string): string | null {
+  if (pw.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[A-Z]/.test(pw)) return 'Password must contain at least one uppercase letter.';
+  if (!/[0-9]/.test(pw)) return 'Password must contain at least one number.';
+  return null;
+}
 
 interface Staff {
   id: string;
   name: string;
   email: string | null;
   role: string;
+  restaurant_id: string | null;
+  restaurant_name: string | null;
   created_at: string;
+  // Access Control shows every account type. Only `kind === 'staff'` rows are
+  // managed here (edit/delete); event heads and delegates are shown read-only
+  // (they're managed in their own sections).
+  kind?: 'staff' | 'event_head' | 'delegate';
+  subtitle?: string | null;
+}
+
+interface Restaurant {
+  id: string;
+  name: string;
 }
 
 interface StaffAnalytics {
@@ -32,11 +54,21 @@ export default function StaffManagement() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Restaurants (for assigning staff to a kitchen)
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'staff' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'staff', restaurant_id: '' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+
+  // Edit State
+  const [editTarget, setEditTarget] = useState<Staff | null>(null);
+  const [editData, setEditData] = useState({ name: '', email: '', role: 'staff', password: '', restaurant_id: '' });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [showEditPassword, setShowEditPassword] = useState(false);
 
   // Delete State — two-step confirmation
   const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
@@ -62,6 +94,7 @@ export default function StaffManagement() {
   useEffect(() => {
     fetchStaff();
     fetchLockedAccounts();
+    fetchRestaurants();
   }, []);
 
   useEffect(() => {
@@ -74,12 +107,37 @@ export default function StaffManagement() {
   const fetchStaff = async () => {
     try {
       setLoading(true);
-      const { data } = await api.get('/superadmin/staff');
-      setStaffList(data);
+      // Pull every account type so Access Control shows the whole roster.
+      const [staffRes, deansRes, delegatesRes] = await Promise.all([
+        api.get('/superadmin/staff'),
+        api.get('/superadmin/deans-list').catch(() => ({ data: [] })),
+        api.get('/superadmin/university-staff').catch(() => ({ data: [] })),
+      ]);
+      const staff: Staff[] = (staffRes.data || []).map((s: any) => ({ ...s, kind: 'staff' as const }));
+      const eventHeads: Staff[] = (deansRes.data || []).map((d: any) => ({
+        id: d.id, name: d.name, email: d.email ?? null, role: 'event_head',
+        restaurant_id: null, restaurant_name: null, created_at: d.created_at ?? '',
+        kind: 'event_head' as const, subtitle: d.school_name ?? null,
+      }));
+      const delegates: Staff[] = (delegatesRes.data || []).map((u: any) => ({
+        id: u.id, name: u.name, email: u.email ?? u.phone ?? null, role: 'delegate',
+        restaurant_id: null, restaurant_name: null, created_at: u.created_at ?? '',
+        kind: 'delegate' as const, subtitle: u.dean_name ? `Under ${u.dean_name}` : null,
+      }));
+      setStaffList([...staff, ...eventHeads, ...delegates]);
     } catch (err) {
       console.error('Failed to fetch staff:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRestaurants = async () => {
+    try {
+      const { data } = await api.get('/superadmin/restaurants');
+      setRestaurants(data || []);
+    } catch (err) {
+      console.error('Failed to fetch restaurants:', err);
     }
   };
 
@@ -126,11 +184,20 @@ export default function StaffManagement() {
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError('');
+    const pwErr = passwordRuleError(formData.password);
+    if (pwErr) { setModalError(pwErr); return; }
     setModalLoading(true);
     try {
-      await api.post('/superadmin/staff', formData);
+      const payload: Record<string, string> = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+      };
+      if (formData.role === 'staff') payload.restaurant_id = formData.restaurant_id;
+      await api.post('/superadmin/staff', payload);
       setShowAddModal(false);
-      setFormData({ name: '', email: '', password: '', role: 'staff' });
+      setFormData({ name: '', email: '', password: '', role: 'staff', restaurant_id: '' });
       setShowModalPassword(false);
       setSuccessMsg('Account created successfully.');
       fetchStaff();
@@ -138,6 +205,42 @@ export default function StaffManagement() {
       setModalError(err.response?.data?.message || 'Failed to create user');
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  // ── Edit ──
+  const openEditModal = (staff: Staff) => {
+    setEditTarget(staff);
+    setEditData({ name: staff.name, email: staff.email || '', role: staff.role, password: '', restaurant_id: staff.restaurant_id || '' });
+    setEditError('');
+    setShowEditPassword(false);
+  };
+
+  const handleEditStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    setEditError('');
+    if (editData.password) {
+      const pwErr = passwordRuleError(editData.password);
+      if (pwErr) { setEditError(pwErr); return; }
+    }
+    setEditLoading(true);
+    try {
+      const payload: Record<string, string> = {
+        name: editData.name.trim(),
+        email: editData.email.trim(),
+        role: editData.role,
+        restaurant_id: editData.role === 'staff' ? editData.restaurant_id : '',
+      };
+      if (editData.password) payload.password = editData.password;
+      await api.put(`/superadmin/staff/${editTarget.id}`, payload);
+      setEditTarget(null);
+      setSuccessMsg('Account updated successfully.');
+      fetchStaff();
+    } catch (err: any) {
+      setEditError(err.response?.data?.message || 'Failed to update account');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -189,7 +292,7 @@ export default function StaffManagement() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
           <div>
             <h1 className="text-4xl font-display font-bold text-[#e5e2e1] mb-2 tracking-tight">Access Control</h1>
-            <p className="text-[#a38b88] text-sm">Manage administrative roles and audit staff activity.</p>
+            <p className="text-[#a38b88] text-sm">Every account on the platform — staff, event heads & delegates. Staff are managed here; the rest are read-only.</p>
           </div>
           <button 
             onClick={() => setShowAddModal(true)}
@@ -226,36 +329,61 @@ export default function StaffManagement() {
                    {staffList.map((st) => (
                       <tr key={st.id} className="hover:bg-[#201f1f] transition group">
                          <td className="p-5">
-                            <div className="flex items-center gap-4 cursor-pointer" onClick={() => loadAnalytics(st)}>
+                            <div className={`flex items-center gap-4 ${st.kind === 'staff' ? 'cursor-pointer' : ''}`} onClick={() => { if (st.kind === 'staff') loadAnalytics(st); }}>
                                <div className="w-10 h-10 bg-[#131313] border border-[#554240]/30 rounded-full flex items-center justify-center text-[#ffb4a8] font-bold">
                                   {st.name.charAt(0)}
                                </div>
-                               <span className="text-[#e5e2e1] font-semibold">{st.name}</span>
+                               <div>
+                                  <span className="text-[#e5e2e1] font-semibold block">{st.name}</span>
+                                  {st.kind === 'staff' && st.role === 'staff' && (
+                                     st.restaurant_name
+                                       ? <span className="text-[#a38b88] text-xs">{st.restaurant_name}</span>
+                                       : <span className="text-[#ffb4ab] text-xs font-semibold">⚠ No restaurant assigned</span>
+                                  )}
+                                  {st.kind !== 'staff' && st.subtitle && (
+                                     <span className="text-[#a38b88] text-xs">{st.subtitle}</span>
+                                  )}
+                               </div>
                             </div>
                          </td>
                          <td className="p-5">
                             <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                               st.role === 'super_admin' ? 'bg-[#ffb4a8]/10 text-[#ffb4a8] border border-[#ffb4a8]/20' : 
-                               st.role === 'admin' ? 'bg-[#eac34a]/10 text-[#eac34a] border border-[#eac34a]/20' : 
+                               st.role === 'super_admin' ? 'bg-[#ffb4a8]/10 text-[#ffb4a8] border border-[#ffb4a8]/20' :
+                               st.role === 'admin' ? 'bg-[#eac34a]/10 text-[#eac34a] border border-[#eac34a]/20' :
+                               st.role === 'event_head' ? 'bg-[#7aa2f7]/10 text-[#7aa2f7] border border-[#7aa2f7]/20' :
+                               st.role === 'delegate' ? 'bg-[#73d0a3]/10 text-[#73d0a3] border border-[#73d0a3]/20' :
                                'bg-[#554240]/30 text-[#a38b88]'
                             }`}>
-                               {st.role.toUpperCase().replace('_', ' ')}
+                               {st.role.toUpperCase().replace(/_/g, ' ')}
                             </span>
                          </td>
                          <td className="p-5 text-[#a38b88] text-sm">
                             {st.email || 'No email'}
                          </td>
                          <td className="p-5 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                               <button onClick={() => loadAnalytics(st)} className="text-[#ffb4a8] text-sm font-semibold hover:underline">View Log</button>
-                               <button
-                                 onClick={(e) => { e.stopPropagation(); openDeleteModal(st); }}
-                                 className="p-2 rounded-lg text-[#554240] hover:text-[#ffb4ab] hover:bg-[#93000a]/15 opacity-0 group-hover:opacity-100 transition-all"
-                                 title="Delete account"
-                               >
-                                 <Trash2 size={15} />
-                               </button>
-                            </div>
+                            {st.kind === 'staff' ? (
+                              <div className="flex items-center justify-end gap-3">
+                                 <button onClick={() => loadAnalytics(st)} className="text-[#ffb4a8] text-sm font-semibold hover:underline">View Log</button>
+                                 <button
+                                   onClick={(e) => { e.stopPropagation(); openEditModal(st); }}
+                                   className="p-2 rounded-lg text-[#554240] hover:text-[#eac34a] hover:bg-[#eac34a]/10 opacity-0 group-hover:opacity-100 transition-all"
+                                   title="Edit account"
+                                 >
+                                   <Pencil size={15} />
+                                 </button>
+                                 <button
+                                   onClick={(e) => { e.stopPropagation(); openDeleteModal(st); }}
+                                   className="p-2 rounded-lg text-[#554240] hover:text-[#ffb4ab] hover:bg-[#93000a]/15 opacity-0 group-hover:opacity-100 transition-all"
+                                   title="Delete account"
+                                 >
+                                   <Trash2 size={15} />
+                                 </button>
+                              </div>
+                            ) : (
+                              <span className="text-[#554240] text-xs italic">
+                                Managed in {st.kind === 'event_head' ? 'Event Heads' : 'University Staff'}
+                              </span>
+                            )}
                          </td>
                       </tr>
                    ))}
@@ -440,11 +568,12 @@ export default function StaffManagement() {
                <div>
                   <label className="text-[#a38b88] text-xs font-bold mb-1 block">Password <span className="text-[#f0513e]">*</span></label>
                   <div className="relative">
-                    <input required minLength={6} type={showModalPassword ? 'text' : 'password'} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 pr-11 text-sm focus:outline-none focus:border-[#ffb4a8]" placeholder="Min 6 characters" />
+                    <input required minLength={8} type={showModalPassword ? 'text' : 'password'} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 pr-11 text-sm focus:outline-none focus:border-[#ffb4a8]" placeholder="Min 8 chars, 1 uppercase, 1 number" />
                     <button type="button" onClick={() => setShowModalPassword(!showModalPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#554240] hover:text-[#a38b88] transition-colors" tabIndex={-1}>
                       {showModalPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+                  <p className="text-[11px] text-[#a38b88] mt-1.5">{PASSWORD_RULE}</p>
                </div>
                <div>
                   <label className="text-[#a38b88] text-xs font-bold mb-1 block">Role <span className="text-[#f0513e]">*</span></label>
@@ -454,11 +583,77 @@ export default function StaffManagement() {
                      <option value="super_admin">Super Admin (Global Head)</option>
                   </select>
                </div>
+               {formData.role === 'staff' && (
+                 <div>
+                    <label className="text-[#a38b88] text-xs font-bold mb-1 block">Restaurant <span className="text-[#f0513e]">*</span></label>
+                    <select required value={formData.restaurant_id} onChange={e=>setFormData({...formData, restaurant_id: e.target.value})} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#ffb4a8]">
+                       <option value="">Select a restaurant…</option>
+                       {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <p className="text-[#554240] text-[11px] mt-1">Staff only see orders for their assigned restaurant.</p>
+                 </div>
+               )}
             </div>
 
             <div className="flex gap-4 mt-8">
                <button type="button" onClick={()=>setShowAddModal(false)} className="flex-1 py-3 text-[#a38b88] hover:text-[#e5e2e1] font-semibold text-sm transition">Cancel</button>
                <button type="submit" disabled={modalLoading} className="flex-1 bg-[#ffb4a8] text-[#410000] py-3 rounded-lg font-bold text-sm shadow-[0_0_15px_rgba(255,180,168,0.2)] disabled:opacity-50">{modalLoading ? 'Creating...' : 'Create Account'}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Edit Account Modal ── */}
+      {editTarget && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditTarget(null)}>
+          <form className="bg-[#1c1b1b] border border-[#554240]/20 w-full max-w-md rounded-2xl p-8" onClick={(e) => e.stopPropagation()} onSubmit={handleEditStaff}>
+            <h2 className="text-xl font-display font-bold text-[#e5e2e1] mb-6 flex items-center gap-2">
+              <Pencil size={18} className="text-[#eac34a]" /> Edit Account
+            </h2>
+            {editError && <p className="text-[#ffb4a8] bg-[#4c0000]/30 p-3 rounded-lg text-sm mb-4">{editError}</p>}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[#a38b88] text-xs font-bold mb-1 block">Full Name <span className="text-[#f0513e]">*</span></label>
+                <input required type="text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#eac34a]" />
+              </div>
+              <div>
+                <label className="text-[#a38b88] text-xs font-bold mb-1 block">Email <span className="text-[#f0513e]">*</span></label>
+                <input required type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#eac34a]" />
+              </div>
+              <div>
+                <label className="text-[#a38b88] text-xs font-bold mb-1 block">New Password <span className="text-[#554240] font-medium normal-case">(leave blank to keep current)</span></label>
+                <div className="relative">
+                  <input minLength={8} type={showEditPassword ? 'text' : 'password'} value={editData.password} onChange={e => setEditData({ ...editData, password: e.target.value })} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 pr-11 text-sm focus:outline-none focus:border-[#eac34a]" placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#554240] hover:text-[#a38b88] transition-colors" tabIndex={-1}>
+                    {showEditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#a38b88] mt-1.5">{PASSWORD_RULE}</p>
+              </div>
+              <div>
+                <label className="text-[#a38b88] text-xs font-bold mb-1 block">Role <span className="text-[#f0513e]">*</span></label>
+                <select required value={editData.role} onChange={e => setEditData({ ...editData, role: e.target.value })} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#eac34a]">
+                  <option value="staff">Staff (Kitchen/Scanner)</option>
+                  <option value="admin">Admin (Manager)</option>
+                  <option value="super_admin">Super Admin (Global Head)</option>
+                </select>
+              </div>
+              {editData.role === 'staff' && (
+                <div>
+                  <label className="text-[#a38b88] text-xs font-bold mb-1 block">Restaurant <span className="text-[#f0513e]">*</span></label>
+                  <select required value={editData.restaurant_id} onChange={e => setEditData({ ...editData, restaurant_id: e.target.value })} className="w-full bg-[#131313] border border-[#554240]/30 text-[#e5e2e1] rounded-lg p-3 text-sm focus:outline-none focus:border-[#eac34a]">
+                    <option value="">Select a restaurant…</option>
+                    {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                  <p className="text-[#554240] text-[11px] mt-1">Staff only see orders for their assigned restaurant.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button type="button" onClick={() => setEditTarget(null)} className="flex-1 py-3 text-[#a38b88] hover:text-[#e5e2e1] font-semibold text-sm transition">Cancel</button>
+              <button type="submit" disabled={editLoading} className="flex-1 bg-[#eac34a] text-[#2a1e00] py-3 rounded-lg font-bold text-sm shadow-[0_0_15px_rgba(234,195,74,0.2)] disabled:opacity-50">{editLoading ? 'Saving...' : 'Save Changes'}</button>
             </div>
           </form>
         </div>

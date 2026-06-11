@@ -19,7 +19,7 @@ function ProtectedLayout() {
     return (
       <div className="min-h-screen bg-[#060810] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 animate-fade-up">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 p-2 overflow-hidden">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 p-2.5 overflow-hidden">
             <img src="/admin/logo.png" alt="" className="w-full h-full object-contain" />
           </div>
           <div className="w-6 h-6 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full animate-spin" />
@@ -62,7 +62,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<LiveOrders />} />
-            <Route path="/orders" element={<AdminRoute><OrderHistory /></AdminRoute>} />
+            {/* Staff may view Order History — backend scopes it to their restaurant */}
+            <Route path="/orders" element={<OrderHistory />} />
             <Route path="/restaurants" element={<AdminRoute><Restaurants /></AdminRoute>} />
             <Route path="/menu" element={<AdminRoute><MenuItems /></AdminRoute>} />
             <Route path="/statistics" element={<AdminRoute><Statistics /></AdminRoute>} />

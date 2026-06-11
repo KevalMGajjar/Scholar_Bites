@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import { createPreOrder, getMyPreOrders, cancelPreOrder } from '../controllers/preOrderController';
-import { createEventPreOrder, getMyEventPreOrders, cancelEventPreOrder, getEventMenuItems } from '../controllers/eventPreOrderController';
+import { createEventPreOrder, getMyEventPreOrders, cancelEventPreOrder, getEventMenuItems, payEventPreOrder } from '../controllers/eventPreOrderController';
 import { redeemCoupon } from '../controllers/walletController';
 
 const router = Router();
@@ -18,6 +18,7 @@ router.patch('/pre-orders/:id/cancel', cancelPreOrder);
 router.post('/event-orders', createEventPreOrder);
 router.get('/event-orders/my', getMyEventPreOrders);
 router.patch('/event-orders/:id/cancel', cancelEventPreOrder);
+router.patch('/event-orders/:id/pay', payEventPreOrder);
 router.get('/event-menu/:university_id', getEventMenuItems);
 
 export default router;

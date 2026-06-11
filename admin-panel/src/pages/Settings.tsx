@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useRestaurant } from '../context/RestaurantContext';
 import api from '../services/api';
-import { Camera, Building2, MapPin, UserPlus, Shield, Trash2, Lock, Eye, EyeOff, Users, Mail, KeyRound, Send, Phone, Store } from 'lucide-react';
+import { UserPlus, Shield, Trash2, Lock, Eye, EyeOff, Users, Mail, KeyRound, Send, Store, Pencil } from 'lucide-react';
 
-interface University {
-  id: string;
-  name: string;
-  address: string;
-  logo_url: string;
-  support_phone?: string;
-  support_email?: string;
+// Mirrors the backend passwordSchema (validators.ts). The API enforces these on
+// staff creation (/admin/staff) and password change (/admin/password/verify-and-change),
+// so we validate here to give an immediate, specific message instead of a 400 round-trip.
+const PASSWORD_RULE = 'At least 8 characters, with 1 uppercase letter and 1 number.';
+function passwordRuleError(pw: string): string | null {
+  if (pw.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[A-Z]/.test(pw)) return 'Password must contain at least one uppercase letter.';
+  if (!/[0-9]/.test(pw)) return 'Password must contain at least one number.';
+  return null;
 }
 
 interface StaffMember {
@@ -27,21 +29,6 @@ export default function Settings() {
   const { user } = useAuth();
   const { restaurants } = useRestaurant();
 
-  // ── University state ──
-  const [university, setUniversity] = useState<University | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [supportPhone, setSupportPhone] = useState('');
-  const [supportEmail, setSupportEmail] = useState('');
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [uniSuccess, setUniSuccess] = useState('');
-  const [uniError, setUniError] = useState('');
-
-  const [groupOrderVisible, setGroupOrderVisible] = useState(false);
-
   // ── Staff state ──
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -50,6 +37,13 @@ export default function Settings() {
   const [staffSaving, setStaffSaving] = useState(false);
   const [staffError, setStaffError] = useState('');
   const [staffSuccess, setStaffSuccess] = useState('');
+
+  // ── Edit staff state ──
+  const [editStaff, setEditStaff] = useState<StaffMember | null>(null);
+  const [editData, setEditData] = useState({ name: '', email: '', password: '', role: 'staff', restaurant_id: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [showEditPw, setShowEditPw] = useState(false);
 
   // ── Password state (OTP-based) ──
   const [otpSent, setOtpSent] = useState(false);
@@ -72,25 +66,6 @@ export default function Settings() {
     return () => clearInterval(t);
   }, [cooldown]);
 
-  const fetchUniversity = useCallback(async () => {
-    if (!user?.university_id) return;
-    try {
-      const res = await api.get(`/university/${user.university_id}`);
-      setUniversity(res.data);
-      setName(res.data.name);
-      setAddress(res.data.address || '');
-      setSupportPhone(res.data.support_phone || '');
-      setSupportEmail(res.data.support_email || '');
-      setLogoPreview(res.data.logo_url || null);
-
-      const settingsRes = await api.get(`/admin/settings/${user.university_id}`);
-
-      setGroupOrderVisible(settingsRes.data.group_order_visible_students);
-    }
-    catch (err) { console.error(err); setUniError('Failed to load university profile or settings'); }
-    finally { setLoading(false); }
-  }, [user?.university_id]);
-
   const fetchStaff = useCallback(async () => {
     if (!user?.university_id) return;
     try { const res = await api.get(`/admin/staff/${user.university_id}`); setStaffList(res.data); }
@@ -98,29 +73,12 @@ export default function Settings() {
     finally { setStaffLoading(false); }
   }, [user?.university_id]);
 
-  useEffect(() => { fetchUniversity(); fetchStaff(); }, [fetchUniversity, fetchStaff]);
-
-  const handleUniSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.university_id) return;
-    setSaving(true); setUniError(''); setUniSuccess('');
-    const fd = new FormData(); fd.append('name', name); fd.append('address', address); fd.append('support_phone', supportPhone); fd.append('support_email', supportEmail);
-    if (logoFile) fd.append('logo', logoFile);
-    try {
-      await api.patch(`/university/${user.university_id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await api.patch(`/admin/settings/${user.university_id}`, {
-        group_order_visible_students: groupOrderVisible,
-      });
-      setUniSuccess('Profile & settings updated successfully!');
-      setLogoFile(null);
-      fetchUniversity();
-    }
-    catch (err: any) { setUniError(err.response?.data?.message || 'Update failed'); }
-    finally { setSaving(false); }
-  };
+  useEffect(() => { fetchStaff(); }, [fetchStaff]);
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+    const pwErr = passwordRuleError(newStaff.password);
+    if (pwErr) { setStaffError(pwErr); return; }
     setStaffSaving(true); setStaffError(''); setStaffSuccess('');
     try {
       const payload: any = { ...newStaff, university_id: user?.university_id };
@@ -133,6 +91,34 @@ export default function Settings() {
     }
     catch (err: any) { setStaffError(err.response?.data?.message || 'Failed to add staff'); }
     finally { setStaffSaving(false); }
+  };
+
+  const openEditStaff = (s: StaffMember) => {
+    setEditStaff(s);
+    setEditData({ name: s.name, email: s.email || '', password: '', role: s.role, restaurant_id: s.restaurant_id || '' });
+    setEditError('');
+    setShowEditPw(false);
+  };
+
+  const handleUpdateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editStaff) return;
+    setEditSaving(true); setEditError(''); setStaffSuccess('');
+    try {
+      const payload: any = {
+        name: editData.name.trim(),
+        email: editData.email.trim(),
+        role: editData.role,
+        restaurant_id: editData.role === 'staff' ? editData.restaurant_id : '',
+      };
+      if (editData.password) payload.password = editData.password;
+      await api.put(`/admin/staff/${editStaff.id}`, payload);
+      setStaffSuccess('Staff account updated successfully!');
+      setEditStaff(null);
+      fetchStaff();
+    }
+    catch (err: any) { setEditError(err.response?.data?.message || 'Failed to update staff'); }
+    finally { setEditSaving(false); }
   };
 
   const handleDeleteStaff = async (id: string, staffName: string) => {
@@ -150,7 +136,8 @@ export default function Settings() {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault(); setPwError(''); setPwSuccess('');
-    if (newPassword.length < 8) { setPwError('New password must be at least 8 characters'); return; }
+    const pwErr = passwordRuleError(newPassword);
+    if (pwErr) { setPwError(pwErr); return; }
     if (newPassword !== confirmPassword) { setPwError('Passwords do not match'); return; }
     if (!otpCode || otpCode.length !== 6) { setPwError('Please enter the 6-digit OTP'); return; }
     setPwSaving(true);
@@ -161,10 +148,6 @@ export default function Settings() {
 
   const inputClass = "w-full px-4 py-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[14px] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder-slate-600";
   const labelClass = "text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5";
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-full min-h-screen"><div className="animate-spin w-6 h-6 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full" /></div>;
-  }
 
   const ROLE_BADGES: Record<string, string> = {
     staff: 'bg-blue-500/8 text-blue-400 border-blue-500/12',
@@ -177,76 +160,11 @@ export default function Settings() {
       {/* ── Header ── */}
       <div className="animate-fade-up">
         <h1 className="text-[28px] font-extrabold text-white tracking-[-0.03em]">Settings</h1>
-        <p className="text-slate-500 text-[14px] font-medium mt-1">Manage university profile, team members, and security</p>
+        <p className="text-slate-500 text-[14px] font-medium mt-1">Manage your team members and account security</p>
       </div>
 
-      {/* ═══ SECTION 1: University Profile ═══ */}
-      {university && (
-        <div className="bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '100ms' }}>
-          <h2 className="text-[16px] font-bold text-white mb-6 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-indigo-500/8 text-indigo-400 border border-indigo-500/12"><Building2 size={16} /></div>
-            University Profile
-          </h2>
-          {uniError && <div className="mb-4 p-3.5 rounded-2xl bg-red-500/6 border border-red-500/12 text-red-400 text-[13px] animate-scale-in">{uniError}</div>}
-          {uniSuccess && <div className="mb-4 p-3.5 rounded-2xl bg-emerald-500/6 border border-emerald-500/12 text-emerald-400 text-[13px] animate-scale-in">{uniSuccess}</div>}
-          <form onSubmit={handleUniSubmit} className="space-y-6">
-            <div className="flex items-start gap-6 pb-6 border-b border-white/[0.04]">
-              <div className="relative group shrink-0">
-                <div className="w-20 h-20 rounded-2xl bg-white/[0.03] border-2 border-white/[0.06] overflow-hidden flex items-center justify-center">
-                  {logoPreview ? <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" /> : <Building2 size={28} className="text-slate-700" />}
-                </div>
-                <label className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer rounded-2xl">
-                  <Camera size={16} className="text-white mb-0.5" /><span className="text-white text-[10px] font-bold">Change</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setLogoFile(f); setLogoPreview(URL.createObjectURL(f)); } }} />
-                </label>
-              </div>
-              <div className="flex-1 mt-1">
-                <h3 className="text-white font-bold text-[13px]">University Logo</h3>
-                <p className="text-slate-600 text-[11px] mt-1">Square PNG or JPG, at least 500×500px.</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div><label className={labelClass}><Building2 size={11} className="text-indigo-400" /> Name</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} /></div>
-              <div><label className={labelClass}><MapPin size={11} className="text-indigo-400" /> Address</label>
-                <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}><Phone size={11} className="text-indigo-400" /> Support Phone</label>
-                <input type="text" value={supportPhone} onChange={(e) => setSupportPhone(e.target.value)} placeholder="+91 ..." className={inputClass} /></div>
-              <div><label className={labelClass}><Mail size={11} className="text-indigo-400" /> Support Email</label>
-                <input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="help@university.edu" className={inputClass} /></div>
-            </div>
-
-            {/* System Toggles & Secrets */}
-            <div className="pt-6 border-t border-white/[0.04]">
-              <h3 className="text-white font-bold text-[13px] mb-4">System Settings</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                  <div>
-                    <h4 className="text-[13px] font-bold text-white mb-1">Group Order Students</h4>
-                    <p className="text-[11px] text-slate-500">Allow students to initiate group orders.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" checked={groupOrderVisible} onChange={(e) => setGroupOrderVisible(e.target.checked)} />
-                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
-                  </label>
-                </div>
-
-
-                {/* Staff Access Code removed — staff are now pre-created by admin */}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4 border-t border-white/[0.04]">
-              <button type="submit" disabled={saving} className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[13px] font-bold hover:shadow-lg hover:shadow-indigo-500/20 transition-all disabled:opacity-50 btn-press flex items-center gap-2">
-                {saving ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> Saving...</> : 'Save Changes'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* ═══ SECTION 2: Staff Accounts ═══ */}
-      <div className="bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '200ms' }}>
+      {/* ═══ SECTION 1: Staff Accounts ═══ */}
+      <div className="bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '100ms' }}>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-[16px] font-bold text-white flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-500/8 text-blue-400 border border-blue-500/12"><Users size={16} /></div>
@@ -270,7 +188,8 @@ export default function Settings() {
                 <div><label className={labelClass}><Mail size={10} /> Email</label>
                   <input type="email" value={newStaff.email} onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })} required placeholder="staff@university.edu" className={inputClass} /></div>
                 <div><label className={labelClass}><KeyRound size={10} /> Password</label>
-                  <input type="password" value={newStaff.password} onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })} required placeholder="Min 8 characters" minLength={8} className={inputClass} /></div>
+                  <input type="password" value={newStaff.password} onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })} required placeholder="Min 8 chars, 1 uppercase, 1 number" minLength={8} className={inputClass} />
+                  <p className="text-[11px] text-slate-600 mt-1.5">{PASSWORD_RULE}</p></div>
                 <div><label className={labelClass}><Shield size={10} /> Role</label>
                   <select value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })} className={`${inputClass} appearance-none`}>
                     <option value="staff" className="bg-[#0c0f18]">Staff</option><option value="admin" className="bg-[#0c0f18]">Admin</option>
@@ -327,6 +246,10 @@ export default function Settings() {
                 <span className="text-slate-700 text-[10px] font-medium hidden md:block">
                   {new Date(s.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </span>
+                <button onClick={() => openEditStaff(s)}
+                  className="p-2 rounded-xl text-slate-700 hover:text-indigo-400 hover:bg-indigo-500/8 opacity-0 group-hover:opacity-100 transition-all btn-press" title="Edit">
+                  <Pencil size={14} />
+                </button>
                 {s.id !== user?.id && (
                   <button onClick={() => handleDeleteStaff(s.id, s.name)}
                     className="p-2 rounded-xl text-slate-700 hover:text-red-400 hover:bg-red-500/8 opacity-0 group-hover:opacity-100 transition-all btn-press" title="Remove">
@@ -339,8 +262,8 @@ export default function Settings() {
         )}
       </div>
 
-      {/* ═══ SECTION 3: OTP Password Change ═══ */}
-      <div className="bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '300ms' }}>
+      {/* ═══ SECTION 2: OTP Password Change ═══ */}
+      <div className="bg-white/[0.02] border border-white/[0.04] rounded-3xl p-8 hover-lift animate-fade-up" style={{ animationDelay: '200ms' }}>
         <h2 className="text-[16px] font-bold text-white mb-2 flex items-center gap-3">
           <div className="p-2 rounded-xl bg-amber-500/8 text-amber-400 border border-amber-500/12"><Lock size={16} /></div>
           Change Password
@@ -377,8 +300,9 @@ export default function Settings() {
               <div className="relative"><input type={showCurrentPw ? 'text' : 'password'} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required placeholder="Enter current password" className={`${inputClass} pr-11`} />
                 <button type="button" onClick={() => setShowCurrentPw(!showCurrentPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors">{showCurrentPw ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></div>
             <div><label className={labelClass}>New Password</label>
-              <div className="relative"><input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required placeholder="Min 8 characters" minLength={8} className={`${inputClass} pr-11`} />
-                <button type="button" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors">{showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></div>
+              <div className="relative"><input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required placeholder="Min 8 chars, 1 uppercase, 1 number" minLength={8} className={`${inputClass} pr-11`} />
+                <button type="button" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors">{showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}</button></div>
+              <p className="text-[11px] text-slate-600 mt-1.5">{PASSWORD_RULE}</p></div>
             <div><label className={labelClass}>Confirm New Password</label>
               <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Re-enter new password" className={inputClass} /></div>
             <div className="flex justify-end pt-2">
@@ -389,6 +313,51 @@ export default function Settings() {
           </form>
         )}
       </div>
+
+      {/* ═══ Edit Staff Modal ═══ */}
+      {editStaff && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditStaff(null)}>
+          <form onSubmit={handleUpdateStaff} onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-3xl bg-[#0c0f18] border border-white/[0.08] p-8 space-y-5 animate-scale-in">
+            <h3 className="text-white font-bold text-[16px] flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-indigo-500/8 text-indigo-400 border border-indigo-500/12"><Pencil size={15} /></div>
+              Edit Staff Account
+            </h3>
+            {editError && <div className="p-3.5 rounded-2xl bg-red-500/6 border border-red-500/12 text-red-400 text-[13px]">{editError}</div>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><label className={labelClass}>Full Name</label>
+                <input type="text" value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} required className={inputClass} /></div>
+              <div><label className={labelClass}><Mail size={10} /> Email</label>
+                <input type="email" value={editData.email} onChange={(e) => setEditData({ ...editData, email: e.target.value })} required className={inputClass} /></div>
+              <div><label className={labelClass}><KeyRound size={10} /> New Password <span className="text-slate-700 normal-case font-medium">(optional)</span></label>
+                <div className="relative">
+                  <input type={showEditPw ? 'text' : 'password'} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} placeholder="Leave blank to keep current" minLength={8} className={`${inputClass} pr-11`} />
+                  <button type="button" onClick={() => setShowEditPw(!showEditPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors" tabIndex={-1}>{showEditPw ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                </div></div>
+              <div><label className={labelClass}><Shield size={10} /> Role</label>
+                <select value={editData.role} onChange={(e) => setEditData({ ...editData, role: e.target.value })} className={`${inputClass} appearance-none`} disabled={editStaff.id === user?.id}>
+                  <option value="staff" className="bg-[#0c0f18]">Staff</option><option value="admin" className="bg-[#0c0f18]">Admin</option>
+                </select></div>
+              {editData.role === 'staff' && (
+                <div className="md:col-span-2"><label className={labelClass}><Store size={10} className="text-emerald-400" /> Assigned Restaurant</label>
+                  <select value={editData.restaurant_id} onChange={(e) => setEditData({ ...editData, restaurant_id: e.target.value })} required className={`${inputClass} appearance-none`}>
+                    <option value="" className="bg-[#0c0f18]">Select restaurant…</option>
+                    {restaurants.map((r) => (<option key={r.id} value={r.id} className="bg-[#0c0f18]">{r.name}</option>))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button type="button" onClick={() => setEditStaff(null)} className="px-5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-slate-400 text-[12px] font-bold hover:bg-white/[0.06] transition-all btn-press">Cancel</button>
+              <button type="submit" disabled={editSaving} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[12px] font-bold hover:shadow-lg hover:shadow-indigo-500/20 transition-all disabled:opacity-50 btn-press flex items-center gap-2">
+                {editSaving ? <><div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" /> Saving...</> : <><Pencil size={13} /> Save Changes</>}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

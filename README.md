@@ -12,7 +12,7 @@ Software/
 ├── frontend/          → Mobile app (Flutter)
 ├── admin-panel/       → Admin dashboard (React + Vite)
 ├── superadmin-panel/  → Super admin dashboard (React + Vite)
-└── dean-portal/       → Dean budget portal (React + Vite)
+└── event-portal/      → Event head budget portal (React + Vite)
 ```
 
 ---
@@ -155,17 +155,17 @@ For production: `npm run build` (served by backend at `/superadmin`).
 
 ---
 
-### 8. Set Up Dean Portal
+### 8. Set Up Event Portal
 
 Open a **new PowerShell window**:
 
 ```powershell
-cd dean-portal
+cd event-portal
 npm install
 npm run dev
 ```
 
-For production: `npm run build` (served by backend at `/dean`).
+For production: `npm run build` (served by backend at `/event`).
 
 ---
 

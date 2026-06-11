@@ -39,14 +39,86 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
     }
   }
 
-  void _cancelOrder(String id) async {
+  void _cancelOrder(String id, {String? reason}) async {
     try {
-      await _staffService.cancelEventOrder(id);
-      if (mounted) CustomToast.showSuccessToast(context, 'Event order cancelled');
+      await _staffService.cancelEventOrder(id, reason: reason);
+      if (mounted) CustomToast.showSuccessToast(context, 'Catering order cancelled');
       _fetchOrders();
     } catch (e) {
-      if (mounted) CustomToast.showErrorToast(context, e.toString());
+      if (mounted) CustomToast.showErrorToast(context, e.toString().replaceAll('Exception: ', ''));
     }
+  }
+
+  void _showCancelDialog(String id) {
+    final reasonCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Cancel Catering Order', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 17)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Let the team know why you are cancelling.', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600])),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              style: GoogleFonts.poppins(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Reason for cancellation…',
+                hintStyle: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[400]),
+                filled: true,
+                fillColor: const Color(0xFFFDF0F0),
+                contentPadding: const EdgeInsets.all(12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: Text('Keep Order', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey[700]))),
+          TextButton(
+            onPressed: () {
+              if (reasonCtrl.text.trim().isEmpty) return;
+              Navigator.pop(c);
+              _cancelOrder(id, reason: reasonCtrl.text.trim());
+            },
+            child: Text('Cancel Order', style: GoogleFonts.poppins(color: Colors.red, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _payOrder(String id) async {
+    try {
+      await _staffService.payEventOrder(id);
+      if (mounted) CustomToast.showSuccessToast(context, 'Payment successful!');
+      _fetchOrders();
+    } catch (e) {
+      if (mounted) CustomToast.showErrorToast(context, e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  void _confirmPay(String id, String amountText) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Pay for Catering', style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+        content: Text('Pay $amountText from your wallet for this catering order?', style: GoogleFonts.poppins()),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: Text('Cancel', style: GoogleFonts.poppins(fontWeight: FontWeight.w600))),
+          TextButton(
+            onPressed: () { Navigator.pop(c); _payOrder(id); },
+            child: Text('Pay Now', style: GoogleFonts.poppins(color: const Color(0xFF8B1C28), fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
   }
 
   Color _getStatusColor(String status) {
@@ -57,6 +129,8 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
       case 'approved':
       case 'confirmed':
         return const Color(0xFF388E3C);
+      case 'on_hold':
+        return const Color(0xFF8E24AA);
       case 'completed':
       case 'preparing':
         return const Color(0xFF1976D2);
@@ -76,6 +150,8 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
       case 'approved':
       case 'confirmed':
         return Icons.check_circle_rounded;
+      case 'on_hold':
+        return Icons.account_balance_wallet_rounded;
       case 'completed':
         return Icons.done_all_rounded;
       case 'preparing':
@@ -180,7 +256,10 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
                       final memberCount = order['member_count'] ?? order['expected_guests'] ?? 0;
                       final items = order['items'] as List<dynamic>? ?? [];
                       final totalAmount = order['total_amount'];
+                      final payText = '₹${num.tryParse('${totalAmount ?? 0}')?.toStringAsFixed(0) ?? 0}';
                       final rejectionReason = order['rejection_reason']?.toString();
+                      final cancellationReason = order['cancellation_reason']?.toString();
+                      final customOrder = order['special_requirements']?.toString() ?? '';
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -251,7 +330,7 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Text(
-                                      status.toUpperCase(),
+                                      status.toUpperCase().replaceAll('_', ' '),
                                       style: GoogleFonts.poppins(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 10,
@@ -283,6 +362,41 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
                                 ],
                               ),
                             ),
+
+                            // Cancellation reason (when the requester cancelled)
+                            if (status == 'cancelled' && cancellationReason != null && cancellationReason.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.red.withValues(alpha: 0.1)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(Icons.close_rounded, size: 16, color: Colors.red.withValues(alpha: 0.6)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Cancelled — Reason',
+                                            style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.red.withValues(alpha: 0.7), letterSpacing: 0.5),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            cancellationReason,
+                                            style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF4A0E13).withValues(alpha: 0.7)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
 
                             // Rejection reason
                             if (status == 'rejected' && rejectionReason != null && rejectionReason.isNotEmpty)
@@ -320,6 +434,35 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
                                               color: const Color(0xFF4A0E13).withValues(alpha: 0.7),
                                             ),
                                           ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            // Custom order / special requirements
+                            if (customOrder.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF3E0),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFE65100).withValues(alpha: 0.18)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFFE65100)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Custom Order', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFFE65100), letterSpacing: 0.5)),
+                                          const SizedBox(height: 2),
+                                          Text(customOrder, style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF4A0E13).withValues(alpha: 0.75))),
                                         ],
                                       ),
                                     ),
@@ -417,6 +560,62 @@ class _EventPreOrderScreenState extends State<EventPreOrderScreen> {
                                       ),
                                     ),
                                   ),
+                                ),
+                              )
+                            else if (status == 'on_hold')
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF8E24AA).withValues(alpha: 0.06),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: const Color(0xFF8E24AA).withValues(alpha: 0.15)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFF8E24AA)),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Approved & quoted. Pay from your wallet — redeem a voucher first if you need to top up.',
+                                              style: GoogleFonts.poppins(fontSize: 11.5, color: const Color(0xFF4A0E13).withValues(alpha: 0.7), height: 1.35),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    GestureDetector(
+                                      onTap: () => _confirmPay(order['id'].toString(), payText),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(colors: [Color(0xFF8B1C28), Color(0xFF6B151F)]),
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 18),
+                                            const SizedBox(width: 8),
+                                            Text('Pay Now · $payText', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Center(
+                                      child: TextButton.icon(
+                                        onPressed: () => _showCancelDialog(order['id'].toString()),
+                                        icon: const Icon(Icons.close_rounded, size: 16, color: Colors.red),
+                                        label: Text('Cancel order', style: GoogleFonts.poppins(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 13)),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               )
                             else

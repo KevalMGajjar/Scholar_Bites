@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, LogOut, ShieldCheck, Undo2, Settings, Users } from 'lucide-react';
+import { LayoutDashboard, LogOut, ShieldCheck, Undo2, Settings, Users, Activity, AlertTriangle, Megaphone } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -17,7 +17,7 @@ export default function Sidebar() {
     <aside className="w-64 h-screen bg-[#0e0e0e] border-r border-[#554240]/15 flex flex-col fixed left-0 top-0 z-40">
       <div className="p-6 border-b border-[#554240]/15">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#f0513e] to-[#ffb4a8] flex items-center justify-center shadow-xl shadow-[#f0513e]/20 p-2 overflow-hidden animate-pulse-glow">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#f0513e] to-[#ffb4a8] flex items-center justify-center shadow-xl shadow-[#f0513e]/20 p-2.5 overflow-hidden animate-pulse-glow">
             <img src="/superadmin/logo.png" alt="Platform Logo" className="w-full h-full object-contain filter brightness-110" />
           </div>
           <div>
@@ -40,7 +40,7 @@ export default function Sidebar() {
 
         <NavLink to="/university-staff" className={({ isActive }) => getNavLinkClass(isActive)}>
           <Users size={20} className="opacity-80" />
-          University Staff
+          Delegates
         </NavLink>
 
         <NavLink to="/audit-logs" className={({ isActive }) => getNavLinkClass(isActive)}>
@@ -51,6 +51,21 @@ export default function Sidebar() {
         <NavLink to="/refunds" className={({ isActive }) => getNavLinkClass(isActive)}>
           <Undo2 size={20} className="opacity-80" />
           Refund Queue
+        </NavLink>
+
+        <NavLink to="/service-status" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <Activity size={20} className="opacity-80" />
+          Service Status
+        </NavLink>
+
+        <NavLink to="/stuck-orders" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <AlertTriangle size={20} className="opacity-80" />
+          Stuck Orders
+        </NavLink>
+
+        <NavLink to="/broadcast" className={({ isActive }) => getNavLinkClass(isActive)}>
+          <Megaphone size={20} className="opacity-80" />
+          Broadcast
         </NavLink>
 
         <NavLink to="/settings" className={({ isActive }) => getNavLinkClass(isActive)}>

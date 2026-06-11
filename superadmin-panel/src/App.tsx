@@ -7,6 +7,9 @@ import RefundQueue from './pages/RefundQueue';
 import StaffManagement from './pages/StaffManagement';
 import UniversityStaffManagement from './pages/UniversityStaffManagement';
 import Settings from './pages/Settings';
+import ServiceStatus from './pages/ServiceStatus';
+import StuckOrders from './pages/StuckOrders';
+import Broadcast from './pages/Broadcast';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout() {
@@ -44,6 +47,9 @@ export default function App() {
             <Route path="/university-staff" element={<UniversityStaffManagement />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/refunds" element={<RefundQueue />} />
+            <Route path="/service-status" element={<ServiceStatus />} />
+            <Route path="/stuck-orders" element={<StuckOrders />} />
+            <Route path="/broadcast" element={<Broadcast />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

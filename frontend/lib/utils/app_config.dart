@@ -1,4 +1,4 @@
 class AppConfig {
-  // Local laptop server (phone must be on the same WiFi network)
-  static const String baseUrl = 'http://localhost:3005/api';
+  // Production server
+  static const String baseUrl = 'http://103.212.120.149:8081/api';
 }

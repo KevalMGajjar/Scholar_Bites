@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT, authorizeRole } from '../middlewares/authMiddleware';
 import rateLimit from 'express-rate-limit';
-import { deanLogin, getDeanProfile, generateCoupon, getDeanCoupons, revokeCoupon, getFundDistribution, exportFundDistributionCSV } from '../controllers/deanPortalController';
+import { deanLogin, getDeanProfile, generateCoupon, getDeanCoupons, revokeCoupon, getFundDistribution, exportFundDistributionExcel, getRepresentatives } from '../controllers/eventPortalController';
 
 const router = Router();
 
@@ -34,6 +34,7 @@ router.post('/coupons', authenticateDean, generateCoupon);
 router.get('/coupons', authenticateDean, getDeanCoupons);
 router.patch('/coupons/:id/revoke', authenticateDean, revokeCoupon);
 router.get('/fund-distribution', authenticateDean, getFundDistribution);
-router.get('/fund-distribution/export', authenticateDean, exportFundDistributionCSV);
+router.get('/fund-distribution/export', authenticateDean, exportFundDistributionExcel);
+router.get('/representatives', authenticateDean, getRepresentatives);
 
 export default router;

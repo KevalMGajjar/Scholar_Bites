@@ -7,6 +7,7 @@ import {
     registerFcmToken,
 } from '../controllers/notificationController';
 import { authenticateJWT } from '../middlewares/authMiddleware';
+import { validate, registerFcmTokenSchema } from '../middlewares/validators';
 
 const router = Router();
 
@@ -17,6 +18,6 @@ router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
 router.post('/:id/read', markAsRead);
 router.post('/read-all', markAllAsRead);
-router.post('/register-token', registerFcmToken);
+router.post('/register-token', validate(registerFcmTokenSchema), registerFcmToken);
 
 export default router;

@@ -216,13 +216,17 @@ class _HomeScreenState extends State<HomeScreen> {
           trending = allItems.take(5).toList();
         }
 
-        // Build dynamic categories based on available menu
-        final Set<String> catSet = {};
+        // Build dynamic categories based on available menu — only the top 5 by item count
+        final Map<String, int> catCounts = {};
         for (var item in allItems) {
-          if (item.category.isNotEmpty) catSet.add(item.category);
+          if (item.category.isNotEmpty) {
+            catCounts[item.category] = (catCounts[item.category] ?? 0) + 1;
+          }
         }
-        
-        final List<Map<String, dynamic>> dynCategories = catSet.map((cat) {
+        final sortedCats = catCounts.keys.toList()
+          ..sort((a, b) => catCounts[b]!.compareTo(catCounts[a]!));
+
+        final List<Map<String, dynamic>> dynCategories = sortedCats.take(5).map((cat) {
           return {
             'name': cat,
             'icon': _getIconForCategory(cat),

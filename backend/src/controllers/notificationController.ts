@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 import { AuthRequest } from '../middlewares/authMiddleware';
-import { sendPush, sendPushToTopic, subscribeToTopic } from '../config/firebaseAdmin';
+import { sendPushToTopic, subscribeToTopic } from '../config/firebaseAdmin';
 
 // ─── Canonical Notification Type Constants ───
 // Keep these in sync with frontend filter types in notifications_screen.dart
@@ -89,24 +89,23 @@ export const createAndPush = async (
 
         console.log(`[DEBUG createAndPush] ✅ Notification inserted id=${result.rows[0].id}`);
 
-        // Send FCM push only if successfully inserted (wasn't deduped)
-        const tokenRes = await pool.query(
-            'SELECT fcm_token FROM users WHERE id = $1',
-            [userId]
-        );
-        const fcmToken = tokenRes.rows[0]?.fcm_token;
-        if (fcmToken) {
-            console.log(`[DEBUG createAndPush] 📱 Sending FCM push to token=${fcmToken.substring(0, 20)}...`);
-            const stringData: Record<string, string> = {};
-            for (const [k, v] of Object.entries(notifData)) {
-                stringData[k] = String(v);
-            }
-            stringData['type'] = type;
-            await sendPush(fcmToken, title, body, stringData);
-            console.log(`[DEBUG createAndPush] ✅ FCM push sent`);
-        } else {
-            console.log(`[DEBUG createAndPush] ⚠️ No FCM token for user ${userId} — notification saved in DB only`);
+        // Send FCM push only if successfully inserted (wasn't deduped).
+        const stringData: Record<string, string> = {};
+        for (const [k, v] of Object.entries(notifData)) {
+            stringData[k] = String(v);
         }
+        stringData['type'] = type;
+
+        // ─── Delivery via the per-user FCM topic ───
+        // Direct-to-token sends are fragile: a stale/rotated fcm_token still
+        // returns "success" from FCM but never reaches the phone, which is why
+        // order_ready/refund silently failed while university broadcasts (topics)
+        // worked. Topics survive token rotation, so we deliver per-user pushes the
+        // same proven way. The device (re)subscribes to `user_<id>` on every app
+        // launch via registerFcmToken(), so this self-heals for all users.
+        console.log(`[DEBUG createAndPush] 📣 Sending to topic user_${userId}`);
+        await sendPushToTopic(`user_${userId}`, title, body, stringData);
+        console.log(`[DEBUG createAndPush] ✅ FCM push sent`);
     } catch (error) {
         console.error('[createAndPush] error:', error);
     }
@@ -290,7 +289,11 @@ export const registerFcmToken = async (req: AuthRequest, res: Response) => {
             [fcm_token, userId]
         );
         
-        // Auto-subscribe the device to the user's university topic for O(1) global broadcasts
+        // Auto-subscribe the device to:
+        //  1. the university topic → O(1) global broadcasts
+        //  2. a per-user topic → reliable order_ready / refund pushes that survive
+        //     token rotation (direct-token sends silently fail on stale tokens).
+        await subscribeToTopic(fcm_token, `user_${userId}`);
         const userRes = await pool.query('SELECT university_id FROM users WHERE id = $1', [userId]);
         if (userRes.rows.length > 0) {
             const uniId = userRes.rows[0].university_id;

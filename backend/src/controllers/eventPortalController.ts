@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import ExcelJS from 'exceljs';
 import pool from '../config/db';
 import { generateToken } from '../utils/jwt';
 import { sendVoucherEmail } from '../services/emailService';
@@ -133,46 +134,67 @@ export const generateCoupon = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'The particular staff is not registered' });
         }
 
-        // Check remaining budget
-        const deanResult = await pool.query(
-            'SELECT total_budget, used_budget, name, school_name FROM deans WHERE id = $1',
-            [deanId]
-        );
+        // Budget check + coupon issue must be atomic. Without locking the dean
+        // row, two concurrent requests both read the same used_budget, both pass
+        // the remaining-budget check, and both issue coupons → used_budget exceeds
+        // total_budget (coupons are spendable wallet credit = real money leak).
+        const client = await pool.connect();
+        let coupon: any;
+        let dean: any;
+        try {
+            await client.query('BEGIN');
 
-        if (deanResult.rows.length === 0) {
-            return res.status(404).json({ message: 'Dean not found' });
+            const deanResult = await client.query(
+                'SELECT total_budget, used_budget, name, school_name FROM deans WHERE id = $1 FOR UPDATE',
+                [deanId]
+            );
+
+            if (deanResult.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ message: 'Dean not found' });
+            }
+
+            dean = deanResult.rows[0];
+            const remaining = Number(dean.total_budget) - Number(dean.used_budget);
+
+            if (parsedAmount > remaining) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({
+                    message: `Insufficient budget. Available: ₹${remaining.toFixed(2)}`,
+                });
+            }
+
+            // Generate unique 10-character coupon code
+            const code = `DC${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+            // 30-day expiry
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30);
+
+            const result = await client.query(
+                `INSERT INTO dean_coupons (dean_id, code, amount, expires_at, staff_email)
+                 VALUES ($1, $2, $3, $4, $5)
+                 RETURNING *`,
+                [deanId, code, parsedAmount, expiresAt, staff_email || null]
+            );
+
+            // Update used_budget on dean (under the same lock)
+            await client.query(
+                'UPDATE deans SET used_budget = used_budget + $1 WHERE id = $2',
+                [parsedAmount, deanId]
+            );
+
+            await client.query('COMMIT');
+            coupon = result.rows[0];
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
         }
 
-        const dean = deanResult.rows[0];
-        const remaining = Number(dean.total_budget) - Number(dean.used_budget);
-
-        if (parsedAmount > remaining) {
-            return res.status(400).json({
-                message: `Insufficient budget. Available: ₹${remaining.toFixed(2)}`,
-            });
-        }
-
-        // Generate unique 10-character coupon code
-        const code = `DC${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-
-        // 30-day expiry
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30);
-
-        const result = await pool.query(
-            `INSERT INTO dean_coupons (dean_id, code, amount, expires_at, staff_email)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING *`,
-            [deanId, code, parsedAmount, expiresAt, staff_email || null]
-        );
-
-        // Update used_budget on dean
-        await pool.query(
-            'UPDATE deans SET used_budget = used_budget + $1 WHERE id = $2',
-            [parsedAmount, deanId]
-        );
-
-        const coupon = result.rows[0];
+        const code = coupon.code;
+        const expiresAt = coupon.expires_at;
 
         // Send voucher email to staff (non-blocking)
         if (staff_email) {
@@ -350,13 +372,23 @@ export const getFundDistribution = async (req: Request, res: Response) => {
     }
 };
 
-/** Export fund distribution CSV */
-export const exportFundDistributionCSV = async (req: Request, res: Response) => {
+/** Export voucher ledger as a styled, well-structured Excel workbook (.xlsx) */
+export const exportFundDistributionExcel = async (req: Request, res: Response) => {
     const deanId = (req as any).user?.id;
 
     try {
+        const deanResult = await pool.query(
+            'SELECT name, school_name, total_budget, used_budget FROM deans WHERE id = $1',
+            [deanId]
+        );
+        if (deanResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Dean not found' });
+        }
+        const dean = deanResult.rows[0];
+
         const result = await pool.query(
-            `SELECT dc.code, dc.amount, dc.status, dc.created_at, dc.expires_at, dc.redeemed_at,
+            `SELECT dc.code, dc.amount, dc.status, dc.event_name, dc.staff_email,
+                    dc.created_at, dc.expires_at, dc.redeemed_at,
                     u.name as redeemed_by_name, u.phone as redeemed_by_phone
              FROM dean_coupons dc
              LEFT JOIN users u ON dc.redeemed_by = u.id
@@ -364,23 +396,276 @@ export const exportFundDistributionCSV = async (req: Request, res: Response) => 
              ORDER BY dc.created_at DESC`,
             [deanId]
         );
+        const coupons = result.rows;
 
-        const headers = ['Code', 'Amount (₹)', 'Status', 'Created', 'Expires', 'Redeemed At', 'Redeemed By', 'Phone'];
-        const rows = result.rows.map((r: any) => [
-            r.code, Number(r.amount).toFixed(2), r.status,
-            new Date(r.created_at).toLocaleString('en-IN'),
-            new Date(r.expires_at).toLocaleString('en-IN'),
-            r.redeemed_at ? new Date(r.redeemed_at).toLocaleString('en-IN') : 'N/A',
-            r.redeemed_by_name || 'N/A', r.redeemed_by_phone || 'N/A',
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+        // ── Aggregate figures for the summary sheet ──
+        const totalIssued = coupons.reduce((s: number, c: any) => s + Number(c.amount), 0);
+        const redeemed = coupons.filter((c: any) => c.status === 'redeemed');
+        const totalRedeemed = redeemed.reduce((s: number, c: any) => s + Number(c.amount), 0);
+        const active = coupons.filter((c: any) => c.status === 'active');
+        const totalActive = active.reduce((s: number, c: any) => s + Number(c.amount), 0);
+        const totalBudget = Number(dean.total_budget);
+        const usedBudget = Number(dean.used_budget);
 
-        const csv = [headers.join(','), ...rows].join('\n');
+        const fmtDate = (d: any) => (d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename="fund_distribution.csv"');
-        res.send(csv);
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Event Head Portal';
+        workbook.created = new Date();
+
+        const BRAND = 'FF8B1C28';      // deep red header fill
+        const BRAND_LIGHT = 'FFF7E9EA'; // soft red zebra stripe
+        const HEADER_FONT = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 } as const;
+
+        // ═══ Sheet 1: Summary ═══
+        const summary = workbook.addWorksheet('Summary', {
+            properties: { defaultRowHeight: 20 },
+            views: [{ showGridLines: false }],
+        });
+        summary.columns = [
+            { key: 'label', width: 32 },
+            { key: 'value', width: 30 },
+        ];
+
+        const titleRow = summary.addRow(['Voucher Distribution Report', '']);
+        summary.mergeCells(`A${titleRow.number}:B${titleRow.number}`);
+        titleRow.getCell(1).font = { bold: true, size: 16, color: { argb: BRAND } };
+        titleRow.height = 28;
+
+        const subRow = summary.addRow([`${dean.name} — ${dean.school_name}`, '']);
+        summary.mergeCells(`A${subRow.number}:B${subRow.number}`);
+        subRow.getCell(1).font = { italic: true, size: 11, color: { argb: 'FF6B6B6B' } };
+        summary.addRow(['Generated', new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })]);
+        summary.addRow([]);
+
+        const addSection = (heading: string) => {
+            const r = summary.addRow([heading, '']);
+            summary.mergeCells(`A${r.number}:B${r.number}`);
+            r.getCell(1).font = HEADER_FONT;
+            r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND } };
+            r.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND } };
+        };
+        const addMetric = (label: string, value: string | number, isCurrency = false) => {
+            const r = summary.addRow([label, value]);
+            r.getCell(1).font = { color: { argb: 'FF444444' } };
+            r.getCell(2).font = { bold: true };
+            r.getCell(2).alignment = { horizontal: 'right' };
+            if (isCurrency) r.getCell(2).numFmt = '₹#,##0.00';
+        };
+
+        addSection('Budget');
+        addMetric('Total Budget', totalBudget, true);
+        addMetric('Used Budget', usedBudget, true);
+        addMetric('Remaining Budget', totalBudget - usedBudget, true);
+        summary.addRow([]);
+
+        addSection('Vouchers');
+        addMetric('Total Vouchers Issued', coupons.length);
+        addMetric('Total Value Issued', totalIssued, true);
+        addMetric('Redeemed Vouchers', redeemed.length);
+        addMetric('Value Redeemed', totalRedeemed, true);
+        addMetric('Active Vouchers', active.length);
+        addMetric('Value Active', totalActive, true);
+
+        // ═══ Sheet 2: Vouchers ═══
+        const sheet = workbook.addWorksheet('Vouchers', {
+            views: [{ state: 'frozen', ySplit: 1 }],
+        });
+        sheet.columns = [
+            { header: 'Code', key: 'code', width: 16 },
+            { header: 'Amount', key: 'amount', width: 14 },
+            { header: 'Status', key: 'status', width: 14 },
+            { header: 'Event', key: 'event', width: 26 },
+            { header: 'Issued To (Email)', key: 'email', width: 30 },
+            { header: 'Redeemed By', key: 'redeemed_by', width: 22 },
+            { header: 'Phone', key: 'phone', width: 16 },
+            { header: 'Created', key: 'created', width: 22 },
+            { header: 'Expires', key: 'expires', width: 22 },
+            { header: 'Redeemed At', key: 'redeemed_at', width: 22 },
+        ];
+
+        // Header styling
+        const headerRow = sheet.getRow(1);
+        headerRow.height = 22;
+        headerRow.eachCell((cell) => {
+            cell.font = HEADER_FONT;
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND } };
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            cell.border = { bottom: { style: 'thin', color: { argb: BRAND } } };
+        });
+
+        const statusColors: Record<string, string> = {
+            redeemed: 'FF2E7D32',
+            active: 'FF1565C0',
+            expired: 'FF9E9E9E',
+            revoked: 'FFB71C1C',
+        };
+
+        coupons.forEach((c: any, idx: number) => {
+            const row = sheet.addRow({
+                code: c.code,
+                amount: Number(c.amount),
+                status: String(c.status || '').toUpperCase(),
+                event: c.event_name || '—',
+                email: c.staff_email || '—',
+                redeemed_by: c.redeemed_by_name || '—',
+                phone: c.redeemed_by_phone || '—',
+                created: fmtDate(c.created_at),
+                expires: fmtDate(c.expires_at),
+                redeemed_at: fmtDate(c.redeemed_at),
+            });
+            row.getCell('amount').numFmt = '₹#,##0.00';
+            row.getCell('code').font = { bold: true, name: 'Consolas' };
+            const statusCell = row.getCell('status');
+            statusCell.font = { bold: true, color: { argb: statusColors[c.status] || 'FF444444' } };
+            // Zebra striping
+            if (idx % 2 === 1) {
+                row.eachCell((cell) => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND_LIGHT } };
+                });
+            }
+        });
+
+        // Total row
+        if (coupons.length > 0) {
+            const totalRow = sheet.addRow({ code: 'TOTAL', amount: totalIssued });
+            totalRow.getCell('code').font = { bold: true };
+            totalRow.getCell('amount').numFmt = '₹#,##0.00';
+            totalRow.getCell('amount').font = { bold: true };
+            totalRow.eachCell((cell) => {
+                cell.border = { top: { style: 'double', color: { argb: BRAND } } };
+            });
+        }
+
+        sheet.autoFilter = { from: 'A1', to: 'J1' };
+
+        const fileName = `voucher_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        await workbook.xlsx.write(res);
+        res.end();
     } catch (error: any) {
-        console.error('[DeanPortal] exportCSV error:', error.message);
+        console.error('[DeanPortal] exportExcel error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/** Get representatives assigned to this dean with voucher analytics */
+export const getRepresentatives = async (req: Request, res: Response) => {
+    const deanId = (req as any).user?.id;
+
+    try {
+        // Get all reps assigned to this dean
+        const repsResult = await pool.query(
+            `SELECT u.id, u.name, u.phone, u.email, u.created_at
+             FROM users u
+             WHERE u.dean_id = $1 AND u.user_type = 'university_staff'
+             ORDER BY u.name ASC`,
+            [deanId]
+        );
+
+        if (repsResult.rows.length === 0) {
+            return res.json({ representatives: [] });
+        }
+
+        const repIds = repsResult.rows.map((r: any) => r.id);
+
+        // Get voucher stats per representative (coupons redeemed BY each rep)
+        const voucherStats = await pool.query(
+            `SELECT dc.redeemed_by,
+                    COUNT(*)::int as voucher_count,
+                    COALESCE(SUM(dc.amount), 0) as total_amount,
+                    MAX(dc.redeemed_at) as last_redeemed_at,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'code', dc.code,
+                                'amount', dc.amount,
+                                'event_name', dc.event_name,
+                                'redeemed_at', dc.redeemed_at,
+                                'status', dc.status
+                            ) ORDER BY dc.redeemed_at DESC
+                        ) FILTER (WHERE dc.redeemed_by IS NOT NULL), '[]'
+                    ) as vouchers
+             FROM dean_coupons dc
+             WHERE dc.dean_id = $1 AND dc.redeemed_by = ANY($2) AND dc.status = 'redeemed'
+             GROUP BY dc.redeemed_by`,
+            [deanId, repIds]
+        );
+
+        // Also get vouchers issued TO each rep by email
+        const issuedStats = await pool.query(
+            `SELECT dc.staff_email,
+                    COUNT(*)::int as issued_count,
+                    COALESCE(SUM(dc.amount), 0) as issued_amount,
+                    COUNT(*) FILTER (WHERE dc.status = 'active')::int as active_count,
+                    COUNT(*) FILTER (WHERE dc.status = 'redeemed')::int as redeemed_count,
+                    COUNT(*) FILTER (WHERE dc.status = 'revoked')::int as revoked_count
+             FROM dean_coupons dc
+             WHERE dc.dean_id = $1 AND dc.staff_email = ANY(
+                 SELECT email FROM users WHERE id = ANY($2) AND email IS NOT NULL
+             )
+             GROUP BY dc.staff_email`,
+            [deanId, repIds]
+        );
+
+        // Build lookup maps
+        const voucherMap: Record<string, any> = {};
+        for (const row of voucherStats.rows) {
+            voucherMap[row.redeemed_by] = {
+                voucher_count: row.voucher_count,
+                total_amount: Number(row.total_amount),
+                last_redeemed_at: row.last_redeemed_at,
+                vouchers: row.vouchers,
+            };
+        }
+
+        const issuedMap: Record<string, any> = {};
+        for (const row of issuedStats.rows) {
+            issuedMap[row.staff_email] = {
+                issued_count: row.issued_count,
+                issued_amount: Number(row.issued_amount),
+                active_count: row.active_count,
+                redeemed_count: row.redeemed_count,
+                revoked_count: row.revoked_count,
+            };
+        }
+
+        // Merge data
+        const representatives = repsResult.rows.map((rep: any) => {
+            const redeemed = voucherMap[rep.id] || { voucher_count: 0, total_amount: 0, last_redeemed_at: null, vouchers: [] };
+            const issued = issuedMap[rep.email] || { issued_count: 0, issued_amount: 0, active_count: 0, redeemed_count: 0, revoked_count: 0 };
+
+            return {
+                id: rep.id,
+                name: rep.name,
+                phone: rep.phone,
+                email: rep.email,
+                created_at: rep.created_at,
+                // Vouchers redeemed by this rep
+                redeemed_count: redeemed.voucher_count,
+                redeemed_amount: redeemed.total_amount,
+                last_redeemed_at: redeemed.last_redeemed_at,
+                recent_vouchers: redeemed.vouchers.slice(0, 5),
+                // Vouchers issued to this rep
+                issued_count: issued.issued_count,
+                issued_amount: issued.issued_amount,
+                active_vouchers: issued.active_count,
+                revoked_vouchers: issued.revoked_count,
+            };
+        });
+
+        // Aggregated totals
+        const totals = {
+            total_reps: representatives.length,
+            total_redeemed: representatives.reduce((s: number, r: any) => s + r.redeemed_amount, 0),
+            total_issued: representatives.reduce((s: number, r: any) => s + r.issued_amount, 0),
+            total_vouchers_redeemed: representatives.reduce((s: number, r: any) => s + r.redeemed_count, 0),
+        };
+
+        res.json({ representatives, totals });
+    } catch (error: any) {
+        console.error('[DeanPortal] getRepresentatives error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };

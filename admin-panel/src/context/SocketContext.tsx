@@ -20,19 +20,27 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user || !token) return;
 
-    // In production, derive socket URL from the page origin (remove /admin path)
-    // In dev, use VITE_SOCKET_URL or localhost:3000
+    // In production the panel and the Socket.io server are the SAME backend,
+    // reached through the same origin (nginx proxies /socket.io to the backend).
+    // Connecting to a hard-coded :3000 fails because that port isn't exposed
+    // publicly — so we must use the page origin as-is.
+    // In dev, use VITE_SOCKET_URL or localhost:3000.
     const getSocketUrl = () => {
       if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL;
       if (import.meta.env.DEV) return 'http://localhost:3000';
-      // Production: admin panel is served from the backend, use its origin
-      return window.location.origin.replace(/:\d+$/, ':3000');
+      // Production: same origin as the served panel.
+      return window.location.origin;
     };
 
     const SOCKET_URL = getSocketUrl();
     const newSocket = io(SOCKET_URL, {
+      // Default path '/socket.io' — nginx must proxy this to the backend with
+      // WebSocket upgrade headers. Polling is kept as a fallback.
       auth: { token },
       transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
     });
 
     newSocket.on('connect', () => {

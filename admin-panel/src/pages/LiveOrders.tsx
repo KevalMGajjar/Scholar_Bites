@@ -27,19 +27,22 @@ interface Order {
   payment_id: string;
 }
 
+// "New orders" are 'placed' for paid live orders, but 'pending' for staff pre-orders.
 const STATUS_COLUMNS = [
-  { key: 'pending', label: 'New Orders', color: 'amber', icon: <Bell size={16} /> },
-  { key: 'preparing', label: 'Preparing', color: 'indigo', icon: <ChefHat size={16} /> },
-  { key: 'ready', label: 'Ready', color: 'emerald', icon: <CheckCircle2 size={16} /> },
+  { key: 'new', statuses: { live: 'placed', preorders: 'pending' } as Record<string, string>, label: 'New Orders', color: 'amber', icon: <Bell size={16} /> },
+  { key: 'preparing', statuses: { live: 'preparing', preorders: 'preparing' } as Record<string, string>, label: 'Preparing', color: 'indigo', icon: <ChefHat size={16} /> },
+  { key: 'ready', statuses: { live: 'ready', preorders: 'ready' } as Record<string, string>, label: 'Ready', color: 'emerald', icon: <CheckCircle2 size={16} /> },
 ];
 
 const STATUS_FLOW: Record<string, string> = {
+  placed: 'preparing',
   pending: 'preparing',
   preparing: 'ready',
   ready: 'completed',
 };
 
 const ACTION_LABELS: Record<string, string> = {
+  placed: 'Accept Order',
   pending: 'Accept Order',
   preparing: 'Mark Ready',
   ready: 'Complete',
@@ -54,7 +57,6 @@ export default function LiveOrders() {
   const [loading, setLoading] = useState(true);
   const [tokenSearch, setTokenSearch] = useState('');
   const [scannedOrder, setScannedOrder] = useState<Order | null>(null);
-  const [searchError, setSearchError] = useState('');
   const [showScanner, setShowScanner] = useState(false);
   const [scanWarning, setScanWarning] = useState<{ message: string; scanned_at?: string; token?: string } | null>(null);
 
@@ -93,6 +95,22 @@ export default function LiveOrders() {
     return () => { socket.off('new_order', handleNewOrder); };
   }, [socket, selectedRestaurantId]);
 
+  // Live status changes from any staff member → update/move/remove on every board
+  useEffect(() => {
+    if (!socket) return;
+    const handleOrderUpdated = (order: any) => {
+      if (selectedRestaurantId && order.restaurant_id && order.restaurant_id !== selectedRestaurantId) return;
+      setOrders((prev) => {
+        if (order.status === 'completed' || order.status === 'cancelled') {
+          return prev.filter((o) => o.id !== order.id);
+        }
+        return prev.map((o) => (o.id === order.id ? { ...o, status: order.status } : o));
+      });
+    };
+    socket.on('order_updated', handleOrderUpdated);
+    return () => { socket.off('order_updated', handleOrderUpdated); };
+  }, [socket, selectedRestaurantId]);
+
   const updateStatus = async (orderId: string, currentStatus: string) => {
     const nextStatus = STATUS_FLOW[currentStatus];
     if (!nextStatus) return;
@@ -103,7 +121,10 @@ export default function LiveOrders() {
       } else {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
       }
-    } catch (err) { console.error('Failed to update status', err); }
+    } catch (err: any) {
+      // e.g. prep-limit reached (409) — keep the order in New Orders and tell the staff why
+      alert(err?.response?.data?.message || 'Failed to update status');
+    }
   };
 
   const updatePreOrderStatus = async (preOrderId: string, currentStatus: string) => {
@@ -117,20 +138,6 @@ export default function LiveOrders() {
         setPreOrders((prev) => prev.map((o) => (o.id === preOrderId ? { ...o, status: nextStatus } : o)));
       }
     } catch (err) { console.error('Failed to update pre-order status', err); }
-  };
-
-  const cancelPreOrder = async (preOrderId: string) => {
-    try {
-      await api.patch(`/admin/pre-orders/${preOrderId}/status`, { status: 'cancelled' });
-      setPreOrders((prev) => prev.filter((o) => o.id !== preOrderId));
-    } catch (err) { console.error('Failed to cancel pre order', err); }
-  };
-
-  const cancelOrder = async (orderId: string) => {
-    try {
-      await api.post(`/admin/orders/${orderId}/refund`, { reason: 'Cancelled by staff' });
-      setOrders((prev) => prev.filter((o) => o.id !== orderId));
-    } catch (err) { console.error('Failed to cancel order', err); }
   };
 
   const getTimeAgo = (dateStr: string) => {
@@ -169,28 +176,17 @@ export default function LiveOrders() {
           <div className="relative group">
             <input
               type="text"
-              placeholder="Search token…"
+              placeholder="Search code…"
               value={tokenSearch}
-              onChange={(e) => { setTokenSearch(e.target.value.toUpperCase()); setSearchError(''); }}
-              onKeyDown={async (e) => {
-                if (e.key === 'Enter' && tokenSearch.trim()) {
-                  try {
-                    setSearchError(''); setScanWarning(null);
-                    const res = await api.get(`/admin/orders/scan/${tokenSearch.trim()}`);
-                    setScannedOrder(res.data); setTokenSearch('');
-                  } catch (err: any) {
-                    if (err?.response?.status === 409) {
-                      const data = err.response.data;
-                      setScanWarning({ message: data.message, scanned_at: data.scanned_at, token: data.order_token });
-                      setTokenSearch('');
-                    } else { setSearchError('Not found'); }
-                  }
-                }
-              }}
+              onChange={(e) => setTokenSearch(e.target.value.toUpperCase())}
               className="w-48 px-4 py-2.5 pl-10 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-white text-[13px] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
             />
             <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-indigo-400 transition-colors" />
-            {searchError && <span className="absolute -bottom-5 left-0 text-red-400 text-[11px] font-medium">{searchError}</span>}
+            {tokenSearch && (
+              <button onClick={() => setTokenSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300" title="Clear">
+                <X size={13} />
+              </button>
+            )}
           </div>
           <button onClick={() => setShowScanner(true)}
             className="px-4 py-2.5 rounded-2xl bg-indigo-500/8 border border-indigo-500/15 text-indigo-400 text-[12px] font-bold hover:bg-indigo-500/15 transition-all flex items-center gap-2 btn-press">
@@ -255,7 +251,7 @@ export default function LiveOrders() {
               if (err?.response?.status === 409) {
                 const data = err.response.data;
                 setScanWarning({ message: data.message, scanned_at: data.scanned_at, token: data.order_token });
-              } else { setSearchError('Order not found for scanned token'); }
+              } else { alert('Order not found for scanned token'); }
             }
           }}
         />
@@ -293,7 +289,14 @@ export default function LiveOrders() {
       {/* ── Kanban Columns ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100%-7rem)]">
         {STATUS_COLUMNS.map((col, colIdx) => {
-          const colOrders = viewMode === 'live' ? orders.filter((o) => o.status === col.key) : preOrders.filter((o) => o.status === col.key);
+          const wantStatus = col.statuses[viewMode];
+          // Live token filter: match the stable order_token. The scanned QR is
+          // `TOKEN:rotating-hmac`, so strip anything after ':' before comparing.
+          const rawSearch = tokenSearch.trim().toUpperCase();
+          const searchTerm = rawSearch.includes(':') ? rawSearch.split(':')[0] : rawSearch;
+          const colOrders = (viewMode === 'live' ? orders : preOrders)
+            .filter((o) => o.status === wantStatus)
+            .filter((o) => !searchTerm || (o.order_token || '').toUpperCase().includes(searchTerm));
           return (
             <div key={col.key} className="flex flex-col min-h-0 animate-fade-up" style={{ animationDelay: `${colIdx * 100}ms` }}>
               {/* Column Header */}
@@ -373,18 +376,12 @@ export default function LiveOrders() {
                       <div className="flex gap-2">
                         <button onClick={() => viewMode === 'live' ? updateStatus(order.id, order.status) : updatePreOrderStatus(order.id, order.status)}
                           className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold tracking-wide transition-all btn-press ${
-                            col.key === 'pending' ? 'bg-amber-500 text-slate-900 hover:shadow-lg hover:shadow-amber-500/20'
+                            col.key === 'new' ? 'bg-amber-500 text-slate-900 hover:shadow-lg hover:shadow-amber-500/20'
                             : col.key === 'preparing' ? 'bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/20'
                             : 'bg-emerald-500 text-slate-900 hover:shadow-lg hover:shadow-emerald-500/20'
                           }`}>
                           {ACTION_LABELS[order.status]}
                         </button>
-                        {col.key === 'pending' && (
-                          <button onClick={() => viewMode === 'live' ? cancelOrder(order.id) : cancelPreOrder(order.id)}
-                            className="px-4 py-2.5 rounded-xl bg-red-500/8 border border-red-500/15 text-red-400 text-[12px] font-bold hover:bg-red-500/15 transition-all btn-press">
-                            Cancel
-                          </button>
-                        )}
                       </div>
                     </div>
                   ))

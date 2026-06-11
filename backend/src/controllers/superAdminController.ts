@@ -4,6 +4,7 @@ import pool from '../config/db';
 import bcrypt from 'bcrypt';
 import { unlockAccount as unlockBruteForce, getLockedAccounts as getBruteForceLocked } from '../middlewares/security';
 import { auditLog, getRequestIp } from '../services/auditLogger';
+import { passwordStrengthError } from '../middlewares/validators';
 
 
 // ─── 1. System Health ───
@@ -37,11 +38,13 @@ export const getSystemHealth = async (req: Request, res: Response) => {
         const activeStaffToday = staffResult.rows[0].count;
 
         const anomalyResult = await pool.query(`
-            SELECT action, details, created_at, user_id 
-            FROM audit_logs 
-            WHERE action IN ('LOGIN_FAILED', 'REFUND_REJECTED', 'ORDER_STATUS_CHANGED') 
-              AND details ILIKE '%error%' OR action = 'LOGIN_LOCKED'
-            ORDER BY created_at DESC 
+            SELECT action, details, created_at, user_id
+            FROM audit_logs
+            WHERE action IN (
+                'LOGIN_FAILED', 'LOGIN_LOCKED', 'LOGIN_PANEL_DENIED',
+                'LOGIN_OTP_BURNED', 'LOGIN_GOOGLE_FAILED', 'REFUND_REJECTED'
+            )
+            ORDER BY created_at DESC
             LIMIT 10
         `);
 
@@ -62,9 +65,11 @@ export const getSystemHealth = async (req: Request, res: Response) => {
 export const getStaffMembers = async (req: Request, res: Response) => {
     try {
         const staff = await pool.query(`
-            SELECT id, name, email, phone, role, created_at 
-            FROM staff 
-            ORDER BY created_at DESC
+            SELECT s.id, s.name, s.email, s.phone, s.role, s.restaurant_id, s.created_at,
+                   r.name as restaurant_name
+            FROM staff s
+            LEFT JOIN restaurants r ON s.restaurant_id = r.id
+            ORDER BY s.created_at DESC
         `);
         res.json(staff.rows);
     } catch (err) {
@@ -74,13 +79,24 @@ export const getStaffMembers = async (req: Request, res: Response) => {
 };
 
 export const addStaffMember = async (req: Request, res: Response) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, restaurant_id } = req.body;
     try {
         if (!name || !email || !password || !role) {
             return res.status(400).json({ message: 'Name, email, password, and role are all required.' });
         }
         if (!['staff', 'admin', 'super_admin'].includes(role)) {
             return res.status(400).json({ message: 'Invalid role provided.' });
+        }
+        // Staff (kitchen) accounts must be tied to a restaurant so they can see that
+        // restaurant's order board. Admins/super_admins are not restaurant-scoped.
+        if (role === 'staff' && !restaurant_id) {
+            return res.status(400).json({ message: 'A restaurant must be selected for staff accounts.' });
+        }
+        // These accounts can be admin / super_admin — enforce the same strong
+        // password rule used everywhere else (validators.ts passwordSchema).
+        const pwErr = passwordStrengthError(password);
+        if (pwErr) {
+            return res.status(400).json({ message: pwErr });
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
@@ -92,11 +108,21 @@ export const addStaffMember = async (req: Request, res: Response) => {
         }
         const uniId = uniResult.rows[0].id;
 
+        // Validate the restaurant belongs to this university (when provided)
+        let restaurantId: string | null = null;
+        if (restaurant_id) {
+            const restRes = await pool.query('SELECT id FROM restaurants WHERE id = $1 AND university_id = $2', [restaurant_id, uniId]);
+            if (restRes.rows.length === 0) {
+                return res.status(400).json({ message: 'Selected restaurant was not found.' });
+            }
+            restaurantId = restRes.rows[0].id;
+        }
+
         const newStaff = await pool.query(`
-            INSERT INTO staff (university_id, name, email, password_hash, role)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, name, email, role, created_at
-        `, [uniId, name, email, passwordHash, role]);
+            INSERT INTO staff (university_id, name, email, password_hash, role, restaurant_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, name, email, role, restaurant_id, created_at
+        `, [uniId, name, email, passwordHash, role, restaurantId]);
 
         const caller = (req as any).user;
         auditLog({
@@ -114,6 +140,93 @@ export const addStaffMember = async (req: Request, res: Response) => {
         }
         console.error('Error adding staff member:', err);
         res.status(500).json({ message: 'Server error adding staff.' });
+    }
+};
+
+// ─── Update Staff Member ───
+export const updateStaffMember = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { name, email, role, password, restaurant_id } = req.body;
+    const caller = (req as any).user;
+    const ip = getRequestIp(req);
+
+    try {
+        if (role && !['staff', 'admin', 'super_admin'].includes(role)) {
+            return res.status(400).json({ message: 'Invalid role provided.' });
+        }
+
+        const target = await pool.query('SELECT id, name, email, role FROM staff WHERE id = $1', [id]);
+        if (target.rows.length === 0) {
+            return res.status(404).json({ message: 'Staff member not found.' });
+        }
+
+        // Resolve the effective role after this update to validate restaurant assignment.
+        const effectiveRole = role !== undefined ? role : target.rows[0].role;
+        if (restaurant_id !== undefined && restaurant_id) {
+            const restRes = await pool.query('SELECT id FROM restaurants WHERE id = $1', [restaurant_id]);
+            if (restRes.rows.length === 0) {
+                return res.status(400).json({ message: 'Selected restaurant was not found.' });
+            }
+        }
+        if (effectiveRole === 'staff' && restaurant_id === undefined) {
+            // Editing a staff account but no restaurant context provided — ignore silently.
+        } else if (effectiveRole === 'staff' && !restaurant_id) {
+            return res.status(400).json({ message: 'A restaurant must be selected for staff accounts.' });
+        }
+
+        // Prevent locking yourself out by changing your own role
+        if (caller?.id === id && role && role !== target.rows[0].role) {
+            return res.status(403).json({ message: 'You cannot change your own role.' });
+        }
+
+        const updates: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name); }
+        if (email !== undefined) { updates.push(`email = $${idx++}`); params.push(email); }
+        if (role !== undefined) { updates.push(`role = $${idx++}`); params.push(role); }
+        if (restaurant_id !== undefined) {
+            // Admins/super_admins are not restaurant-scoped; clear it if role flips away from staff.
+            const restToSet = effectiveRole === 'staff' ? restaurant_id : null;
+            updates.push(`restaurant_id = $${idx++}`);
+            params.push(restToSet);
+        }
+        if (password) {
+            const pwErr = passwordStrengthError(password);
+            if (pwErr) {
+                return res.status(400).json({ message: pwErr });
+            }
+            const passwordHash = await bcrypt.hash(password, 10);
+            updates.push(`password_hash = $${idx++}`);
+            params.push(passwordHash);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ message: 'No fields to update.' });
+        }
+
+        params.push(id);
+        const result = await pool.query(
+            `UPDATE staff SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, name, email, role, restaurant_id, created_at`,
+            params
+        );
+
+        auditLog({
+            userId: caller?.id,
+            action: 'STAFF_UPDATED',
+            resource: `staff:${id}`,
+            details: `Updated ${updates.map(u => u.split(' = ')[0]).join(', ')} for ${target.rows[0].email || target.rows[0].name}`,
+            ip,
+        });
+
+        res.json(result.rows[0]);
+    } catch (err: any) {
+        if (err.code === '23505') {
+            return res.status(409).json({ message: 'Email already exists.' });
+        }
+        console.error('Error updating staff member:', err);
+        res.status(500).json({ message: 'Server error updating staff.' });
     }
 };
 
@@ -328,6 +441,39 @@ export const unlockAccountHandler = async (req: Request, res: Response) => {
         res.json({ message: `Account ${email} has been unlocked successfully.` });
     } catch (error) {
         console.error('Error unlocking account:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ─── Per-Restaurant "Preparing" Capacity Limits ───
+
+/** GET /api/superadmin/restaurants — list restaurants with their prep_limit */
+export const getRestaurantsForLimits = async (_req: Request, res: Response) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, name, COALESCE(prep_limit, 0) AS prep_limit, is_event_restaurant
+             FROM restaurants ORDER BY name ASC`
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching restaurants for limits:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/** PATCH /api/superadmin/restaurants/:id/prep-limit — set how many orders may be 'preparing' at once (0 = unlimited) */
+export const updateRestaurantPrepLimit = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const limit = Math.max(0, parseInt(req.body?.prep_limit) || 0);
+    try {
+        const result = await pool.query(
+            'UPDATE restaurants SET prep_limit = $1 WHERE id = $2 RETURNING id, name, prep_limit',
+            [limit, id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Restaurant not found' });
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating prep limit:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

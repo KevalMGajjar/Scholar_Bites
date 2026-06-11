@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import pool from '../config/db';
 import * as ExcelJS from 'exceljs';
 import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
+import { passwordStrengthError } from '../middlewares/validators';
 
 // ═══════════════════════════════════════════════════════════════
 // Dean Management — Admin Panel Endpoints
@@ -18,8 +19,9 @@ export const createDean = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: 'Name, email, school name, and password are required' });
     }
 
-    if (password.length < 8) {
-        return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    const pwErr = passwordStrengthError(password);
+    if (pwErr) {
+        return res.status(400).json({ message: pwErr });
     }
 
     try {
@@ -202,7 +204,8 @@ export const getAllEvents = async (req: AuthRequest, res: Response) => {
                            'quantity', ei.quantity,
                            'price_at_time', ei.price_at_time,
                            'item_name', mi.name,
-                           'item_image', mi.image_url
+                           'item_image', mi.image_url,
+                           'category', mi.category
                        )
                    ) FILTER (WHERE ei.id IS NOT NULL), '[]') as items
             FROM event_pre_orders e

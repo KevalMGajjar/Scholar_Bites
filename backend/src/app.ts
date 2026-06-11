@@ -16,7 +16,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import superAdminRoutes from './routes/superAdminRoutes';
 import userRoutes from './routes/userRoutes';
 import staffRoutes from './routes/staffRoutes';
-import deanRoutes from './routes/deanRoutes';
+import eventPortalRoutes from './routes/eventPortalRoutes';
 
 const app = express();
 
@@ -63,7 +63,7 @@ app.use('/api/admin/password/request-otp', otpLimiter);
 // Staff code verification removed — staff are now pre-created by admin
 app.use('/api/auth/login-otp-staff', authLimiter);
 app.use('/api/auth/register-otp-staff', authLimiter);
-app.use('/api/dean/login', authLimiter);
+app.use('/api/event/login', authLimiter);
 
 // Serve uploaded images
 app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
@@ -81,7 +81,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/staff', staffRoutes);
-app.use('/api/dean', deanRoutes);
+app.use('/api/event', eventPortalRoutes);
 
 app.get('/api', (req, res) => {
     res.send('University Canteen API is running');
@@ -137,29 +137,29 @@ app.use((req, res, next) => {
     }
 });
 
-// ─── Serve Dean Portal (built static files) ───
-const deanDist = path.resolve(__dirname, '../../dean-portal/dist');
-const deanIndex = path.join(deanDist, 'index.html');
+// ─── Serve Event Portal (built static files) ───
+const eventPortalDist = path.resolve(__dirname, '../../event-portal/dist');
+const eventPortalIndex = path.join(eventPortalDist, 'index.html');
 
 app.use((req, res, next) => {
-    if (!req.path.startsWith('/dean') || req.path.startsWith('/api/dean')) {
+    if (!req.path.startsWith('/event') || req.path.startsWith('/api/event')) {
         return next();
     }
 
-    if (!fs.existsSync(deanIndex)) {
-        res.status(503).send('Dean portal not built. Run: cd dean-portal && npm run build');
+    if (!fs.existsSync(eventPortalIndex)) {
+        res.status(503).send('Event portal not built. Run: cd event-portal && npm run build');
         return;
     }
 
-    let filePath = req.path.replace('/dean', '');
+    let filePath = req.path.replace('/event', '');
     if (filePath === '') filePath = '/';
 
-    const fullPath = path.join(deanDist, filePath);
+    const fullPath = path.join(eventPortalDist, filePath);
 
     if (filePath !== '/' && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
         res.sendFile(fullPath);
     } else {
-        res.sendFile(deanIndex);
+        res.sendFile(eventPortalIndex);
     }
 });
 

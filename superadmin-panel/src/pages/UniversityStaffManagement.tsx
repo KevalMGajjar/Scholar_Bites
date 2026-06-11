@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../services/api';
-import { Users, Upload, UserPlus, Trash2, AlertTriangle, Download, FileSpreadsheet, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Users, Upload, UserPlus, Trash2, AlertTriangle, Download, FileSpreadsheet, CheckCircle, XCircle, Search, Pencil } from 'lucide-react';
 
 interface UniversityStaff {
   id: string;
@@ -8,12 +8,23 @@ interface UniversityStaff {
   phone: string;
   email: string | null;
   user_type: string;
+  dean_id: string | null;
+  dean_name: string | null;
+  dean_school: string | null;
   created_at: string;
+}
+
+interface Dean {
+  id: string;
+  name: string;
+  email: string;
+  school_name: string;
 }
 
 interface CsvEntry {
   name: string;
   phone: string;
+  email?: string;
 }
 
 interface BulkResult {
@@ -30,7 +41,8 @@ export default function UniversityStaffManagement() {
 
   // Add Modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', dean_id: '' });
+  const [deans, setDeans] = useState<Dean[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
 
@@ -52,7 +64,20 @@ export default function UniversityStaffManagement() {
   // Toast
   const [successMsg, setSuccessMsg] = useState('');
 
-  useEffect(() => { fetchStaff(); }, []);
+  // Edit Modal
+  const [editTarget, setEditTarget] = useState<UniversityStaff | null>(null);
+  const [editData, setEditData] = useState({ name: '', phone: '', email: '', dean_id: '' });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  useEffect(() => { fetchStaff(); fetchDeans(); }, []);
+
+  const fetchDeans = async () => {
+    try {
+      const { data } = await api.get('/superadmin/deans-list');
+      setDeans(data);
+    } catch (err) { console.error('Failed to fetch deans:', err); }
+  };
 
   useEffect(() => {
     if (successMsg) {
@@ -86,15 +111,38 @@ export default function UniversityStaffManagement() {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         email: formData.email.trim() || undefined,
+        dean_id: formData.dean_id || undefined,
       });
       setShowAddModal(false);
-      setFormData({ name: '', phone: '', email: '' });
-      setSuccessMsg('Staff member created successfully');
+      setFormData({ name: '', phone: '', email: '', dean_id: '' });
+      setSuccessMsg('Delegate created successfully');
       fetchStaff();
     } catch (err: any) {
       setModalError(err.response?.data?.message || 'Failed to create staff member');
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  // ── Edit Staff ──
+  const handleEdit = async () => {
+    if (!editTarget) return;
+    setEditLoading(true);
+    setEditError('');
+    try {
+      await api.put(`/superadmin/university-staff/${editTarget.id}`, {
+        name: editData.name.trim(),
+        phone: editData.phone.trim(),
+        email: editData.email.trim() || undefined,
+        dean_id: editData.dean_id || undefined,
+      });
+      setEditTarget(null);
+      setSuccessMsg('Delegate updated successfully');
+      fetchStaff();
+    } catch (err: any) {
+      setEditError(err.response?.data?.message || 'Failed to update delegate');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -118,9 +166,10 @@ export default function UniversityStaffManagement() {
       const header = lines[0].toLowerCase().split(',').map(h => h.trim());
       const nameIdx = header.findIndex(h => h === 'name');
       const phoneIdx = header.findIndex(h => h === 'phone');
+      const emailIdx = header.findIndex(h => h === 'email');
 
       if (nameIdx === -1 || phoneIdx === -1) {
-        setCsvError('CSV must have "name" and "phone" columns');
+        setCsvError('CSV must have "name" and "phone" columns ("email" is optional)');
         return;
       }
 
@@ -131,6 +180,7 @@ export default function UniversityStaffManagement() {
           entries.push({
             name: cols[nameIdx],
             phone: cols[phoneIdx],
+            ...(emailIdx !== -1 && cols[emailIdx] ? { email: cols[emailIdx] } : {}),
           });
         }
       }
@@ -162,7 +212,7 @@ export default function UniversityStaffManagement() {
   };
 
   const downloadTemplate = () => {
-    const csv = 'name,phone\nJohn Doe,9876543210\nJane Smith,9123456789\n';
+    const csv = 'name,phone,email\nJohn Doe,9876543210,john@university.edu\nJane Smith,9123456789,jane@university.edu\n';
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -212,17 +262,17 @@ export default function UniversityStaffManagement() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/20 flex items-center justify-center">
             <Users size={20} className="text-red-400" />
           </div>
-          University Staff Management
+          Delegates
         </h1>
         <p className="text-[#a38b88] text-sm mt-2 ml-[52px]">
-          Create and manage university staff members who can access staff features in the app (group orders, pre-orders, catering, coupons).
+          Create and manage delegates who can access staff features in the app (group orders, pre-orders, catering, coupons).
         </p>
       </div>
 
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bg-[#1c1b1b]/60 border border-[#554240]/15 rounded-2xl p-5">
-          <p className="text-[#a38b88] text-xs font-medium uppercase tracking-wider">Total Staff</p>
+          <p className="text-[#a38b88] text-xs font-medium uppercase tracking-wider">Total Delegates</p>
           <p className="text-3xl font-bold text-[#e5e2e1] mt-1">{staffList.length}</p>
         </div>
         <div className="bg-[#1c1b1b]/60 border border-[#554240]/15 rounded-2xl p-5">
@@ -237,7 +287,7 @@ export default function UniversityStaffManagement() {
           </p>
         </div>
         <div className="bg-[#1c1b1b]/60 border border-[#554240]/15 rounded-2xl p-5">
-          <p className="text-[#a38b88] text-xs font-medium uppercase tracking-wider">Active Staff</p>
+          <p className="text-[#a38b88] text-xs font-medium uppercase tracking-wider">Active Delegates</p>
           <p className="text-3xl font-bold text-[#e5e2e1] mt-1">
             {staffList.length}
           </p>
@@ -265,11 +315,11 @@ export default function UniversityStaffManagement() {
             Import CSV
           </button>
           <button
-            onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '', email: '' }); setModalError(''); }}
+            onClick={() => { setShowAddModal(true); setFormData({ name: '', phone: '', email: '', dean_id: '' }); setModalError(''); }}
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all"
           >
             <UserPlus size={16} />
-            Add Staff
+            Add Representative
           </button>
         </div>
       </div>
@@ -282,16 +332,17 @@ export default function UniversityStaffManagement() {
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Name</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Phone</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Email</th>
+              <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Assigned Dean</th>
               <th className="text-left px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Created</th>
               <th className="text-right px-6 py-4 text-xs font-semibold text-[#a38b88] uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="text-center py-16 text-[#a38b88]">Loading...</td></tr>
+              <tr><td colSpan={6} className="text-center py-16 text-[#a38b88]">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-16 text-[#a38b88]">
-                {searchQuery ? 'No matching staff found' : 'No university staff members yet. Click "Add Staff" or "Import CSV" to get started.'}
+              <tr><td colSpan={6} className="text-center py-16 text-[#a38b88]">
+                {searchQuery ? 'No matching delegates found' : 'No delegates yet. Click "Add Delegate" or "Import CSV" to get started.'}
               </td></tr>
             ) : (
               filtered.map((staff) => (
@@ -306,17 +357,36 @@ export default function UniversityStaffManagement() {
                   </td>
                   <td className="px-6 py-4 text-[#dcc0bd] text-sm font-mono">+91 {staff.phone}</td>
                   <td className="px-6 py-4 text-[#dcc0bd] text-sm">{staff.email || '—'}</td>
+                  <td className="px-6 py-4">
+                    {staff.dean_name ? (
+                      <div>
+                        <span className="text-[#e5e2e1] text-sm font-medium">{staff.dean_name}</span>
+                        <span className="block text-[#a38b88] text-xs">{staff.dean_school}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[#a38b88]/40 text-sm">Not assigned</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-[#a38b88] text-sm">
                     {new Date(staff.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => { setDeleteTarget(staff); setDeleteConfirmed(false); setDeleteError(''); }}
-                      className="p-2 rounded-lg text-[#a38b88] hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => { setEditTarget(staff); setEditData({ name: staff.name, phone: staff.phone, email: staff.email || '', dean_id: staff.dean_id || '' }); setEditError(''); }}
+                        className="p-2 rounded-lg text-[#a38b88] hover:text-[#eac34a] hover:bg-[#eac34a]/10 transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => { setDeleteTarget(staff); setDeleteConfirmed(false); setDeleteError(''); }}
+                        className="p-2 rounded-lg text-[#a38b88] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -331,7 +401,7 @@ export default function UniversityStaffManagement() {
           <div className="bg-[#181717] border border-[#554240]/20 rounded-2xl p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-[#e5e2e1] mb-6 flex items-center gap-3">
               <UserPlus size={20} className="text-red-400" />
-              Add University Staff
+              Add Delegate
             </h2>
 
             <div className="space-y-4">
@@ -367,6 +437,20 @@ export default function UniversityStaffManagement() {
                   placeholder="staff@university.edu"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Assign Dean</label>
+                <select
+                  value={formData.dean_id}
+                  onChange={e => setFormData({ ...formData, dean_id: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-red-500/40 appearance-none"
+                >
+                  <option value="">No dean assigned</option>
+                  {deans.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} — {d.school_name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {modalError && (
@@ -376,7 +460,58 @@ export default function UniversityStaffManagement() {
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setShowAddModal(false)} className="px-5 py-2.5 rounded-xl border border-[#554240]/20 text-[#dcc0bd] text-sm font-medium hover:bg-[#1c1b1b] transition-colors">Cancel</button>
               <button onClick={handleAdd} disabled={modalLoading} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#f0513e] to-[#8B1C28] text-white text-sm font-semibold hover:shadow-lg hover:shadow-red-600/20 transition-all disabled:opacity-50">
-                {modalLoading ? 'Creating...' : 'Create Staff'}
+                {modalLoading ? 'Creating...' : 'Create Delegate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Edit Representative Modal ══ */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEditTarget(null)}>
+          <div className="bg-[#181717] border border-[#554240]/20 rounded-2xl p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-[#e5e2e1] mb-6 flex items-center gap-3">
+              <Pencil size={20} className="text-[#eac34a]" />
+              Edit Delegate
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Full Name *</label>
+                <input type="text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-[#eac34a]/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Phone Number *</label>
+                <input type="text" value={editData.phone} onChange={e => setEditData({ ...editData, phone: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-[#eac34a]/40" maxLength={10} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Email Address</label>
+                <input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-[#eac34a]/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#a38b88] mb-1.5 uppercase tracking-wider">Assign Dean</label>
+                <select value={editData.dean_id} onChange={e => setEditData({ ...editData, dean_id: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0e0e0e] border border-[#554240]/20 rounded-xl text-[#e5e2e1] text-sm focus:outline-none focus:border-[#eac34a]/40 appearance-none">
+                  <option value="">No dean assigned</option>
+                  {deans.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} — {d.school_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {editError && (
+              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{editError}</div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setEditTarget(null)} className="px-5 py-2.5 rounded-xl border border-[#554240]/20 text-[#dcc0bd] text-sm font-medium hover:bg-[#1c1b1b] transition-colors">Cancel</button>
+              <button onClick={handleEdit} disabled={editLoading} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#eac34a] to-[#d4a93a] text-[#0e0e0e] text-sm font-semibold hover:shadow-lg hover:shadow-[#eac34a]/20 transition-all disabled:opacity-50">
+                {editLoading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -391,7 +526,7 @@ export default function UniversityStaffManagement() {
               <FileSpreadsheet size={20} className="text-red-400" />
               Import Staff from CSV
             </h2>
-            <p className="text-[#a38b88] text-sm mb-6">Upload a CSV file with columns: <code className="bg-[#0e0e0e] px-2 py-0.5 rounded text-red-400 text-xs">name,phone</code></p>
+            <p className="text-[#a38b88] text-sm mb-6">Upload a CSV file with columns: <code className="bg-[#0e0e0e] px-2 py-0.5 rounded text-red-400 text-xs">name,phone,email</code> <span className="text-[#a38b88]/60">(email is optional)</span></p>
 
             <div className="flex-1 overflow-y-auto">
               {/* Upload Area */}
@@ -430,6 +565,7 @@ export default function UniversityStaffManagement() {
                           <th className="text-left px-4 py-2 text-xs text-[#a38b88]">#</th>
                           <th className="text-left px-4 py-2 text-xs text-[#a38b88]">Name</th>
                           <th className="text-left px-4 py-2 text-xs text-[#a38b88]">Phone</th>
+                          <th className="text-left px-4 py-2 text-xs text-[#a38b88]">Email</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -438,6 +574,7 @@ export default function UniversityStaffManagement() {
                             <td className="px-4 py-2 text-[#a38b88]">{i + 1}</td>
                             <td className="px-4 py-2 text-[#e5e2e1]">{row.name}</td>
                             <td className="px-4 py-2 text-[#dcc0bd] font-mono">{row.phone}</td>
+                            <td className="px-4 py-2 text-[#dcc0bd] text-sm">{row.email || <span className="text-[#a38b88]/40">—</span>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -506,7 +643,7 @@ export default function UniversityStaffManagement() {
                 <AlertTriangle className="text-red-400" size={20} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-[#e5e2e1]">Remove Staff Member</h3>
+                <h3 className="text-lg font-bold text-[#e5e2e1]">Remove Delegate</h3>
                 <p className="text-[#a38b88] text-sm">This will delete {deleteTarget.name}'s account</p>
               </div>
             </div>

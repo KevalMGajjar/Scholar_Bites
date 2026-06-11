@@ -14,12 +14,14 @@ datasource db {
 // ═══════════════════════════════════════════════════════════════
 model University {
   id         String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name       String       @unique @db.VarChar(255)
-  logo_url   String?
-  address    String?
-  latitude   Float?
-  longitude  Float?
-  created_at DateTime     @default(now()) @db.Timestamptz
+  name          String    @unique @db.VarChar(255)
+  logo_url      String?
+  address       String?
+  support_phone String?   @db.VarChar(50)   // shown on app; updated from super-admin settings
+  support_email String?   @db.VarChar(255)  // shown on app; updated from super-admin settings
+  latitude      Float?
+  longitude     Float?
+  created_at    DateTime  @default(now()) @db.Timestamptz
 
   users       User[]
   staff       Staff[]
@@ -67,6 +69,7 @@ model Restaurant {
   tags                  String[] @default([]) // e.g. ["Healthy", "Fast Food"]
   is_open               Boolean  @default(true)
   prep_time_minutes     Int      @default(15)
+  prep_limit            Int      @default(0)      // Max orders allowed in 'preparing' at once (0 = unlimited)
   is_event_restaurant   Boolean  @default(false) // Catering-only restaurant
   opening_time          DateTime? @db.Time       // Daily open time
   closing_time          DateTime? @db.Time       // Daily close time
@@ -77,9 +80,28 @@ model Restaurant {
   orders        Order[]
   staff         Staff[]
   preOrders     StaffPreOrder[]
+  categories    Category[]
 
   @@unique([university_id, name])
   @@map("restaurants")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 1.6. categories Table (Per-restaurant menu categories)
+// ═══════════════════════════════════════════════════════════════
+model Category {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  restaurant_id String   @db.Uuid
+  name          String   @db.VarChar(100)
+  cutoff_time   DateTime? @db.Time       // Deadline time for ordering
+  lead_time     Int      @default(0)     // Lead time in minutes
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  menuItems  MenuItem[]
+
+  @@unique([restaurant_id, name])
+  @@map("categories")
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -220,17 +242,20 @@ model DeanCoupon {
 model MenuItem {
   id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   restaurant_id    String   @db.Uuid
+  category_id      String?  @db.Uuid
   name             String   @db.VarChar(100)
   description      String?
   price            Decimal  @db.Decimal(10, 2)
   category         String   @db.VarChar(50)
   image_url        String?
   is_available     Boolean  @default(true)
+  is_veg           Boolean  @default(true)
   stock_quantity   Int      @default(0)
   nutritional_info Json?
   created_at       DateTime @default(now()) @db.Timestamptz
 
   restaurant         Restaurant          @relation(fields: [restaurant_id], references: [id])
+  categoryRef        Category?           @relation(fields: [category_id], references: [id], onDelete: SetNull)
   orderItems         OrderItem[]
   reviews            Review[]
   preOrderItems      StaffPreOrderItem[]
@@ -238,6 +263,7 @@ model MenuItem {
 
   @@unique([restaurant_id, name])
   @@index([category])
+  @@index([category_id])
   @@map("menu_items")
 }
 
@@ -299,6 +325,7 @@ model GroupOrderMember {
 // ═══════════════════════════════════════════════════════════════
 enum OrderStatus {
   pending
+  placed
   preparing
   ready
   completed
@@ -421,6 +448,7 @@ enum EventStatus {
   upcoming
   pending
   approved
+  on_hold
   confirmed
   preparing
   completed
@@ -438,10 +466,12 @@ model EventPreOrder {
   member_count     Int
   staff_name       String      @db.VarChar(100)
   staff_email      String      @db.VarChar(255)
-  status           EventStatus @default(upcoming)
-  total_amount     Decimal     @default(0.00) @db.Decimal(10, 2)
-  rejection_reason String?                    // Reason for rejection by admin
-  created_at       DateTime    @default(now()) @db.Timestamptz
+  status               EventStatus @default(upcoming)
+  total_amount         Decimal     @default(0.00) @db.Decimal(10, 2)
+  rejection_reason     String?                    // Reason for rejection by admin
+  cancellation_reason  String?                    // Reason the requester cancelled the order
+  special_requirements String?                    // Custom / tailor-made order notes from the requester
+  created_at           DateTime    @default(now()) @db.Timestamptz
 
   user       User                @relation(fields: [user_id], references: [id])
   university University          @relation(fields: [university_id], references: [id])

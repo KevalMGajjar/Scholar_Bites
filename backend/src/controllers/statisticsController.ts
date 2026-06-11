@@ -61,7 +61,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
         // 2. Total revenue
         const revenueResult = await pool.query(
             `SELECT COALESCE(SUM(total_amount), 0)::numeric as total_revenue
-             FROM orders WHERE university_id = $1 AND status IN ('preparing', 'ready', 'completed')${restaurantClauseDirect}`,
+             FROM orders WHERE university_id = $1 AND status IN ('placed', 'preparing', 'ready', 'completed')${restaurantClauseDirect}`,
             restaurantId ? [uniId, restaurantId] : [uniId]
         );
         const totalRevenue = parseFloat(revenueResult.rows[0].total_revenue);
@@ -80,7 +80,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
                     COUNT(*)::int as orders
              FROM orders
              WHERE university_id = $1
-               AND status IN ('preparing', 'ready', 'completed')
+               AND status IN ('placed', 'preparing', 'ready', 'completed')
                AND created_at >= NOW() - INTERVAL '6 months'${monthlyRestaurantClause}
              GROUP BY month, sort_key
              ORDER BY sort_key`,
@@ -101,7 +101,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
              FROM order_items oi
              JOIN menu_items m ON oi.menu_item_id = m.id
              JOIN orders o ON oi.order_id = o.id
-             WHERE o.university_id = $1 AND o.status IN ('preparing', 'ready', 'completed')${bestSellersRestaurantClause}
+             WHERE o.university_id = $1 AND o.status IN ('placed', 'preparing', 'ready', 'completed')${bestSellersRestaurantClause}
              GROUP BY m.id, m.name, m.image_url, m.price
              ORDER BY total_sold DESC
              LIMIT 5`,
@@ -111,7 +111,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
         // 5. Average order value
         const avgResult = await pool.query(
             `SELECT COALESCE(AVG(total_amount), 0)::numeric as avg_order_value
-             FROM orders WHERE university_id = $1 AND status IN ('preparing', 'ready', 'completed')${restaurantClauseDirect}`,
+             FROM orders WHERE university_id = $1 AND status IN ('placed', 'preparing', 'ready', 'completed')${restaurantClauseDirect}`,
             restaurantId ? [uniId, restaurantId] : [uniId]
         );
         const avgOrderValue = parseFloat(parseFloat(avgResult.rows[0].avg_order_value).toFixed(2));
@@ -123,7 +123,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
              FROM orders
              WHERE university_id = $1
                AND created_at >= CURRENT_DATE
-               AND status IN ('preparing', 'ready', 'completed')${restaurantClauseDirect}`,
+               AND status IN ('placed', 'preparing', 'ready', 'completed')${restaurantClauseDirect}`,
             restaurantId ? [uniId, restaurantId] : [uniId]
         );
 
@@ -153,7 +153,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
              ) AS d(day)
              LEFT JOIN orders o ON DATE(o.created_at) = d.day
                  AND o.university_id = $1
-                 AND o.status IN ('preparing', 'ready', 'completed')${dailyRestaurantClause}
+                 AND o.status IN ('placed', 'preparing', 'ready', 'completed')${dailyRestaurantClause}
              GROUP BY d.day
              ORDER BY d.day`,
             dailyParams
@@ -165,7 +165,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
                     COUNT(*)::int as orders
              FROM orders
              WHERE university_id = $1
-               AND status IN ('preparing', 'ready', 'completed')
+               AND status IN ('placed', 'preparing', 'ready', 'completed')
                AND created_at >= NOW() - INTERVAL '30 days'${restaurantClauseDirect}
              GROUP BY hour
              ORDER BY hour`,

@@ -24,19 +24,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('dean_token');
-    const storedUser = localStorage.getItem('dean_user');
+    const token = localStorage.getItem('event_token');
+    const storedUser = localStorage.getItem('event_user');
     
     if (token && storedUser) {
       setUser(JSON.parse(storedUser));
-      api.get('/dean/profile')
+      api.get('/event/profile')
         .then((res) => {
           setUser(res.data);
-          localStorage.setItem('dean_user', JSON.stringify(res.data));
+          localStorage.setItem('event_user', JSON.stringify(res.data));
         })
         .catch(() => {
-          localStorage.removeItem('dean_token');
-          localStorage.removeItem('dean_user');
+          localStorage.removeItem('event_token');
+          localStorage.removeItem('event_user');
           setUser(null);
         })
         .finally(() => setIsLoading(false));
@@ -46,14 +46,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const login = (token: string, userData: DeanUser) => {
-    localStorage.setItem('dean_token', token);
-    localStorage.setItem('dean_user', JSON.stringify(userData));
+    localStorage.setItem('event_token', token);
+    localStorage.setItem('event_user', JSON.stringify(userData));
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem('dean_token');
-    localStorage.removeItem('dean_user');
+    localStorage.removeItem('event_token');
+    localStorage.removeItem('event_user');
     setUser(null);
   };
 
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (user) {
       const updated = { ...user, total_budget: total, used_budget: used };
       setUser(updated);
-      localStorage.setItem('dean_user', JSON.stringify(updated));
+      localStorage.setItem('event_user', JSON.stringify(updated));
     }
   };
 

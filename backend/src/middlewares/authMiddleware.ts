@@ -32,8 +32,8 @@ export const authenticateJWT = async (req: AuthRequest, res: Response, next: Nex
     const decoded = verifyToken(token) as any;
 
     if (!decoded) {
-        console.warn(`[Auth] 403: Failed to decode token for ${req.path}`);
-        return res.sendStatus(403);
+        console.warn(`[Auth] 401: Failed to decode token for ${req.path}`);
+        return res.sendStatus(401);
     }
 
     // ─── Single-device check: compare token hash against stored active_token ───

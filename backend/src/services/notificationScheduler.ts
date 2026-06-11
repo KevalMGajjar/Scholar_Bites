@@ -73,8 +73,10 @@ export const startNotificationScheduler = () => {
                 WHERE is_open = true
                   AND closing_time IS NOT NULL
                   AND closing_time <= (timezone('${IST_TIMEZONE}', now()))::time
-                  AND opening_time IS NOT NULL
-                  AND opening_time < closing_time
+                  -- Skip ONLY overnight schedules (open late, close after midnight),
+                  -- where opening_time >= closing_time. A NULL opening_time is treated
+                  -- as a normal same-day schedule and is allowed to auto-close.
+                  AND (opening_time IS NULL OR opening_time < closing_time)
                 RETURNING id, name
             `);
             if (rows.length > 0) {

@@ -21,8 +21,8 @@ export const getTrendingItems = async (req: Request, res: Response) => {
              JOIN orders o ON oi.order_id = o.id
              JOIN restaurants r ON m.restaurant_id = r.id
              WHERE o.university_id = $1
-               AND r.name NOT ILIKE '%event management%' AND r.name NOT ILIKE '%club events%'
-               AND o.status IN ('preparing', 'ready', 'completed')
+               AND r.is_event_restaurant = false
+               AND o.status IN ('placed', 'preparing', 'ready', 'completed')
              GROUP BY m.id, r.is_open
              ORDER BY order_count DESC
              LIMIT 5`,
@@ -51,18 +51,22 @@ export const getMenu = async (req: Request, res: Response) => {
 
         if (restaurant_id) {
             query = `
-                SELECT m.*, r.is_open as restaurant_is_open 
+                SELECT m.*, r.is_open as restaurant_is_open,
+                       c.name as category_name, c.cutoff_time as category_cutoff_time, c.lead_time as category_lead_time
                 FROM menu_items m 
                 JOIN restaurants r ON m.restaurant_id = r.id 
+                LEFT JOIN categories c ON m.category_id = c.id
                 WHERE m.restaurant_id = $${pIndex++} AND r.name NOT ILIKE '%event management%' AND r.name NOT ILIKE '%club events%'${availFilter}
             `;
             params.push(restaurant_id);
         } else if (university_id) {
             query = `
-                SELECT DISTINCT ON (m.name) m.*, r.is_open as restaurant_is_open 
-                FROM menu_items m 
-                JOIN restaurants r ON m.restaurant_id = r.id 
-                WHERE r.university_id = $${pIndex++} AND r.name NOT ILIKE '%event management%' AND r.name NOT ILIKE '%club events%'${availFilter}
+                SELECT DISTINCT ON (m.name) m.*, r.is_open as restaurant_is_open,
+                       c.name as category_name, c.cutoff_time as category_cutoff_time, c.lead_time as category_lead_time
+                FROM menu_items m
+                JOIN restaurants r ON m.restaurant_id = r.id
+                LEFT JOIN categories c ON m.category_id = c.id
+                WHERE r.university_id = $${pIndex++} AND r.is_event_restaurant = false${availFilter}
             `;
             params.push(university_id);
         }
@@ -83,7 +87,7 @@ export const getMenu = async (req: Request, res: Response) => {
 };
 
 export const addMenuItem = async (req: AuthRequest, res: Response) => {
-    const { name, description, price, category, image_url, nutritional_info, stock_quantity, restaurant_id, is_veg } = req.body;
+    const { name, description, price, category, category_id, image_url, nutritional_info, stock_quantity, restaurant_id, is_veg } = req.body;
     
     if (!restaurant_id) {
         return res.status(400).json({ message: 'Restaurant ID is required' });
@@ -100,9 +104,9 @@ export const addMenuItem = async (req: AuthRequest, res: Response) => {
         if (restCheck.rows.length === 0) return res.sendStatus(403);
 
         const result = await pool.query(
-            `INSERT INTO menu_items (restaurant_id, name, description, price, category, image_url, nutritional_info, stock_quantity, is_veg)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-            [restaurant_id, name, description, price, category, image_url, nutritional_info ? (typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info) : null, stock_quantity || 0, is_veg !== undefined ? (is_veg === 'true' || is_veg === true) : true]
+            `INSERT INTO menu_items (restaurant_id, name, description, price, category, category_id, image_url, nutritional_info, stock_quantity, is_veg)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [restaurant_id, name, description, price, category || '', category_id || null, image_url, nutritional_info ? (typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info) : null, stock_quantity || 0, is_veg !== undefined ? (is_veg === 'true' || is_veg === true) : true]
         );
         
         let item = result.rows[0];
@@ -205,7 +209,7 @@ export const updateStock = async (req: Request, res: Response) => {
 // ─── Admin: Update Menu Item (full edit) ───
 export const updateMenuItem = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, description, price, category, nutritional_info, stock_quantity, is_available, is_veg } = req.body;
+    const { name, description, price, category, category_id, nutritional_info, stock_quantity, is_available, is_veg } = req.body;
     let { image_url } = req.body;
 
     console.log(`[DEBUG updateMenuItem] id=${id}, body keys=[${Object.keys(req.body).join(', ')}], is_available=${is_available}, stock_quantity=${stock_quantity}`);
@@ -253,6 +257,7 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         if (image_url !== undefined) { updates.push(`image_url = $${idx++}`); params.push(image_url); }
         if (nutritional_info !== undefined) { updates.push(`nutritional_info = $${idx++}`); params.push(typeof nutritional_info === 'string' ? JSON.parse(nutritional_info) : nutritional_info); }
         if (is_veg !== undefined) { updates.push(`is_veg = $${idx++}`); params.push(is_veg === 'true' || is_veg === true); }
+        if (category_id !== undefined) { updates.push(`category_id = $${idx++}`); params.push(category_id || null); }
 
         // ─── Smart stock → availability sync ───
         const newStockQty = stock_quantity !== undefined ? Number(stock_quantity) : current.stock_quantity;
@@ -319,11 +324,27 @@ export const deleteMenuItem = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Forbidden' });
         }
 
-        const result = await pool.query(
-            'UPDATE menu_items SET is_available = false WHERE id = $1 RETURNING *', [id]
-        );
-        auditLog({ userId: user?.id, action: 'MENU_DELETED', resource: `menu:${id}`, ip: getRequestIp(req) });
-        res.json({ message: 'Item deactivated', item: result.rows[0] });
+        // Try a real delete. If the item is referenced by past orders/reviews, the FK
+        // constraint blocks it (code 23503) — fall back to archiving (hiding) it instead
+        // so we never orphan order history.
+        try {
+            await pool.query('DELETE FROM menu_items WHERE id = $1', [id]);
+            auditLog({ userId: user?.id, action: 'MENU_DELETED', resource: `menu:${id}`, details: 'Permanently deleted', ip: getRequestIp(req) });
+            return res.json({ message: 'Item permanently deleted', deleted: true });
+        } catch (err: any) {
+            if (err.code === '23503') {
+                const result = await pool.query(
+                    'UPDATE menu_items SET is_available = false WHERE id = $1 RETURNING *', [id]
+                );
+                auditLog({ userId: user?.id, action: 'MENU_DELETED', resource: `menu:${id}`, details: 'Archived (had order history)', ip: getRequestIp(req) });
+                return res.json({
+                    message: 'This item has order history, so it was archived (hidden from the menu) instead of being permanently deleted.',
+                    deleted: false,
+                    item: result.rows[0],
+                });
+            }
+            throw err;
+        }
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

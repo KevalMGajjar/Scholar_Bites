@@ -75,13 +75,11 @@ class ApiClient {
               return handler.next(e);
             }
 
-            // ─── 403: Token decode failure (expired / corrupted / wrong secret) ───
-            // This is the exact case from the error log:
-            // "[Auth] 403: Failed to decode token for /balance"
-            if (statusCode == 403) {
-              _forceLogout('Your session has expired. Please log in again.');
-              return handler.next(e);
-            }
+            // NOTE: 403 is NOT a logout case. The backend returns 401 for all auth
+            // failures (missing/expired/corrupt token) and uses 403 ONLY for
+            // permission denials (e.g. a student hitting a university-staff-only
+            // endpoint like redeemCoupon). Logging out on 403 would kick users out
+            // on a harmless "not allowed" — let the calling screen handle it.
 
             // ─── 401 without DEVICE_CONFLICT: generic unauthorized ───
             // Could be a missing token, revoked session, etc.
