@@ -93,8 +93,17 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
     final firstDate = DateTime(now.year, now.month, now.day);
     final pickedDate = await showDatePicker(context: context, initialDate: firstDate, firstDate: firstDate, lastDate: DateTime(now.year + 1, now.month, now.day));
     if (pickedDate != null) {
-      final pickedTime = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 12, minute: 0));
-      if (pickedTime != null) setState(() { _selectedDate = pickedDate; _selectedTime = pickedTime; });
+      final pickedTime = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+      if (pickedTime != null) {
+        // Give an immediate, clear message if the chosen moment is already in the past
+        // (e.g. picking noon today when it's already evening).
+        final picked = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+        if (picked.isBefore(DateTime.now())) {
+          if (mounted) CustomToast.showErrorToast(context, 'That time has already passed today. Pick a later time or a future date.');
+          return;
+        }
+        setState(() { _selectedDate = pickedDate; _selectedTime = pickedTime; });
+      }
     }
   }
 
@@ -102,7 +111,8 @@ class _NewEventOrderScreenState extends State<NewEventOrderScreen> {
     if (_eventNameController.text.trim().isEmpty) { CustomToast.showErrorToast(context, 'Please enter an event name'); return false; }
     if (_guestsController.text.trim().isEmpty || int.tryParse(_guestsController.text) == null) { CustomToast.showErrorToast(context, 'Please enter valid guest count'); return false; }
     if (_staffNameController.text.trim().isEmpty) { CustomToast.showErrorToast(context, 'Please enter staff name'); return false; }
-    if (_staffEmailController.text.trim().isEmpty || !_staffEmailController.text.contains('@')) { CustomToast.showErrorToast(context, 'Please enter a valid staff email'); return false; }
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    if (!emailRegex.hasMatch(_staffEmailController.text.trim())) { CustomToast.showErrorToast(context, 'Please enter a valid staff email'); return false; }
     if (_selectedDate == null || _selectedTime == null) { CustomToast.showErrorToast(context, 'Please select date and time'); return false; }
     if (_cart.isEmpty && !_hasCustomOrder) { CustomToast.showErrorToast(context, 'Please add menu items or describe a custom order'); return false; }
     return true;

@@ -245,6 +245,60 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        // ═══ STAFF DAILY PRE-ORDER STATS (respect the restaurant filter) ═══
+        {
+            const spoParams: any[] = [uniId];
+            let spoClause = '';
+            if (restaurantId) { spoClause = ' AND restaurant_id = $2'; spoParams.push(restaurantId); }
+
+            const spoRevenue = await pool.query(
+                `SELECT COALESCE(SUM(total_amount), 0)::numeric as total, COUNT(*)::int as count
+                 FROM staff_pre_orders WHERE university_id = $1 AND status <> 'cancelled'${spoClause}`,
+                spoParams
+            );
+            const spoToday = await pool.query(
+                `SELECT COUNT(*)::int as count, COALESCE(SUM(total_amount), 0)::numeric as revenue
+                 FROM staff_pre_orders WHERE university_id = $1 AND created_at >= CURRENT_DATE AND status <> 'cancelled'${spoClause}`,
+                spoParams
+            );
+            const spoStatus = await pool.query(
+                `SELECT status, COUNT(*)::int as count FROM staff_pre_orders WHERE university_id = $1${spoClause} GROUP BY status`,
+                spoParams
+            );
+
+            combinedRevenue += parseFloat(spoRevenue.rows[0].total);
+            combinedOrdersToday += spoToday.rows[0].count;
+            combinedRevenueToday += parseFloat(spoToday.rows[0].revenue);
+            for (const row of spoStatus.rows) {
+                combinedStatus[row.status] = (combinedStatus[row.status] || 0) + row.count;
+            }
+
+            const spoBest = await pool.query(
+                `SELECT m.name, m.image_url, m.price, SUM(poi.quantity)::int as total_sold,
+                        SUM(poi.quantity * poi.price_at_time)::numeric as total_revenue
+                 FROM staff_pre_order_items poi
+                 JOIN menu_items m ON poi.menu_item_id = m.id
+                 JOIN staff_pre_orders po ON poi.pre_order_id = po.id
+                 WHERE po.university_id = $1 AND po.status <> 'cancelled'${restaurantId ? ' AND po.restaurant_id = $2' : ''}
+                 GROUP BY m.id, m.name, m.image_url, m.price
+                 ORDER BY total_sold DESC LIMIT 5`,
+                spoParams
+            );
+            for (const sb of spoBest.rows) {
+                const existing = allBestSellers.find(b => b.name === sb.name);
+                if (existing) {
+                    existing.total_sold += sb.total_sold;
+                    existing.total_revenue += parseFloat(sb.total_revenue);
+                } else {
+                    allBestSellers.push({
+                        name: sb.name, image_url: sb.image_url, price: parseFloat(sb.price),
+                        total_sold: sb.total_sold, total_revenue: parseFloat(sb.total_revenue),
+                    });
+                }
+            }
+            allBestSellers.sort((a, b) => b.total_sold - a.total_sold);
+        }
+
         res.json({
             orders_by_status: combinedStatus,
             total_revenue: combinedRevenue,

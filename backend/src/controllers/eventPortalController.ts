@@ -5,6 +5,7 @@ import ExcelJS from 'exceljs';
 import pool from '../config/db';
 import { generateToken } from '../utils/jwt';
 import { sendVoucherEmail } from '../services/emailService';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ═══════════════════════════════════════════════════════════════
 // Dean Portal Controller — Standalone dean-facing endpoints
@@ -32,6 +33,7 @@ export const deanLogin = async (req: Request, res: Response) => {
         );
 
         if (result.rows.length === 0) {
+            auditLog({ action: 'DEAN_LOGIN_FAILED', resource: `email:${email}`, details: 'No such dean', ip: getRequestIp(req) });
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
@@ -39,6 +41,7 @@ export const deanLogin = async (req: Request, res: Response) => {
         const valid = await bcrypt.compare(password, dean.password_hash);
 
         if (!valid) {
+            auditLog({ userId: dean.id, action: 'DEAN_LOGIN_FAILED', resource: `dean:${dean.id}`, details: 'Wrong password', ip: getRequestIp(req) });
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
@@ -51,6 +54,8 @@ export const deanLogin = async (req: Request, res: Response) => {
         // Save active token hash for single-device enforcement
         const tokenHash = hashToken(token);
         await pool.query('UPDATE deans SET active_token = $1 WHERE id = $2', [tokenHash, dean.id]);
+
+        auditLog({ userId: dean.id, action: 'DEAN_LOGIN_SUCCESS', resource: `dean:${dean.id}`, details: dean.email, ip: getRequestIp(req) });
 
         res.json({
             token,
@@ -208,6 +213,14 @@ export const generateCoupon = async (req: Request, res: Response) => {
             }).catch((err: any) => console.warn('[DeanPortal] Voucher email failed:', err.message));
         }
 
+        auditLog({
+            userId: deanId,
+            action: 'COUPON_GENERATED',
+            resource: `coupon:${coupon.code}`,
+            details: `₹${parsedAmount} voucher for ${staff_email}`,
+            ip: getRequestIp(req),
+        });
+
         res.status(201).json({
             coupon: {
                 ...coupon,
@@ -271,6 +284,14 @@ export const revokeCoupon = async (req: Request, res: Response) => {
             'UPDATE deans SET used_budget = used_budget - $1 WHERE id = $2',
             [Number(coupon.amount), deanId]
         );
+
+        auditLog({
+            userId: deanId,
+            action: 'COUPON_REVOKED',
+            resource: `coupon:${coupon.code}`,
+            details: `₹${Number(coupon.amount)} voucher revoked`,
+            ip: getRequestIp(req),
+        });
 
         res.json({ message: 'Coupon revoked', coupon: { ...coupon, amount: Number(coupon.amount) } });
     } catch (error: any) {

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
 import { AHMEDABAD_UNIVERSITY_ID } from '../config/constants';
+import { auditLog, getRequestIp } from '../services/auditLogger';
 
 // ═══════════════════════════════════════════════════════════════
 // University Staff Management (Super Admin)
@@ -64,6 +65,14 @@ export const createUniversityStaff = async (req: Request, res: Response) => {
              RETURNING id, name, phone, email, user_type, dean_id, created_at`,
             [name.trim(), cleanPhone, email || null, AHMEDABAD_UNIVERSITY_ID, dean_id || null]
         );
+
+        auditLog({
+            userId: (req as any).user?.id,
+            action: 'UNIVERSITY_STAFF_CREATED',
+            resource: `delegate:${result.rows[0].id}`,
+            details: `${name.trim()} (${cleanPhone})`,
+            ip: getRequestIp(req),
+        });
 
         res.status(201).json(result.rows[0]);
     } catch (error: any) {
@@ -146,6 +155,14 @@ export const bulkCreateUniversityStaff = async (req: Request, res: Response) => 
 
         await client.query('COMMIT');
 
+        auditLog({
+            userId: (req as any).user?.id,
+            action: 'UNIVERSITY_STAFF_CREATED',
+            resource: 'delegate:bulk',
+            details: `Bulk import — ${created.length} created, ${skipped.length} skipped`,
+            ip: getRequestIp(req),
+        });
+
         res.status(201).json({
             created: created.length,
             skipped: skipped.length,
@@ -181,6 +198,12 @@ export const deleteUniversityStaff = async (req: Request, res: Response) => {
         }
 
         await pool.query('DELETE FROM users WHERE id = $1', [id]);
+        auditLog({
+            userId: (req as any).user?.id,
+            action: 'UNIVERSITY_STAFF_DELETED',
+            resource: `delegate:${id}`,
+            ip: getRequestIp(req),
+        });
         res.json({ message: 'Staff member removed successfully' });
     } catch (error: any) {
         console.error('[UniversityStaff] delete error:', error.message);
@@ -244,6 +267,14 @@ export const updateUniversityStaff = async (req: Request, res: Response) => {
              RETURNING id, name, phone, email, user_type, dean_id, created_at`,
             values
         );
+
+        auditLog({
+            userId: (req as any).user?.id,
+            action: 'UNIVERSITY_STAFF_UPDATED',
+            resource: `delegate:${id}`,
+            details: fields.map((f) => f.split(' = ')[0]).join(', '),
+            ip: getRequestIp(req),
+        });
 
         res.json(result.rows[0]);
     } catch (error: any) {

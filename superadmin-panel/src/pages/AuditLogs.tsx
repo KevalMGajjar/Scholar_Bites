@@ -40,6 +40,25 @@ const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; b
   WALLET_TOPUP: { label: 'Wallet Top-up', icon: Wallet, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   WALLET_PAYMENT: { label: 'Wallet Payment', icon: Wallet, color: 'text-blue-400', bg: 'bg-blue-500/10' },
   UNIVERSITY_UPDATED: { label: 'University Updated', icon: Edit, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  // ── Event portal (deans / event heads) ──
+  DEAN_LOGIN_SUCCESS: { label: 'Event Head Login', icon: LogIn, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  DEAN_LOGIN_FAILED: { label: 'Event Head Login Failed', icon: ShieldAlert, color: 'text-red-400', bg: 'bg-red-500/10' },
+  DEAN_CREATED: { label: 'Event Head Created', icon: UserPlus, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  DEAN_DELETED: { label: 'Event Head Deleted', icon: UserMinus, color: 'text-red-400', bg: 'bg-red-500/10' },
+  DEAN_UPDATED: { label: 'Event Head Updated', icon: Edit, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  DEAN_BUDGET_UPDATED: { label: 'Event Head Budget', icon: Wallet, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  COUPON_GENERATED: { label: 'Voucher Issued', icon: Wallet, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  COUPON_REVOKED: { label: 'Voucher Revoked', icon: Wallet, color: 'text-red-400', bg: 'bg-red-500/10' },
+  COUPON_REDEEMED: { label: 'Voucher Redeemed', icon: Wallet, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  // ── Delegates (university staff) ──
+  UNIVERSITY_STAFF_CREATED: { label: 'Delegate Created', icon: UserPlus, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  UNIVERSITY_STAFF_DELETED: { label: 'Delegate Removed', icon: UserMinus, color: 'text-red-400', bg: 'bg-red-500/10' },
+  UNIVERSITY_STAFF_UPDATED: { label: 'Delegate Updated', icon: Edit, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  // ── Catering (event pre-orders) ──
+  EVENT_PRE_ORDER: { label: 'Catering Order', icon: CreditCard, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  EVENT_STATUS_UPDATED: { label: 'Catering Status Changed', icon: Edit, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  EVENT_PRE_ORDER_CANCELLED: { label: 'Catering Cancelled', icon: Trash2, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+  STAFF_PRE_ORDER: { label: 'Daily Pre-Order', icon: CreditCard, color: 'text-blue-400', bg: 'bg-blue-500/10' },
 };
 
 const ACTION_CATEGORIES = [
@@ -61,6 +80,15 @@ const ACTION_CATEGORIES = [
   { label: '── Orders & Payments ──', value: '', disabled: true },
   { label: 'Order Status', value: 'ORDER_STATUS_CHANGED' },
   { label: 'Wallet Top-up', value: 'WALLET_TOPUP' },
+  { label: '── Event Portal ──', value: '', disabled: true },
+  { label: 'Event Head Login', value: 'DEAN_LOGIN_SUCCESS' },
+  { label: 'Voucher Issued', value: 'COUPON_GENERATED' },
+  { label: 'Voucher Revoked', value: 'COUPON_REVOKED' },
+  { label: 'Voucher Redeemed', value: 'COUPON_REDEEMED' },
+  { label: 'Catering Status Changed', value: 'EVENT_STATUS_UPDATED' },
+  { label: '── Delegates ──', value: '', disabled: true },
+  { label: 'Delegate Created', value: 'UNIVERSITY_STAFF_CREATED' },
+  { label: 'Delegate Removed', value: 'UNIVERSITY_STAFF_DELETED' },
 ];
 
 function timeAgo(dateStr: string) {

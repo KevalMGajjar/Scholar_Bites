@@ -809,7 +809,8 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
 // ─── Admin: Get All Orders (with items + user info) ───
 export const getAllOrders = async (req: AuthRequest, res: Response) => {
-    const { status, restaurant_id, search, page = '1', limit = '50' } = req.query;
+    const { status, restaurant_id, search, refunded, page = '1', limit = '50' } = req.query;
+    const refundedClauseSql = ` AND o.status = 'cancelled' AND EXISTS (SELECT 1 FROM wallet_transactions wt WHERE wt.reference_id = o.id::text AND wt.type = 'refund')`;
 
     try {
         const staffRes = await pool.query('SELECT university_id, restaurant_id, role FROM staff WHERE id = $1', [req.user.id]);
@@ -826,9 +827,13 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
         }
 
         let query = `
-            SELECT o.*, 
+            SELECT o.*,
                    u.name as user_name, u.phone as user_phone,
                    r.name as restaurant_name,
+                   EXISTS (
+                       SELECT 1 FROM wallet_transactions wt
+                       WHERE wt.reference_id = o.id::text AND wt.type = 'refund'
+                   ) as is_refunded,
                    json_agg(json_build_object(
                        'id', oi.id,
                        'menu_item_id', oi.menu_item_id,
@@ -847,7 +852,9 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
         const params: any[] = [uniId];
         let pIdx = 2;
 
-        if (status) {
+        if (refunded === 'true') {
+            query += refundedClauseSql;
+        } else if (status) {
             query += ` AND o.status = $${pIdx++}`;
             params.push(status);
         }
@@ -887,7 +894,8 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
         `;
         const countParams: any[] = [uniId];
         let cIdx = 2;
-        if (status) { countQuery += ` AND o.status = $${cIdx++}`; countParams.push(status); }
+        if (refunded === 'true') { countQuery += refundedClauseSql; }
+        else if (status) { countQuery += ` AND o.status = $${cIdx++}`; countParams.push(status); }
         if (effectiveRestaurantId) { countQuery += ` AND o.restaurant_id = $${cIdx++}`; countParams.push(effectiveRestaurantId); }
         if (search && typeof search === 'string' && search.trim()) {
             const raw = search.trim();

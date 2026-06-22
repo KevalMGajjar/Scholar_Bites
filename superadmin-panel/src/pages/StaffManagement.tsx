@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { UserPlus, Activity, LogIn, ShieldOff, Unlock, Trash2, AlertTriangle, Eye, EyeOff, Pencil } from 'lucide-react';
+import { UserPlus, Activity, LogIn, ShieldOff, Unlock, Trash2, AlertTriangle, Eye, EyeOff, Pencil, Search } from 'lucide-react';
 
 // Mirrors the backend passwordSchema (validators.ts). The API enforces this on
 // /superadmin/staff create + update, so validate here for an immediate message.
@@ -53,6 +53,7 @@ interface LockedAccount {
 export default function StaffManagement() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   
   // Restaurants (for assigning staff to a kitchen)
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -310,6 +311,23 @@ export default function StaffManagement() {
           </div>
         )}
 
+        {/* Search */}
+        <div className="relative mb-6">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#554240]" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email…"
+            className="w-full pl-11 pr-10 py-3 rounded-xl bg-[#1c1b1b] border border-[#554240]/20 text-[#e5e2e1] text-sm focus:outline-none focus:border-[#ffb4a8]/40 placeholder-[#554240]"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#554240] hover:text-[#a38b88]" title="Clear">
+              &times;
+            </button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex justify-center p-20">
              <div className="animate-spin w-8 h-8 flex border-2 border-indigo-500 border-t-transparent rounded-full" />
@@ -326,7 +344,11 @@ export default function StaffManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#554240]/15">
-                   {staffList.map((st) => (
+                   {staffList.filter((st) => {
+                      const q = search.trim().toLowerCase();
+                      if (!q) return true;
+                      return st.name.toLowerCase().includes(q) || (st.email || '').toLowerCase().includes(q);
+                   }).map((st) => (
                       <tr key={st.id} className="hover:bg-[#201f1f] transition group">
                          <td className="p-5">
                             <div className={`flex items-center gap-4 ${st.kind === 'staff' ? 'cursor-pointer' : ''}`} onClick={() => { if (st.kind === 'staff') loadAnalytics(st); }}>

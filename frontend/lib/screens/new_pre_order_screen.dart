@@ -22,8 +22,7 @@ class _NewPreOrderScreenState extends State<NewPreOrderScreen> {
   bool _isPaying = false;
   List<FoodItem> _menuItems = [];
   Map<String, int> _cart = {}; // foodId -> quantity
-  DateTime? _selectedDate;
-  
+
   @override
   void initState() {
     super.initState();
@@ -45,32 +44,6 @@ class _NewPreOrderScreenState extends State<NewPreOrderScreen> {
     }
   }
 
-  void _selectDate() async {
-    final now = DateTime.now();
-    final firstDate = DateTime(now.year, now.month, now.day + 1); // Tomorrow at earliest
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: firstDate,
-      firstDate: firstDate,
-      lastDate: DateTime(now.year, now.month + 1, now.day), 
-      builder: (context, child) {
-         return Theme(
-           data: ThemeData.light().copyWith(
-             colorScheme: const ColorScheme.light(
-               primary: Color(0xFF8B1C28),
-               onPrimary: Colors.white,
-               onSurface: Color(0xFF4A0E13),
-             ),
-           ),
-           child: child!,
-         );
-      }
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
   double get _totalAmount {
     double total = 0;
     _cart.forEach((id, qty) {
@@ -81,36 +54,44 @@ class _NewPreOrderScreenState extends State<NewPreOrderScreen> {
   }
 
   void _placeOrder() async {
-    if (_selectedDate == null) {
-      CustomToast.showErrorToast(context, 'Please select a target date for your pre-order');
-      return;
-    }
     if (_cart.isEmpty) {
       CustomToast.showErrorToast(context, 'Please add items to your pre-order');
       return;
     }
 
+    // A pre-order is for a single restaurant — derive it from the chosen items.
+    final restaurantIds = _cart.keys
+        .map((id) => _menuItems.firstWhere((m) => m.id == id).restaurantId)
+        .where((r) => r != null && r.isNotEmpty)
+        .toSet();
+    if (restaurantIds.isEmpty) {
+      CustomToast.showErrorToast(context, 'Selected items are missing a restaurant');
+      return;
+    }
+    if (restaurantIds.length > 1) {
+      CustomToast.showErrorToast(context, 'A pre-order can only contain items from one restaurant');
+      return;
+    }
+    final restaurantId = restaurantIds.first!;
+
     setState(() => _isPaying = true);
 
     final itemsList = _cart.entries.map((e) {
-      final item = _menuItems.firstWhere((m) => m.id == e.key);
       return {
-        'food_id': item.id,
+        'menu_item_id': e.key,
         'quantity': e.value,
-        'price': item.price,
       };
     }).toList();
 
     try {
       await _staffService.createPreOrder(
+        restaurantId: restaurantId,
         items: itemsList,
-        targetDate: _selectedDate!.toIso8601String(),
-        notes: '',
       );
-      
+
       if (mounted) {
         setState(() => _isPaying = false);
-        CustomToast.showSuccessToast(context, 'Pre-Order created! Balance deducted.');
+        CustomToast.showSuccessToast(context, 'Pre-Order created for today! Balance deducted.');
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -196,7 +177,7 @@ class _NewPreOrderScreenState extends State<NewPreOrderScreen> {
                 children: [
                   // Target Date
                   Text(
-                    'Target Date',
+                    'Pre-Order For',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -204,31 +185,26 @@ class _NewPreOrderScreenState extends State<NewPreOrderScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: _selectDate,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF8B1C28).withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF8B1C28)),
-                          const SizedBox(width: 12),
-                          Text(
-                            _selectedDate == null 
-                                ? 'Select delivery date (Tomorrow+)'
-                                : DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate!),
-                            style: GoogleFonts.poppins(
-                              color: _selectedDate == null ? Colors.grey : const Color(0xFF4A0E13),
-                              fontWeight: _selectedDate == null ? FontWeight.normal : FontWeight.w600,
-                              fontSize: 16,
-                            ),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF8B1C28).withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, color: Color(0xFF8B1C28)),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Today · ${DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now())}',
+                          style: GoogleFonts.poppins(
+                            color: const Color(0xFF4A0E13),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 32),

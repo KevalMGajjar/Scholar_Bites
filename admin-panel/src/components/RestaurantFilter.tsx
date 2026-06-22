@@ -1,20 +1,41 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRestaurant } from '../context/RestaurantContext';
 import { Lock, ChevronDown } from 'lucide-react';
 
 export default function RestaurantFilter() {
   const { restaurants, selectedRestaurantId, setSelectedRestaurantId, isStaffLocked, staffRestaurantName } = useRestaurant();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
 
-  // Close on outside click
+  // Position the portal menu right under the trigger when it opens.
+  useLayoutEffect(() => {
+    if (open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    }
+  }, [open]);
+
+  // Close on outside click (the menu lives in a portal, so check BOTH refs),
+  // and on scroll/resize to avoid a misaligned floating menu.
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const onMove = () => setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('resize', onMove);
+    window.addEventListener('scroll', onMove, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', onMove);
+      window.removeEventListener('scroll', onMove, true);
+    };
   }, [open]);
 
   if (isStaffLocked) {
@@ -35,8 +56,9 @@ export default function RestaurantFilter() {
     isSelected ? '#ef4444' : isOpen ? '#10b981' : '#64748b';
 
   return (
-    <div ref={ref} className="relative z-50" style={{ minWidth: '180px' }}>
+    <div className="relative" style={{ minWidth: '180px' }}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between gap-2 px-3.5 py-2 rounded-[14px] text-[13px] font-medium text-slate-300 bg-[#111318] border border-white/[0.08] hover:border-white/[0.15] transition-colors"
@@ -50,14 +72,20 @@ export default function RestaurantFilter() {
         <ChevronDown size={14} className={`text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
-        <div className="absolute z-[100] mt-1.5 w-full rounded-xl bg-[#0c0e14] border border-white/[0.12] shadow-2xl shadow-black/70 overflow-hidden py-1 animate-scale-in">
-          {/* All Restaurants */}
+      {/* Rendered in a portal at <body> with a fully opaque background and a huge
+          z-index — escapes every parent stacking context so cards can never sit
+          on top of it or show through. */}
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, backgroundColor: '#0c0e14' }}
+          className="rounded-xl border border-white/[0.12] shadow-2xl shadow-black/70 overflow-hidden py-1 animate-scale-in"
+        >
           <button
             type="button"
             onClick={() => { setSelectedRestaurantId(null); setOpen(false); }}
             className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-left transition-colors ${
-              !selectedRestaurantId ? 'bg-indigo-500 text-white' : 'text-slate-300 hover:bg-white/[0.05]'
+              !selectedRestaurantId ? 'bg-indigo-500 text-white' : 'text-slate-300 hover:bg-white/[0.06]'
             }`}
           >
             {!selectedRestaurantId && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#ef4444' }} />}
@@ -72,7 +100,7 @@ export default function RestaurantFilter() {
                 type="button"
                 onClick={() => { setSelectedRestaurantId(r.id); setOpen(false); }}
                 className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-left transition-colors ${
-                  isSelected ? 'bg-indigo-500 text-white' : 'text-slate-300 hover:bg-white/[0.05]'
+                  isSelected ? 'bg-indigo-500 text-white' : 'text-slate-300 hover:bg-white/[0.06]'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor(isSelected, r.is_open) }} />
@@ -80,7 +108,8 @@ export default function RestaurantFilter() {
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

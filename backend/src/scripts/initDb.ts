@@ -257,7 +257,12 @@ export const createTablesQuery = `
   -- lacks these, so Prisma-provisioned DBs are missing them → 500 on save).
   ALTER TABLE universities ADD COLUMN IF NOT EXISTS support_phone VARCHAR(50);
   ALTER TABLE universities ADD COLUMN IF NOT EXISTS support_email VARCHAR(255);
+  ALTER TABLE universities ADD COLUMN IF NOT EXISTS support_staff TEXT;
   ALTER TABLE universities ADD COLUMN IF NOT EXISTS address TEXT;
+
+  -- Migration: last pickup/pre-order time (HH:MM, IST). Delegates can't pick a
+  -- catering pickup time later than this. Lives in university_settings (Prisma table).
+  ALTER TABLE university_settings ADD COLUMN IF NOT EXISTS pre_order_cutoff VARCHAR(5) DEFAULT '22:00';
 
   -- Index for stale notification cleanup
   CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at);

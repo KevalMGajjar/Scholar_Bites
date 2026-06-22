@@ -25,6 +25,11 @@ export const createEventPreOrder = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: 'All event details are required' });
     }
 
+    // Validate the contact email format.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(staff_email).trim())) {
+        return res.status(400).json({ message: 'Please enter a valid email address.' });
+    }
+
     const itemsArr = Array.isArray(items) ? items : [];
     const hasCustomOrder = typeof special_requirements === 'string' && special_requirements.trim().length > 0;
     if (itemsArr.length === 0 && !hasCustomOrder) {
@@ -89,34 +94,49 @@ export const createEventPreOrder = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        // ── Enforce advance-notice (lead time) and same-day cutoff ──
-        // Interpreted in the server's local timezone — set TZ=Asia/Kolkata on the server.
-        const eventDateTime = new Date(`${event_date}T${String(event_time).slice(0, 5)}:00`);
-        if (isNaN(eventDateTime.getTime())) {
+        // ── Time rules (catering): per-item lead time + same-day cutoff, all in IST ──
+        // We avoid string Date parsing entirely (it depends on the server's timezone)
+        // and build absolute epoch millis from the raw numbers via Date.UTC, treating
+        // the chosen date/time as IST. This is correct no matter the server timezone.
+        const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+        const nowMs = Date.now();
+        const nowIST = new Date(nowMs + IST_OFFSET_MS); // read IST wall-clock via UTC getters
+
+        const [ey, emo, ed] = String(event_date).split('-').map(Number);
+        const [eh, emin] = String(event_time).slice(0, 5).split(':').map(Number);
+        if ([ey, emo, ed, eh, emin].some((n) => Number.isNaN(n))) {
             throw new Error('Invalid event date or time');
         }
-        if (eventDateTime.getTime() < Date.now() + maxLeadTime * 60 * 1000) {
-            if (maxLeadTime <= 0) {
-                throw new Error('Event date & time must be in the future.');
+        // Absolute epoch of the pickup, where (ey-emo-ed eh:emin) is an IST wall-clock time.
+        const pickupMs = Date.UTC(ey, emo - 1, ed, eh, emin, 0) - IST_OFFSET_MS;
+
+        // Is the pickup for today (IST)?
+        const isToday = ey === nowIST.getUTCFullYear()
+            && (emo - 1) === nowIST.getUTCMonth()
+            && ed === nowIST.getUTCDate();
+
+        // 1) Same-day cutoff — checked FIRST so the right message wins for today's
+        //    orders. Only applies to today; future dates are never blocked by it.
+        if (isToday && earliestCutoff) {
+            const [ch, cm] = String(earliestCutoff).split(':').map(Number);
+            const nowMins = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+            if (nowMins > (ch * 60 + cm)) {
+                throw new Error(`Same-day orders for these items closed at ${String(earliestCutoff).slice(0, 5)}. Please pick another day.`);
             }
+        }
+
+        // 2) Only a TODAY pickup can be "in the past". A future date is always valid
+        //    date-wise (the lead-time rule below still enforces minimum notice).
+        if (isToday && pickupMs <= nowMs) {
+            throw new Error('Pickup time must be in the future.');
+        }
+
+        // 3) Lead time: pickup must be at least `maxLeadTime` minutes from now.
+        if (maxLeadTime > 0 && pickupMs < nowMs + maxLeadTime * 60 * 1000) {
             const h = Math.floor(maxLeadTime / 60);
             const m = maxLeadTime % 60;
             const leadLabel = h > 0 ? `${h} hour${h !== 1 ? 's' : ''}${m ? ` ${m} min` : ''}` : `${m} min`;
             throw new Error(`These items need at least ${leadLabel} of advance notice. Please pick a later time.`);
-        }
-        if (earliestCutoff) {
-            const now = new Date();
-            const eventDay = new Date(`${event_date}T00:00:00`);
-            const isToday = eventDay.getFullYear() === now.getFullYear()
-                && eventDay.getMonth() === now.getMonth()
-                && eventDay.getDate() === now.getDate();
-            if (isToday) {
-                const [ch, cm] = String(earliestCutoff).split(':').map(Number);
-                const cutoffToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ch || 0, cm || 0, 0);
-                if (now.getTime() > cutoffToday.getTime()) {
-                    throw new Error(`Same-day orders for these items close at ${String(earliestCutoff).slice(0, 5)}. Please choose another day.`);
-                }
-            }
         }
 
         // Wallet is only charged for itemised orders. A pure custom order has no
@@ -278,6 +298,14 @@ export const cancelEventPreOrder = async (req: AuthRequest, res: Response) => {
 
         await client.query('COMMIT');
 
+        auditLog({
+            userId,
+            action: 'EVENT_PRE_ORDER_CANCELLED',
+            resource: `event:${id}`,
+            details: refundAmount > 0 ? `Refunded ₹${refundAmount}` : 'No refund (unpaid)',
+            ip: getRequestIp(req),
+        });
+
         res.json({
             message: refundAmount > 0 ? 'Order cancelled and refunded' : 'Order cancelled',
             refunded: refundAmount,
@@ -357,6 +385,14 @@ export const updateEventStatus = async (req: AuthRequest, res: Response) => {
         }
 
         await client.query('COMMIT');
+
+        auditLog({
+            userId: req.user?.id,
+            action: 'EVENT_STATUS_UPDATED',
+            resource: `event:${id}`,
+            details: `status=${status}${total_amount ? `, quoted=₹${total_amount}` : ''}${rejection_reason ? `, reason=${rejection_reason}` : ''}`,
+            ip: getRequestIp(req),
+        });
 
         // Send rejection email to staff (async, non-blocking)
         if (status === 'rejected') {

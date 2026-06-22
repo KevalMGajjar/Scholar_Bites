@@ -36,7 +36,7 @@ export const getUniversitySettings = async (req: Request, res: Response) => {
 /** Update university settings (admin only) */
 export const updateUniversitySettings = async (req: Request, res: Response) => {
     const { university_id } = req.params;
-    const { group_order_visible_students, system_email, admin_email, super_admin_email } = req.body;
+    const { group_order_visible_students, system_email, admin_email, super_admin_email, pre_order_cutoff } = req.body;
 
     try {
         const result = await pool.query(
@@ -45,10 +45,11 @@ export const updateUniversitySettings = async (req: Request, res: Response) => {
                  system_email = COALESCE($2, system_email),
                  admin_email = COALESCE($3, admin_email),
                  super_admin_email = COALESCE($4, super_admin_email),
+                 pre_order_cutoff = COALESCE($5, pre_order_cutoff),
                  updated_at = NOW()
-             WHERE university_id = $5
+             WHERE university_id = $6
              RETURNING *`,
-            [group_order_visible_students, system_email, admin_email, super_admin_email, university_id]
+            [group_order_visible_students, system_email, admin_email, super_admin_email, pre_order_cutoff, university_id]
         );
 
         if (result.rows.length === 0) {

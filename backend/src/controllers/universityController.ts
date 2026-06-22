@@ -45,10 +45,10 @@ export const getUniversityById = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
         const result = await pool.query(
-            `SELECT u.*, s.group_order_visible_students 
+            `SELECT u.*, s.group_order_visible_students, s.pre_order_cutoff
              FROM universities u
              LEFT JOIN university_settings s ON u.id = s.university_id
-             WHERE u.id = $1`, 
+             WHERE u.id = $1`,
              [id]
         );
         if (result.rows.length === 0) {
@@ -148,7 +148,7 @@ export const updateUniversity = async (req: Request, res: Response) => {
         return res.status(403).json({ message: 'Forbidden: You can only edit your own university' });
     }
 
-    const { name, address, support_phone, support_email } = req.body;
+    const { name, address, support_phone, support_email, support_staff } = req.body;
     let { logo_url } = req.body;
 
     try {
@@ -167,6 +167,7 @@ export const updateUniversity = async (req: Request, res: Response) => {
         if (logo_url !== undefined) { updates.push(`logo_url = $${idx++}`); params.push(logo_url); }
         if (support_phone !== undefined) { updates.push(`support_phone = $${idx++}`); params.push(support_phone); }
         if (support_email !== undefined) { updates.push(`support_email = $${idx++}`); params.push(support_email); }
+        if (support_staff !== undefined) { updates.push(`support_staff = $${idx++}`); params.push(support_staff); }
 
         if (updates.length > 0) {
             params.push(id);

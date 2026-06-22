@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Settings as SettingsIcon, Mail, Globe, Save, CheckCircle2, Building2, Camera, MapPin, Phone } from 'lucide-react';
+import { Settings as SettingsIcon, Mail, Globe, Save, CheckCircle2, Building2, Camera, MapPin, Phone, Users } from 'lucide-react';
 import api from '../services/api';
 
 const UNIVERSITY_ID = 'f6cc7c6c-9534-45c7-8658-8855f2ad087b';
@@ -11,6 +11,7 @@ interface University {
   logo_url: string;
   support_phone?: string;
   support_email?: string;
+  support_staff?: string;
 }
 
 export default function Settings() {
@@ -29,9 +30,11 @@ export default function Settings() {
   const [address, setAddress] = useState('');
   const [supportPhone, setSupportPhone] = useState('');
   const [supportEmail, setSupportEmail] = useState('');
+  const [supportStaff, setSupportStaff] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [groupOrderVisible, setGroupOrderVisible] = useState(false);
+  const [preOrderCutoff, setPreOrderCutoff] = useState('22:00');
   const [uniSaving, setUniSaving] = useState(false);
   const [uniError, setUniError] = useState('');
   const [uniSuccess, setUniSuccess] = useState('');
@@ -49,6 +52,7 @@ export default function Settings() {
       setAdminEmail(res.data.admin_email || '');
       setSuperAdminEmail(res.data.super_admin_email || '');
       setGroupOrderVisible(!!res.data.group_order_visible_students);
+      if (res.data.pre_order_cutoff) setPreOrderCutoff(String(res.data.pre_order_cutoff).slice(0, 5));
     } catch (err: any) {
       console.error('[Settings] fetch error:', err);
       setError('Failed to load settings');
@@ -65,6 +69,7 @@ export default function Settings() {
       setAddress(res.data.address || '');
       setSupportPhone(res.data.support_phone || '');
       setSupportEmail(res.data.support_email || '');
+      setSupportStaff(res.data.support_staff || '');
       setLogoPreview(res.data.logo_url || null);
     } catch (err: any) {
       console.error('[Settings] university fetch error:', err);
@@ -126,10 +131,11 @@ export default function Settings() {
     fd.append('address', address);
     fd.append('support_phone', supportPhone);
     fd.append('support_email', supportEmail);
+    fd.append('support_staff', supportStaff);
     if (logoFile) fd.append('logo', logoFile);
     try {
       await api.patch(`/university/${UNIVERSITY_ID}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await api.patch(`/admin/settings/${UNIVERSITY_ID}`, { group_order_visible_students: groupOrderVisible });
+      await api.patch(`/admin/settings/${UNIVERSITY_ID}`, { group_order_visible_students: groupOrderVisible, pre_order_cutoff: preOrderCutoff });
       setUniSuccess('University profile updated successfully!');
       setLogoFile(null);
       fetchUniversity();
@@ -210,6 +216,8 @@ export default function Settings() {
                   <input type="text" value={supportPhone} onChange={(e) => setSupportPhone(e.target.value)} placeholder="+91 ..." className={inputClass} /></div>
                 <div><label className={labelClass}><Mail size={11} className="text-[#ffb4a8]" /> Support Email</label>
                   <input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="help@university.edu" className={inputClass} /></div>
+                <div className="md:col-span-2"><label className={labelClass}><Users size={11} className="text-[#ffb4a8]" /> Staff Contact <span className="text-[#554240] normal-case font-medium">(shown in the app's Help → Staff)</span></label>
+                  <textarea value={supportStaff} onChange={(e) => setSupportStaff(e.target.value)} rows={2} placeholder="e.g. Canteen Manager — Counter 3, 9 AM–6 PM" className={`${inputClass} resize-none`} /></div>
               </div>
 
               {/* System toggles */}
@@ -224,6 +232,19 @@ export default function Settings() {
                     <input type="checkbox" className="sr-only peer" checked={groupOrderVisible} onChange={(e) => setGroupOrderVisible(e.target.checked)} />
                     <div className="w-11 h-6 bg-[#554240] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#f0513e]"></div>
                   </label>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-[#131313] border border-[#554240]/20 max-w-md mt-3">
+                  <div>
+                    <h4 className="text-[13px] font-bold text-[#e5e2e1] mb-1">Daily Pre-Order Cutoff</h4>
+                    <p className="text-[11px] text-[#a38b88]">Last time delegates can place a daily pre-order (today). Does not affect catering.</p>
+                  </div>
+                  <input
+                    type="time"
+                    value={preOrderCutoff}
+                    onChange={(e) => setPreOrderCutoff(e.target.value)}
+                    className="px-3 py-2 rounded-lg bg-[#1c1b1b] border border-[#554240]/30 text-[#e5e2e1] text-sm font-mono focus:outline-none focus:border-[#f0513e]/40"
+                  />
                 </div>
               </div>
 

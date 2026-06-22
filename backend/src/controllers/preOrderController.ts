@@ -39,6 +39,21 @@ export const createPreOrder = async (req: AuthRequest, res: Response) => {
 
         const { university_id, wallet_balance } = userResult.rows[0];
 
+        // Daily pre-orders are for today and close at the super-admin pickup cutoff (IST).
+        const cutoffRes = await client.query(
+            'SELECT pre_order_cutoff FROM university_settings WHERE university_id = $1',
+            [university_id]
+        );
+        const cutoff = cutoffRes.rows[0]?.pre_order_cutoff; // 'HH:MM' or null
+        if (cutoff) {
+            const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000); // IST wall clock via UTC getters
+            const nowMins = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+            const [ch, cm] = String(cutoff).split(':').map(Number);
+            if (nowMins > (ch * 60 + cm)) {
+                throw new Error(`Pre-orders for today close at ${String(cutoff).slice(0, 5)}.`);
+            }
+        }
+
         // Validate restaurant exists
         const restResult = await client.query(
             'SELECT id, name, is_open FROM restaurants WHERE id = $1 AND university_id = $2',
@@ -266,6 +281,69 @@ export const getTodayPreOrders = async (req: AuthRequest, res: Response) => {
         })));
     } catch (error: any) {
         console.error('[PreOrder] getTodayPreOrders error:', error.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/** Get all staff pre-orders (admin, paginated, restaurant-scoped for staff).
+ *  Powers the "Pre-Orders" filter in Order History. */
+export const getAdminPreOrders = async (req: AuthRequest, res: Response) => {
+    const { restaurant_id, page = '1', limit = '20' } = req.query;
+    try {
+        const staffRes = await pool.query('SELECT university_id, restaurant_id, role FROM staff WHERE id = $1', [req.user.id]);
+        if (staffRes.rows.length === 0) return res.sendStatus(403);
+        const uniId = staffRes.rows[0].university_id;
+        const staffRole = staffRes.rows[0].role;
+        const staffRestaurantId = staffRes.rows[0].restaurant_id;
+
+        // Staff are restricted to their own restaurant; admins may filter optionally.
+        let effectiveRestaurantId: any = restaurant_id;
+        if (staffRole === 'staff') {
+            if (!staffRestaurantId) return res.status(403).json({ message: 'Staff member not assigned to a restaurant' });
+            effectiveRestaurantId = staffRestaurantId;
+        }
+
+        const params: any[] = [uniId];
+        let restaurantClause = '';
+        if (effectiveRestaurantId) {
+            restaurantClause = ` AND po.restaurant_id = $${params.length + 1}`;
+            params.push(effectiveRestaurantId);
+        }
+
+        const lim = parseInt(limit as string) || 20;
+        const off = ((parseInt(page as string) || 1) - 1) * lim;
+
+        const result = await pool.query(
+            `SELECT po.*, u.name as user_name, u.phone as user_phone, r.name as restaurant_name,
+                    COALESCE(json_agg(json_build_object(
+                        'id', poi.id, 'menu_item_id', poi.menu_item_id, 'quantity', poi.quantity,
+                        'price_at_time', poi.price_at_time, 'item_name', mi.name
+                    )) FILTER (WHERE poi.id IS NOT NULL), '[]') as items
+             FROM staff_pre_orders po
+             LEFT JOIN users u ON po.user_id = u.id
+             LEFT JOIN restaurants r ON po.restaurant_id = r.id
+             LEFT JOIN staff_pre_order_items poi ON poi.pre_order_id = po.id
+             LEFT JOIN menu_items mi ON poi.menu_item_id = mi.id
+             WHERE po.university_id = $1${restaurantClause}
+             GROUP BY po.id, u.name, u.phone, r.name
+             ORDER BY po.created_at DESC
+             LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+            [...params, lim, off]
+        );
+
+        const countParams: any[] = [uniId];
+        let countClause = '';
+        if (effectiveRestaurantId) { countClause = ` AND restaurant_id = $2`; countParams.push(effectiveRestaurantId); }
+        const countRes = await pool.query(
+            `SELECT COUNT(*) FROM staff_pre_orders WHERE university_id = $1${countClause}`, countParams
+        );
+
+        res.json({
+            orders: result.rows.map((r: any) => ({ ...r, total_amount: Number(r.total_amount), is_pre_order: true })),
+            total: parseInt(countRes.rows[0].count),
+        });
+    } catch (error: any) {
+        console.error('[PreOrder] getAdminPreOrders error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 };

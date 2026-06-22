@@ -123,9 +123,11 @@ class _StaffPreOrderScreenState extends State<StaffPreOrderScreen> {
                     itemCount: _preOrders.length,
                     itemBuilder: (context, index) {
                       final order = _preOrders[index];
-                      final date = DateTime.parse(order['target_date']).toLocal();
+                      final rawDate = order['order_date'] ?? order['created_at'];
+                      final date = rawDate != null ? DateTime.parse(rawDate.toString()).toLocal() : DateTime.now();
                       final dateStr = DateFormat('EEE, MMM d, yyyy').format(date);
-                      final total = (double.parse(order['total_amount'].toString())).toStringAsFixed(2);
+                      final total = (double.tryParse(order['total_amount'].toString()) ?? 0).toStringAsFixed(2);
+                      final restaurantName = order['restaurant_name']?.toString() ?? 'Restaurant';
                       
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -147,12 +149,26 @@ class _StaffPreOrderScreenState extends State<StaffPreOrderScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  dateStr,
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                    color: const Color(0xFF4A0E13),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        restaurantName,
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                          color: const Color(0xFF4A0E13),
+                                        ),
+                                      ),
+                                      Text(
+                                        dateStr,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: const Color(0xFF4A0E13).withValues(alpha: 0.55),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 Container(
@@ -180,15 +196,17 @@ class _StaffPreOrderScreenState extends State<StaffPreOrderScreen> {
                                  child: Row(
                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                    children: [
-                                     Text(
-                                       '${item['quantity']}x ${item['food_name']}',
-                                       style: GoogleFonts.poppins(
-                                         color: const Color(0xFF4A0E13).withValues(alpha: 0.8),
-                                         fontSize: 14,
+                                     Expanded(
+                                       child: Text(
+                                         '${item['quantity']}x ${item['item_name'] ?? 'Item'}',
+                                         style: GoogleFonts.poppins(
+                                           color: const Color(0xFF4A0E13).withValues(alpha: 0.8),
+                                           fontSize: 14,
+                                         ),
                                        ),
                                      ),
                                      Text(
-                                       '₹${item['price']}',
+                                       '₹${item['price_at_time']}',
                                        style: GoogleFonts.poppins(
                                          fontWeight: FontWeight.w600,
                                          color: const Color(0xFF4A0E13),

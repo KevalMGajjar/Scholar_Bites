@@ -21,6 +21,8 @@ interface Order {
   created_at: string;
   payment_id: string;
   order_token?: string;
+  is_pre_order?: boolean;
+  is_refunded?: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -29,9 +31,10 @@ const STATUS_COLORS: Record<string, string> = {
   ready: 'bg-emerald-500/8 text-emerald-400 border border-emerald-500/15',
   completed: 'bg-white/[0.04] text-slate-400 border border-white/[0.06]',
   cancelled: 'bg-red-500/8 text-red-400 border border-red-500/15',
+  refunded: 'bg-violet-500/8 text-violet-400 border border-violet-500/15',
 };
 
-const FILTER_OPTIONS = ['', 'pending', 'preparing', 'ready', 'completed', 'cancelled'] as const;
+const FILTER_OPTIONS = ['', 'pending', 'preparing', 'ready', 'completed', 'cancelled', 'refunded', 'pre-orders'] as const;
 const PAGE_SIZE = 20;
 
 export default function OrderHistory() {
@@ -66,12 +69,22 @@ export default function OrderHistory() {
     setLoading(true);
     try {
       const params: Record<string, string> = { page: String(page), limit: String(PAGE_SIZE) };
-      if (statusFilter) params.status = statusFilter;
-      if (debouncedSearch) params.search = debouncedSearch;
       if (selectedRestaurantId) params.restaurant_id = selectedRestaurantId;
-      const res = await api.get('/admin/orders', { params });
-      setOrders(res.data.orders);
-      setTotal(res.data.total);
+      if (statusFilter === 'pre-orders') {
+        // Staff daily pre-orders live in their own table/endpoint.
+        const res = await api.get('/admin/pre-orders', { params });
+        setOrders(res.data.orders);
+        setTotal(res.data.total);
+      } else {
+        // 'refunded' isn't a real order status — it's a cancelled order that has a
+        // refund transaction; the backend handles it via the `refunded` param.
+        if (statusFilter === 'refunded') params.refunded = 'true';
+        else if (statusFilter) params.status = statusFilter;
+        if (debouncedSearch) params.search = debouncedSearch;
+        const res = await api.get('/admin/orders', { params });
+        setOrders(res.data.orders);
+        setTotal(res.data.total);
+      }
     } catch (err) {
       console.error('Failed to fetch order history:', err);
     } finally {
@@ -250,14 +263,20 @@ export default function OrderHistory() {
                       <span className="text-white text-[14px] font-extrabold tracking-[-0.01em]">₹{parseFloat(order.total_amount).toFixed(0)}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[order.status] || ''}`}>
-                        {order.status}
-                      </span>
+                      {(() => {
+                        // A refunded order is stored as 'cancelled' + a wallet refund txn.
+                        const display = order.is_refunded && order.status === 'cancelled' ? 'refunded' : order.status;
+                        return (
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[display] || ''}`}>
+                            {display}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 text-slate-600 text-[12px] font-medium whitespace-nowrap">{formatDate(order.created_at)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                        {order.status === 'completed' && (
+                        {!order.is_pre_order && order.status === 'completed' && (
                           <button
                             onClick={async () => {
                               try {
@@ -279,7 +298,7 @@ export default function OrderHistory() {
                             <FileText size={11} /> Invoice
                           </button>
                         )}
-                        {order.status === 'completed' && (
+                        {!order.is_pre_order && order.status === 'completed' && (
                           <button onClick={() => { setRefundModalOrder(order); setRefundReason(''); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/6 border border-red-500/12 text-red-400 text-[11px] font-bold hover:bg-red-500/15 transition-all btn-press">
                             <RotateCcw size={11} /> Refund

@@ -8,7 +8,7 @@ import { getCategories, createCategory, updateCategory, deleteCategory } from '.
 import { upload } from '../controllers/uploadController';
 import { getStatistics } from '../controllers/statisticsController';
 import { createDean, getAllDeans, updateDeanBudget, updateDeanDetails, deleteDean, getAllEvents, getEventsCalendar, exportEventsExcel, getDeanFundDistribution, exportFundDistributionCSV, exportFundsLedgerExcel } from '../controllers/deanController';
-import { getTodayPreOrders, updatePreOrderStatus } from '../controllers/preOrderController';
+import { getTodayPreOrders, updatePreOrderStatus, getAdminPreOrders } from '../controllers/preOrderController';
 import { updateEventStatus } from '../controllers/eventPreOrderController';
 import { getUniversitySettings, updateUniversitySettings } from '../controllers/staffAuthController';
 import { validate, updateOrderStatusSchema, staffLoginSchema, registerStaffSchema, verifyOtpSchema, addMenuItemSchema } from '../middlewares/validators';
@@ -93,6 +93,7 @@ router.patch('/events/:id/status', authorizeRole(['admin', 'super_admin']), upda
 
 // ─── Pre-Order Management (Admin only) ───
 router.get('/pre-orders/today', authorizeRole(['admin', 'super_admin']), getTodayPreOrders);
+router.get('/pre-orders', authorizeRole(['staff', 'admin', 'super_admin']), getAdminPreOrders);
 router.patch('/pre-orders/:id/status', authorizeRole(['admin', 'super_admin']), updatePreOrderStatus);
 
 export default router;

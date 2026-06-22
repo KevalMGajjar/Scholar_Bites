@@ -334,15 +334,20 @@ async function queryAuditLogs(page: number, limit: number, offset: number, actio
         params.push(action);
     }
     if (search) {
-        whereClause += ` AND (al.resource ILIKE $${idx} OR al.details ILIKE $${idx} OR s.email ILIKE $${idx} OR s.name ILIKE $${idx})`;
+        whereClause += ` AND (al.resource ILIKE $${idx} OR al.details ILIKE $${idx} OR s.email ILIKE $${idx} OR s.name ILIKE $${idx} OR d.name ILIKE $${idx} OR d.email ILIKE $${idx})`;
         params.push(`%${search}%`);
         idx++;
     }
 
+    // Actor may be a staff member, a student/delegate (users), or a dean/event head.
+    const joins = `
+         LEFT JOIN staff s ON al.user_id = s.id
+         LEFT JOIN users u ON al.user_id = u.id AND s.id IS NULL
+         LEFT JOIN deans d ON al.user_id = d.id AND s.id IS NULL AND u.id IS NULL`;
+
     const countResult = await pool.query(
         `SELECT COUNT(*)::int as total
-         FROM audit_logs al
-         LEFT JOIN staff s ON al.user_id = s.id
+         FROM audit_logs al ${joins}
          WHERE 1=1 ${whereClause}`,
         params
     );
@@ -350,12 +355,10 @@ async function queryAuditLogs(page: number, limit: number, offset: number, actio
     const logsResult = await pool.query(
         `SELECT al.id, al.action, al.resource, al.details, al.ip_address, al.created_at,
                 al.user_id,
-                COALESCE(s.name, u.name, 'System') as user_name,
-                COALESCE(s.email, u.phone, '') as user_identifier,
-                COALESCE(CAST(s.role AS VARCHAR), 'student') as user_role
-         FROM audit_logs al
-         LEFT JOIN staff s ON al.user_id = s.id
-         LEFT JOIN users u ON al.user_id = u.id AND s.id IS NULL
+                COALESCE(s.name, u.name, d.name, 'System') as user_name,
+                COALESCE(s.email, u.phone, d.email, '') as user_identifier,
+                COALESCE(CAST(s.role AS VARCHAR), CASE WHEN d.id IS NOT NULL THEN 'event_head' ELSE 'student' END) as user_role
+         FROM audit_logs al ${joins}
          WHERE 1=1 ${whereClause}
          ORDER BY al.created_at DESC
          LIMIT $${idx} OFFSET $${idx + 1}`,

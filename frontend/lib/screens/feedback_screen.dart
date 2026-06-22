@@ -481,9 +481,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Widget _buildContactBar() {
     final supportEmail = _university?['support_email'] as String?;
     final supportPhone = _university?['support_phone'] as String?;
+    final supportStaff = _university?['support_staff'] as String?;
 
     final hasCustomEmail = supportEmail != null && supportEmail.trim().isNotEmpty;
     final hasCustomPhone = supportPhone != null && supportPhone.trim().isNotEmpty;
+    final hasStaffInfo = supportStaff != null && supportStaff.trim().isNotEmpty;
 
     final List<Widget> chips = [];
 
@@ -494,18 +496,20 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         color: const Color(0xFF5C6BC0),
         onTap: () => _showContactInfo(
           'Email Support',
-          'scholarbites@gmail.com',
+          hasCustomEmail ? supportEmail.trim() : 'scholarbites@gmail.com',
           'Send us an email for detailed issues, refund requests, or suggestions. We typically respond within 24 hours.',
           Icons.email_rounded,
         ),
       ),
     ));
 
-    String staffDetails = 'Visit the canteen counter and ask for the manager. They can help with immediate orders and food quality.';
-    if (hasCustomEmail || hasCustomPhone) {
+    String staffDetails = hasStaffInfo
+        ? supportStaff.trim()
+        : 'Visit the canteen counter and ask for the manager. They can help with immediate orders and food quality.';
+    if (hasCustomPhone || hasCustomEmail) {
       staffDetails += '\n\nUniversity Contact Details:';
-      if (hasCustomPhone) staffDetails += '\nPhone: $supportPhone';
-      if (hasCustomEmail) staffDetails += '\nEmail: $supportEmail';
+      if (hasCustomPhone) staffDetails += '\nPhone: ${supportPhone.trim()}';
+      if (hasCustomEmail) staffDetails += '\nEmail: ${supportEmail.trim()}';
     }
 
     chips.add(Expanded(
@@ -529,7 +533,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         color: const Color(0xFFE65100),
         onTap: () => _showContactInfo(
           'Call Support',
-          '7016806164',
+          hasCustomPhone ? supportPhone.trim() : '7016806164',
           'Available Monday - Saturday\n9:00 AM - 6:00 PM\n\nFor urgent issues during canteen hours, call the helpline directly.',
           Icons.phone_rounded,
         ),

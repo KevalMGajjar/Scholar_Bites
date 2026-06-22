@@ -16,19 +16,17 @@ class StaffService {
     }
   }
 
-  /// Create a new pre-order
+  /// Create a new pre-order (always for today; the backend sets the date).
   Future<Map<String, dynamic>> createPreOrder({
+    required String restaurantId,
     required List<Map<String, dynamic>> items,
-    required String targetDate,
-    required String notes,
   }) async {
     try {
       final response = await _dio.post(
         '/staff/pre-orders',
         data: {
+          'restaurant_id': restaurantId,
           'items': items,
-          'target_date': targetDate,
-          'notes': notes,
         },
       );
       return response.data as Map<String, dynamic>;
